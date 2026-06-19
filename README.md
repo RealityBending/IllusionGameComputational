@@ -1,1 +1,3 @@
-# IllusionComputationalModel
+# IllusionGameComputational
+
+WIP
