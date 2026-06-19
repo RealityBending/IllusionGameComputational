@@ -72,6 +72,29 @@ ppt_suggestibility <- read.csv("https://raw.githubusercontent.com/RealityBending
 
 ```
 
+### Phenomenological Control Scale (PCS)
+
+- https://github.com/RealityBending/IllusionGamePhenomenologicalControl
+
+```{r}
+#| code-fold: false
+
+illu_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGamePhenomenologicalControl/refs/heads/main/data/rawdata_illusion.csv") |>
+  mutate(
+    Dataset = "IllusionGamePCS",
+    Participant = paste0("IllusionGamePCS_", Participant),
+    Response = tolower(str_remove(Response, "Arrow"))
+  ) |>
+  select(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)
+
+ppt_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGamePhenomenologicalControl/refs/heads/main/data/rawdata_participants.csv") |>
+  mutate(
+    Dataset = "IllusionGamePCS",
+    Participant = paste0("IllusionGamePCS_", Participant)
+  )
+
+```
+
 
 :::
 
@@ -83,7 +106,7 @@ ppt_suggestibility <- read.csv("https://raw.githubusercontent.com/RealityBending
 ### Summary
 
 ```{r}
-illu <- rbind(illu_reliability, illu_suggestibility)
+illu <- rbind(illu_reliability, illu_suggestibility, illu_pcs)
 
 illu |> 
   summarize(N = n_distinct(Participant),
@@ -123,7 +146,7 @@ illu <- illu |> filter(RT > 0)
 #| fig-width: 12
 #| fig-height: 8
 
-cols <- c("IllusionGameSuggestibility" = "#9C27B0", "IllusionGameReliability" = "#FF9800")
+cols <- c("IllusionGameSuggestibility" = "#9C27B0", "IllusionGameReliability" = "#FF9800", "IllusionGamePCS" = "#FFC0CB")
 binwidth <- 0.03
 
 # Get density of lognormal distribution
@@ -333,6 +356,7 @@ p_strength2 <- estimate_relation(m_strength2, length = 1000) |>
 # Split file to avoid GitHub upload limits
 write.csv(illu[1:400000, ], "../data/illusion_part1.csv", row.names = FALSE)
 write.csv(illu[400001:nrow(illu), ], "../data/illusion_part2.csv", row.names = FALSE)
+
 
 ```
 
