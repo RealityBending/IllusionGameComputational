@@ -33,13 +33,18 @@ library(ggdist)
 - https://github.com/RealityBending/IllusionGameValidation
 
 ```{r}
-# using trial data from Study 2 (data in two parts)
+#| code-fold: false
 
 illu_validation <- rbind(read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part1.csv"), read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part2.csv")) |> 
     mutate(
     Dataset = "IllusionGameValidation",
     Participant = paste0("IllusionGameValidation_", Participant),
-    Illusion_Difference = Illusion_Difference * Illusion_Side
+    Illusion_Difference = Illusion_Difference * Illusion_Side,
+    Illusion_Type = case_match(Illusion_Type,
+      "Müller-Lyer" ~ "MullerLyer",
+      "Vertical-Horizontal" ~ "VerticalHorizontal",
+      .default = Illusion_Type),
+    Answer = str_remove(Answer, "arrow")
   ) |>
   filter(Illusion_Type %in% c("MullerLyer", "Ebbinghaus", "VerticalHorizontal")) |>
   select(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response=Answer)
@@ -125,7 +130,7 @@ ppt_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGa
 ### Summary
 
 ```{r}
-illu <- rbind(illu_reliability, illu_suggestibility, illu_pcs)
+illu <- rbind(illu_validation, illu_reliability, illu_suggestibility, illu_pcs)
 
 illu |> 
   summarize(N = n_distinct(Participant),
