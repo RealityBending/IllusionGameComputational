@@ -35,6 +35,8 @@ library(ggdist)
 ```{r}
 # using trial data from Study 2 (data in two parts)
 
+#| code-fold: false
+
 illu_validation <- rbind(read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part1.csv"), read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part2.csv")) |> 
     mutate(
     Dataset = "IllusionGameValidation",
@@ -125,7 +127,7 @@ ppt_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGa
 ### Summary
 
 ```{r}
-illu <- rbind(illu_reliability, illu_suggestibility, illu_pcs)
+illu <- rbind(illu_validation, illu_reliability, illu_suggestibility, illu_pcs)
 
 illu |> 
   summarize(N = n_distinct(Participant),
