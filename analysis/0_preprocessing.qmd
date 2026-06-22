@@ -40,11 +40,13 @@ illu_validation <- rbind(read.csv("https://raw.githubusercontent.com/RealityBend
     Dataset = "IllusionGameValidation",
     Participant = paste0("IllusionGameValidation_", Participant),
     Illusion_Difference = Illusion_Difference * Illusion_Side,
+    Block = case_match(Block, 1 ~ "A", 2 ~ "B", .default = as.character(Block)),
     Illusion_Type = case_match(Illusion_Type,
       "Müller-Lyer" ~ "MullerLyer",
       "Vertical-Horizontal" ~ "VerticalHorizontal",
       .default = Illusion_Type),
-    Answer = str_remove(Answer, "arrow")
+    Answer = str_remove(Answer, "arrow"),
+    RT = RT / 1000
   ) |>
   filter(Illusion_Type %in% c("MullerLyer", "Ebbinghaus", "VerticalHorizontal")) |>
   select(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response=Answer)
@@ -66,7 +68,8 @@ illu_reliability <- read.csv("https://raw.githubusercontent.com/RealityBending/I
   mutate(
     Dataset = "IllusionGameReliability",
     Participant = paste0("IllusionGameReliability_", Participant),
-    Illusion_Difference = Illusion_Difference * Illusion_Side
+    Illusion_Difference = Illusion_Difference * Illusion_Side,
+    Block = case_match(Block, 1 ~ "A", 2 ~ "B", .default = as.character(Block))
   ) |>
   select(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response=Answer)
 ppt_reliability <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameReliability/refs/heads/main/data/raw_questionnaires.csv") |>
