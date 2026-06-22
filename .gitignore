@@ -49,3 +49,4 @@ po/*~
 rsconnect/
 
 analysis/models/*
+analysis/bayesflow/posterior_summaries.csv
