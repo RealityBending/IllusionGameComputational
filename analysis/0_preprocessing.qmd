@@ -101,7 +101,7 @@ ppt_suggestibility <- read.csv("https://raw.githubusercontent.com/RealityBending
   )
 ```
 
-### Phenomenological Control Scale (PCS)
+### Phenomenological Control
 
 - https://github.com/RealityBending/IllusionGamePhenomenologicalControl
 
@@ -148,7 +148,7 @@ illu |>
 
 ## Cleaning
 
-### Extremely RTs
+### Extreme RTs
 
 We removed `r sum(illu$RT >= 7)` trials (`r insight::format_percent(sum(illu$RT >= 7) / nrow(illu))` of the data) with RTs longer than 6 seconds, as these likely reflect participants taking breaks during the task. 
 
@@ -167,13 +167,13 @@ We removed `r sum(illu$RT <= 0)` trials (`r insight::format_percent(sum(illu$RT 
 illu <- illu |> filter(RT > 0)
 ```
 
-### Outliers RTs
+### Outlying Participants
 
 ```{r}
 #| fig-width: 12
 #| fig-height: 8
 
-cols <- c("IllusionGameValidation" = "#216B07", "IllusionGameReliability" = "#FF9800", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#FFC0CB")
+cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameReliability" = "#FF5722", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#2196F3")
 binwidth <- 0.03
 
 # Get density of lognormal distribution
@@ -224,6 +224,7 @@ p_tail2 <- illu |>
 p1 | (p_tail1 / p_tail2 ) + plot_layout(guides = "collect") & theme(legend.position = "top")
 ```
 
+
 We removed `r sum(illu$RT <= 1/6)` trials (`r insight::format_percent(sum(illu$RT <= 1/6) / nrow(illu))`) with RTs shorter than 1/6 seconds, as these likely reflect anticipatory responses, and `r sum(illu$RT > 4)` trials (`r insight::format_percent(sum(illu$RT > 4) / nrow(illu))`) with RTs longer than 4 seconds.
 
 
@@ -232,6 +233,10 @@ We removed `r sum(illu$RT <= 1/6)` trials (`r insight::format_percent(sum(illu$R
 
 illu <- illu |> filter(RT > 1/6) |> filter(RT < 4)
 ```
+
+
+
+
 
 ### Extreme Participants
 
@@ -258,7 +263,8 @@ outliers$Outlier <- ifelse(outliers$Error >= 0.45, "Outlier", outliers$Outlier)
 
 outliers |> 
   ggplot(aes(x = Error, y = RT)) +
-  geom_point(aes(color = Outlier, size = RT_SD), alpha = 0.5) +
+  geom_point(aes(color = Outlier, size = RT_SD), alpha = 0.35) +
+  geom_density_2d(color = "black", alpha = 0.6, bins = 10, show.legend = FALSE) +
   annotate("rect", xmin = -Inf, xmax = 0.45, ymin = -Inf, ymax = 1/3, alpha = 0.1, fill = "red") +
   annotate("rect", xmin = -Inf, xmax = 0.45, ymin = 3, ymax = Inf, alpha = 0.1, fill = "red") +
   annotate("rect", xmin = 0.45, xmax = Inf, ymin = -Inf, ymax = Inf, alpha = 0.1, fill = "red") +
@@ -266,9 +272,12 @@ outliers |>
   geom_vline(xintercept = 0.5, linetype = "dotted", color = "black") +
   geom_abline(intercept = 2.5, slope = -4.25, linetype = "dashed", color = "black") +
   scale_color_manual(values = c("Outlier" = "red", "Normal" = "steelblue")) +
-  labs(title = "Outlier Detection") + 
-  ggside::geom_xsidedensity(aes(y = after_stat(density), color = Outlier), position = position_nudge(y = -0.5), alpha = 0.5) +
-  ggside::geom_ysidedensity(aes(x = after_stat(density), color = Outlier), position = position_nudge(x = -0.5), alpha = 0.5) +
+  scale_size_continuous(range = c(0.5, 3)) +
+  scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2), labels = scales::percent) +
+  labs(title = "Outlier Detection", x = "Errors") + 
+  # ggside::geom_xsidedensity(aes(y = after_stat(density)), alpha = 0.5) +
+  ggside::geom_xsidedensity(aes(y = after_stat(density), color = Outlier), alpha = 0.5) +
+  ggside::geom_ysidedensity(aes(x = after_stat(density), color = Outlier), alpha = 0.5) +
   theme_minimal() +
   ggside::theme_ggside_void()
 
@@ -297,7 +306,7 @@ illu <- illu[!flagged,]
 
 # RTs
 # ---------------
-m_diff1 <- mgcv::bam(RT ~ Group + s(Illusion_Difference, k = -1, by = `Group`, bs = "cr"),
+m_diff1 <- mgcv::bam(RT ~ Group + s(Illusion_Difference, k = -1, by = `Group`, bs = "ts"),
                     data = mutate(illu, Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
 
 p_diff1 <- estimate_relation(m_diff1, length = 1000) |> 
@@ -310,7 +319,7 @@ p_diff1 <- estimate_relation(m_diff1, length = 1000) |>
   labs(y = "Response Time (s)", x = "Task Difficulty") +
   theme_minimal()
 
-m_strength1 <- mgcv::bam(RT ~ Group + s(Illusion_Strength, k = -1, by = `Group`, bs = "cr"),
+m_strength1 <- mgcv::bam(RT ~ Group + s(Illusion_Strength, k = -1, by = `Group`, bs = "ts"),
                     data = mutate(illu, 
                                   Illusion_Strength = Illusion_Strength * ifelse(Illusion_Type == "Ebbinghaus", 30, 1),
                                   Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
@@ -337,7 +346,7 @@ p_strength1 <- estimate_relation(m_strength1, length = 1000) |>
 
 # Responses
 # ---------------
-m_diff2 <- mgcv::bam(RightDown ~ Group + s(Illusion_Difference, k = -1, by = `Group`, bs = "cr"), 
+m_diff2 <- mgcv::bam(RightDown ~ Group + s(Illusion_Difference, k = -1, by = `Group`, bs = "ts"), 
                     family = binomial(link = "logit"),
                     data = mutate(illu, 
                                   RightDown = ifelse(Response %in% c("down", "right"), 1, 0),
@@ -353,7 +362,7 @@ p_diff2 <- estimate_relation(m_diff2, length = 1000) |>
   labs(y = "P(Right/Down Arrow Response)", x = "Task Difficulty") +
   theme_minimal() 
 
-m_strength2 <- mgcv::bam(Error ~ Group + s(Illusion_Strength, k = -1, by = `Group`, bs = "cr"), 
+m_strength2 <- mgcv::bam(Error ~ Group + s(Illusion_Strength, k = -1, by = `Group`, bs = "ts"), 
                     family = binomial(link = "logit"),
                     data = mutate(illu, 
                                   Illusion_Strength = Illusion_Strength * ifelse(Illusion_Type == "Ebbinghaus", 30, 1),
