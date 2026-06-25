@@ -79,6 +79,29 @@ ppt_reliability <- read.csv("https://raw.githubusercontent.com/RealityBending/Il
   )
 ```
 
+### International
+
+- https://github.com/RealityBending/IllusionGameInternational
+
+```{r}
+#| code-fold: false
+
+illu_international <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameInternational/refs/heads/main/data/rawdata_IllusionGame.csv") |>
+  mutate(
+    Dataset = "IllusionGameInternational",
+    Participant = paste0("IllusionGameInternational_", Participant),
+    Response = str_remove(Response, "arrow")
+  ) |>
+  select(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)
+
+ppt_international <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameInternational/refs/heads/main/data/rawdata_participants.csv") |>
+  mutate(
+    Dataset = "IllusionGameInternational",
+    Participant = paste0("IllusionGameInternational_", Participant)
+  )
+```
+
+
 ### Suggestibility
 
 - https://github.com/RealityBending/IllusionGameSuggestibility
@@ -133,7 +156,7 @@ ppt_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGa
 ### Summary
 
 ```{r}
-illu <- rbind(illu_validation, illu_reliability, illu_suggestibility, illu_pcs)
+illu <- rbind(illu_validation, illu_reliability, illu_international, illu_suggestibility, illu_pcs)
 
 illu |> 
   summarize(N = n_distinct(Participant),
@@ -173,7 +196,7 @@ illu <- illu |> filter(RT > 0)
 #| fig-width: 12
 #| fig-height: 8
 
-cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameReliability" = "#FF5722", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#2196F3")
+cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameReliability" = "#FF5722", "IllusionGameInternational" = "#FFBE65", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#2196F3")
 binwidth <- 0.03
 
 # Get density of lognormal distribution

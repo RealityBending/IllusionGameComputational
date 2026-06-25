@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.8.25">
+<meta name="generator" content="quarto-1.7.32">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -61,15 +61,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="0_preprocessing_files/libs/clipboard/clipboard.min.js"></script>
 <script src="0_preprocessing_files/libs/quarto-html/quarto.js" type="module"></script>
 <script src="0_preprocessing_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
-<script src="0_preprocessing_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
 <script src="0_preprocessing_files/libs/quarto-html/popper.min.js"></script>
 <script src="0_preprocessing_files/libs/quarto-html/tippy.umd.min.js"></script>
 <script src="0_preprocessing_files/libs/quarto-html/anchor.min.js"></script>
 <link href="0_preprocessing_files/libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="0_preprocessing_files/libs/quarto-html/quarto-syntax-highlighting-7b89279ff1a6dce999919e0e67d4d9ec.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="0_preprocessing_files/libs/quarto-html/quarto-syntax-highlighting-37eea08aefeeee20ff55810ff984fec1.css" rel="stylesheet" id="quarto-text-highlighting-styles">
 <script src="0_preprocessing_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="0_preprocessing_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="0_preprocessing_files/libs/bootstrap/bootstrap-9e3ffae467580fdb927a41352e75a2e0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="0_preprocessing_files/libs/bootstrap/bootstrap-bb462d781dde1847d9e3ccf7736099dd.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
 
 
 </head>
@@ -123,22 +122,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(tidyverse)</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(easystats)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(patchwork)</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggside)</span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggdist)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggdist)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 <div class="tabset-margin-container"></div><div class="panel-tabset">
-<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">Validation</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Reliability</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-3" role="tab" aria-controls="tabset-1-3" aria-selected="false" href="">Suggestibility</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-4-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-4" role="tab" aria-controls="tabset-1-4" aria-selected="false" href="">Phenomenological Control</a></li></ul>
+<ul class="nav nav-tabs" role="tablist"><li class="nav-item" role="presentation"><a class="nav-link active" id="tabset-1-1-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-1" role="tab" aria-controls="tabset-1-1" aria-selected="true" href="">Validation</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-2-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-2" role="tab" aria-controls="tabset-1-2" aria-selected="false" href="">Reliability</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-3-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-3" role="tab" aria-controls="tabset-1-3" aria-selected="false" href="">International</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-4-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-4" role="tab" aria-controls="tabset-1-4" aria-selected="false" href="">Suggestibility</a></li><li class="nav-item" role="presentation"><a class="nav-link" id="tabset-1-5-tab" data-bs-toggle="tab" data-bs-target="#tabset-1-5" role="tab" aria-controls="tabset-1-5" aria-selected="false" href="">Phenomenological Control</a></li></ul>
 <div class="tab-content">
 <div id="tabset-1-1" class="tab-pane active" role="tabpanel" aria-labelledby="tabset-1-1-tab">
 <ul>
 <li>https://github.com/RealityBending/IllusionGameValidation</li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>illu_validation <span class="ot">&lt;-</span> <span class="fu">rbind</span>(<span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part1.csv"</span>), <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part2.csv"</span>)) <span class="sc">|&gt;</span> </span>
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>illu_validation <span class="ot">&lt;-</span> <span class="fu">rbind</span>(<span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part1.csv"</span>), <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study2_part2.csv"</span>)) <span class="sc">|&gt;</span> </span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(</span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameValidation"</span>,</span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameValidation_"</span>, Participant),</span>
@@ -152,20 +151,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">RT =</span> RT <span class="sc">/</span> <span class="dv">1000</span></span>
 <span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
 <span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Illusion_Type <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"MullerLyer"</span>, <span class="st">"Ebbinghaus"</span>, <span class="st">"VerticalHorizontal"</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, <span class="at">Response=</span>Answer)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<div class="cell-output cell-output-stderr">
-<pre><code>Warning: There was 1 warning in `mutate()`.
-ℹ In argument: `Block = case_match(Block, 1 ~ "A", 2 ~ "B", .default =
-  as.character(Block))`.
-Caused by warning:
-! `case_match()` was deprecated in dplyr 1.2.0.
-ℹ Please use `recode_values()` instead.</code></pre>
-</div>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>ppt_validation <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study3.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionValidation"</span>,</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameValidation_"</span>, Participant)</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, <span class="at">Response=</span>Answer)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>ppt_validation <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameValidation/refs/heads/main/data/study3.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionValidation"</span>,</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameValidation_"</span>, Participant)</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </div>
 <div id="tabset-1-2" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-2-tab">
@@ -173,59 +164,79 @@ Caused by warning:
 <li>https://github.com/RealityBending/IllusionGameReliability</li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>illu_reliability <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameReliability/refs/heads/main/data/raw_illusion1.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameReliability"</span>,</span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameReliability_"</span>, Participant),</span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Illusion_Difference =</span> Illusion_Difference <span class="sc">*</span> Illusion_Side,</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">Block =</span> <span class="fu">case_match</span>(Block, <span class="dv">1</span> <span class="sc">~</span> <span class="st">"A"</span>, <span class="dv">2</span> <span class="sc">~</span> <span class="st">"B"</span>, <span class="at">.default =</span> <span class="fu">as.character</span>(Block))</span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, <span class="at">Response=</span>Answer)</span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>ppt_reliability <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameReliability/refs/heads/main/data/raw_questionnaires.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameReliability"</span>,</span>
-<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameReliability_"</span>, Participant)</span>
-<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>illu_reliability <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameReliability/refs/heads/main/data/raw_illusion1.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameReliability"</span>,</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameReliability_"</span>, Participant),</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Illusion_Difference =</span> Illusion_Difference <span class="sc">*</span> Illusion_Side,</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">Block =</span> <span class="fu">case_match</span>(Block, <span class="dv">1</span> <span class="sc">~</span> <span class="st">"A"</span>, <span class="dv">2</span> <span class="sc">~</span> <span class="st">"B"</span>, <span class="at">.default =</span> <span class="fu">as.character</span>(Block))</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, <span class="at">Response=</span>Answer)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>ppt_reliability <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameReliability/refs/heads/main/data/raw_questionnaires.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameReliability"</span>,</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameReliability_"</span>, Participant)</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </div>
 <div id="tabset-1-3" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-3-tab">
 <ul>
-<li>https://github.com/RealityBending/IllusionGameSuggestibility</li>
+<li>https://github.com/RealityBending/IllusionGameInternational</li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>illu_suggestibility <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameSuggestibility/refs/heads/main/data/rawdata_IllusionGame.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameSuggestibility"</span>,</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameSuggestibility_"</span>, Participant),</span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Response =</span> <span class="fu">str_remove</span>(Response, <span class="st">"arrow"</span>)</span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)</span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>ppt_suggestibility <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameSuggestibility/refs/heads/main/data/rawdata_participants.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameSuggestibility"</span>,</span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameSuggestibility_"</span>, Participant)</span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>illu_international <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameInternational/refs/heads/main/data/rawdata_IllusionGame.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameInternational"</span>,</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameInternational_"</span>, Participant),</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Response =</span> <span class="fu">str_remove</span>(Response, <span class="st">"arrow"</span>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>ppt_international <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameInternational/refs/heads/main/data/rawdata_participants.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameInternational"</span>,</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameInternational_"</span>, Participant)</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </div>
 <div id="tabset-1-4" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-4-tab">
 <ul>
+<li>https://github.com/RealityBending/IllusionGameSuggestibility</li>
+</ul>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>illu_suggestibility <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameSuggestibility/refs/heads/main/data/rawdata_IllusionGame.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameSuggestibility"</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameSuggestibility_"</span>, Participant),</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Response =</span> <span class="fu">str_remove</span>(Response, <span class="st">"arrow"</span>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>ppt_suggestibility <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGameSuggestibility/refs/heads/main/data/rawdata_participants.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGameSuggestibility"</span>,</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGameSuggestibility_"</span>, Participant)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+</div>
+<div id="tabset-1-5" class="tab-pane" role="tabpanel" aria-labelledby="tabset-1-5-tab">
+<ul>
 <li>https://github.com/RealityBending/IllusionGamePhenomenologicalControl</li>
 </ul>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>illu_pcs <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGamePhenomenologicalControl/refs/heads/main/data/rawdata_illusion.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGamePCS"</span>,</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGamePCS_"</span>, Participant),</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Response =</span> <span class="fu">tolower</span>(<span class="fu">str_remove</span>(Response, <span class="st">"Arrow"</span>))</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>ppt_pcs <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGamePhenomenologicalControl/refs/heads/main/data/rawdata_participants.csv"</span>) <span class="sc">|&gt;</span></span>
-<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
-<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGamePCS"</span>,</span>
-<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGamePCS_"</span>, Participant)</span>
-<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>illu_pcs <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGamePhenomenologicalControl/refs/heads/main/data/rawdata_illusion.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGamePCS"</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGamePCS_"</span>, Participant),</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">Response =</span> <span class="fu">tolower</span>(<span class="fu">str_remove</span>(Response, <span class="st">"Arrow"</span>))</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  ) <span class="sc">|&gt;</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>ppt_pcs <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"https://raw.githubusercontent.com/RealityBending/IllusionGamePhenomenologicalControl/refs/heads/main/data/rawdata_participants.csv"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">Dataset =</span> <span class="st">"IllusionGamePCS"</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="at">Participant =</span> <span class="fu">paste0</span>(<span class="st">"IllusionGamePCS_"</span>, Participant)</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>  )</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </div>
 </div>
@@ -236,34 +247,34 @@ Caused by warning:
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> <span class="fu">rbind</span>(illu_validation, illu_reliability, illu_suggestibility, illu_pcs)</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>illu <span class="sc">|&gt;</span> </span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">N =</span> <span class="fu">n_distinct</span>(Participant),</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">N_obs =</span> <span class="fu">n</span>(), </span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">.by=</span> <span class="st">"Dataset"</span>) <span class="sc">|&gt;</span> </span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">gt</span>(<span class="at">rowname_col =</span> <span class="st">"Dataset"</span>) <span class="sc">|&gt;</span> </span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">grand_summary_rows</span>(<span class="at">fns =</span>  <span class="fu">list</span>(<span class="at">label =</span> <span class="st">"Total"</span>, <span class="at">fn =</span> <span class="st">"sum"</span>),</span>
-<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>                         <span class="at">columns =</span> <span class="sc">-</span>Dataset) </span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> <span class="fu">rbind</span>(illu_validation, illu_reliability, illu_international, illu_suggestibility, illu_pcs)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>illu <span class="sc">|&gt;</span> </span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">N =</span> <span class="fu">n_distinct</span>(Participant),</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>            <span class="at">N_obs =</span> <span class="fu">n</span>(), </span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">.by=</span> <span class="st">"Dataset"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">gt</span>(<span class="at">rowname_col =</span> <span class="st">"Dataset"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  gt<span class="sc">::</span><span class="fu">grand_summary_rows</span>(<span class="at">fns =</span>  <span class="fu">list</span>(<span class="at">label =</span> <span class="st">"Total"</span>, <span class="at">fn =</span> <span class="st">"sum"</span>),</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>                         <span class="at">columns =</span> <span class="sc">-</span>Dataset) </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
-<div id="dmtfevxpis" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
-<style>#dmtfevxpis table {
+<div id="ozyyxezdov" style="padding-left:0px;padding-right:0px;padding-top:10px;padding-bottom:10px;overflow-x:auto;overflow-y:auto;width:auto;height:auto;">
+<style>#ozyyxezdov table {
   font-family: system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-#dmtfevxpis thead, #dmtfevxpis tbody, #dmtfevxpis tfoot, #dmtfevxpis tr, #dmtfevxpis td, #dmtfevxpis th {
+#ozyyxezdov thead, #ozyyxezdov tbody, #ozyyxezdov tfoot, #ozyyxezdov tr, #ozyyxezdov td, #ozyyxezdov th {
   border-style: none;
 }
 
-#dmtfevxpis p {
+#ozyyxezdov p {
   margin: 0;
   padding: 0;
 }
 
-#dmtfevxpis .gt_table {
+#ozyyxezdov .gt_table {
   display: table;
   border-collapse: collapse;
   line-height: normal;
@@ -289,12 +300,12 @@ Caused by warning:
   border-left-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_caption {
+#ozyyxezdov .gt_caption {
   padding-top: 4px;
   padding-bottom: 4px;
 }
 
-#dmtfevxpis .gt_title {
+#ozyyxezdov .gt_title {
   color: #333333;
   font-size: 125%;
   font-weight: initial;
@@ -306,7 +317,7 @@ Caused by warning:
   border-bottom-width: 0;
 }
 
-#dmtfevxpis .gt_subtitle {
+#ozyyxezdov .gt_subtitle {
   color: #333333;
   font-size: 85%;
   font-weight: initial;
@@ -318,7 +329,7 @@ Caused by warning:
   border-top-width: 0;
 }
 
-#dmtfevxpis .gt_heading {
+#ozyyxezdov .gt_heading {
   background-color: #FFFFFF;
   text-align: center;
   border-bottom-color: #FFFFFF;
@@ -330,13 +341,13 @@ Caused by warning:
   border-right-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_bottom_border {
+#ozyyxezdov .gt_bottom_border {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_col_headings {
+#ozyyxezdov .gt_col_headings {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -351,7 +362,7 @@ Caused by warning:
   border-right-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_col_heading {
+#ozyyxezdov .gt_col_heading {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -371,7 +382,7 @@ Caused by warning:
   overflow-x: hidden;
 }
 
-#dmtfevxpis .gt_column_spanner_outer {
+#ozyyxezdov .gt_column_spanner_outer {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -383,15 +394,15 @@ Caused by warning:
   padding-right: 4px;
 }
 
-#dmtfevxpis .gt_column_spanner_outer:first-child {
+#ozyyxezdov .gt_column_spanner_outer:first-child {
   padding-left: 0;
 }
 
-#dmtfevxpis .gt_column_spanner_outer:last-child {
+#ozyyxezdov .gt_column_spanner_outer:last-child {
   padding-right: 0;
 }
 
-#dmtfevxpis .gt_column_spanner {
+#ozyyxezdov .gt_column_spanner {
   border-bottom-style: solid;
   border-bottom-width: 2px;
   border-bottom-color: #D3D3D3;
@@ -403,11 +414,11 @@ Caused by warning:
   width: 100%;
 }
 
-#dmtfevxpis .gt_spanner_row {
+#ozyyxezdov .gt_spanner_row {
   border-bottom-style: hidden;
 }
 
-#dmtfevxpis .gt_group_heading {
+#ozyyxezdov .gt_group_heading {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -433,7 +444,7 @@ Caused by warning:
   text-align: left;
 }
 
-#dmtfevxpis .gt_empty_group_heading {
+#ozyyxezdov .gt_empty_group_heading {
   padding: 0.5px;
   color: #333333;
   background-color: #FFFFFF;
@@ -448,15 +459,15 @@ Caused by warning:
   vertical-align: middle;
 }
 
-#dmtfevxpis .gt_from_md > :first-child {
+#ozyyxezdov .gt_from_md > :first-child {
   margin-top: 0;
 }
 
-#dmtfevxpis .gt_from_md > :last-child {
+#ozyyxezdov .gt_from_md > :last-child {
   margin-bottom: 0;
 }
 
-#dmtfevxpis .gt_row {
+#ozyyxezdov .gt_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -475,7 +486,7 @@ Caused by warning:
   overflow-x: hidden;
 }
 
-#dmtfevxpis .gt_stub {
+#ozyyxezdov .gt_stub {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -488,7 +499,7 @@ Caused by warning:
   padding-right: 5px;
 }
 
-#dmtfevxpis .gt_stub_row_group {
+#ozyyxezdov .gt_stub_row_group {
   color: #333333;
   background-color: #FFFFFF;
   font-size: 100%;
@@ -502,15 +513,15 @@ Caused by warning:
   vertical-align: top;
 }
 
-#dmtfevxpis .gt_row_group_first td {
+#ozyyxezdov .gt_row_group_first td {
   border-top-width: 2px;
 }
 
-#dmtfevxpis .gt_row_group_first th {
+#ozyyxezdov .gt_row_group_first th {
   border-top-width: 2px;
 }
 
-#dmtfevxpis .gt_summary_row {
+#ozyyxezdov .gt_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -520,16 +531,16 @@ Caused by warning:
   padding-right: 5px;
 }
 
-#dmtfevxpis .gt_first_summary_row {
+#ozyyxezdov .gt_first_summary_row {
   border-top-style: solid;
   border-top-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_first_summary_row.thick {
+#ozyyxezdov .gt_first_summary_row.thick {
   border-top-width: 2px;
 }
 
-#dmtfevxpis .gt_last_summary_row {
+#ozyyxezdov .gt_last_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -539,7 +550,7 @@ Caused by warning:
   border-bottom-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_grand_summary_row {
+#ozyyxezdov .gt_grand_summary_row {
   color: #333333;
   background-color: #FFFFFF;
   text-transform: inherit;
@@ -549,7 +560,7 @@ Caused by warning:
   padding-right: 5px;
 }
 
-#dmtfevxpis .gt_first_grand_summary_row {
+#ozyyxezdov .gt_first_grand_summary_row {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -559,7 +570,7 @@ Caused by warning:
   border-top-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_last_grand_summary_row_top {
+#ozyyxezdov .gt_last_grand_summary_row_top {
   padding-top: 8px;
   padding-bottom: 8px;
   padding-left: 5px;
@@ -569,11 +580,11 @@ Caused by warning:
   border-bottom-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_striped {
+#ozyyxezdov .gt_striped {
   background-color: rgba(128, 128, 128, 0.05);
 }
 
-#dmtfevxpis .gt_table_body {
+#ozyyxezdov .gt_table_body {
   border-top-style: solid;
   border-top-width: 2px;
   border-top-color: #D3D3D3;
@@ -582,7 +593,7 @@ Caused by warning:
   border-bottom-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_footnotes {
+#ozyyxezdov .gt_footnotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -596,7 +607,7 @@ Caused by warning:
   border-right-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_footnote {
+#ozyyxezdov .gt_footnote {
   margin: 0px;
   font-size: 90%;
   padding-top: 4px;
@@ -605,7 +616,7 @@ Caused by warning:
   padding-right: 5px;
 }
 
-#dmtfevxpis .gt_sourcenotes {
+#ozyyxezdov .gt_sourcenotes {
   color: #333333;
   background-color: #FFFFFF;
   border-bottom-style: none;
@@ -619,7 +630,7 @@ Caused by warning:
   border-right-color: #D3D3D3;
 }
 
-#dmtfevxpis .gt_sourcenote {
+#ozyyxezdov .gt_sourcenote {
   font-size: 90%;
   padding-top: 4px;
   padding-bottom: 4px;
@@ -627,77 +638,77 @@ Caused by warning:
   padding-right: 5px;
 }
 
-#dmtfevxpis .gt_left {
+#ozyyxezdov .gt_left {
   text-align: left;
 }
 
-#dmtfevxpis .gt_center {
+#ozyyxezdov .gt_center {
   text-align: center;
 }
 
-#dmtfevxpis .gt_right {
+#ozyyxezdov .gt_right {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
-#dmtfevxpis .gt_font_normal {
+#ozyyxezdov .gt_font_normal {
   font-weight: normal;
 }
 
-#dmtfevxpis .gt_font_bold {
+#ozyyxezdov .gt_font_bold {
   font-weight: bold;
 }
 
-#dmtfevxpis .gt_font_italic {
+#ozyyxezdov .gt_font_italic {
   font-style: italic;
 }
 
-#dmtfevxpis .gt_super {
+#ozyyxezdov .gt_super {
   font-size: 65%;
 }
 
-#dmtfevxpis .gt_footnote_marks {
+#ozyyxezdov .gt_footnote_marks {
   font-size: 75%;
   vertical-align: 0.4em;
   position: initial;
 }
 
-#dmtfevxpis .gt_asterisk {
+#ozyyxezdov .gt_asterisk {
   font-size: 100%;
   vertical-align: 0;
 }
 
-#dmtfevxpis .gt_indent_1 {
+#ozyyxezdov .gt_indent_1 {
   text-indent: 5px;
 }
 
-#dmtfevxpis .gt_indent_2 {
+#ozyyxezdov .gt_indent_2 {
   text-indent: 10px;
 }
 
-#dmtfevxpis .gt_indent_3 {
+#ozyyxezdov .gt_indent_3 {
   text-indent: 15px;
 }
 
-#dmtfevxpis .gt_indent_4 {
+#ozyyxezdov .gt_indent_4 {
   text-indent: 20px;
 }
 
-#dmtfevxpis .gt_indent_5 {
+#ozyyxezdov .gt_indent_5 {
   text-indent: 25px;
 }
 
-#dmtfevxpis .katex-display {
+#ozyyxezdov .katex-display {
   display: inline-flex !important;
   margin-bottom: 0.75em !important;
 }
 
-#dmtfevxpis div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
+#ozyyxezdov div.Reactable > div.rt-table > div.rt-thead > div.rt-tr.rt-tr-group-header > div.rt-th-group:after {
   height: 0px !important;
 }
 </style>
 
-<table class="gt_table caption-top table table-sm table-striped small" data-quarto-bootstrap="false">
+<table class="gt_table caption-top table table-sm table-striped small" data-quarto-postprocess="true" data-quarto-disable-processing="false" data-quarto-bootstrap="false">
 <thead>
 <tr class="gt_col_headings header">
 <th id="a::stub" class="gt_col_heading gt_columns_bottom_border gt_left" data-quarto-table-cell-role="th" scope="col"></th>
@@ -707,29 +718,34 @@ Caused by warning:
 </thead>
 <tbody class="gt_table_body">
 <tr class="odd">
-<th id="stub_1_1" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGameValidation</th>
+<td id="stub_1_1" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGameValidation</td>
 <td class="gt_row gt_right" headers="stub_1_1 N">256</td>
 <td class="gt_row gt_right" headers="stub_1_1 N_obs">98088</td>
 </tr>
 <tr class="even">
-<th id="stub_1_2" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGameReliability</th>
+<td id="stub_1_2" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGameReliability</td>
 <td class="gt_row gt_right" headers="stub_1_2 N">500</td>
 <td class="gt_row gt_right" headers="stub_1_2 N_obs">192000</td>
 </tr>
 <tr class="odd">
-<th id="stub_1_3" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGameSuggestibility</th>
-<td class="gt_row gt_right" headers="stub_1_3 N">780</td>
-<td class="gt_row gt_right" headers="stub_1_3 N_obs">374400</td>
+<td id="stub_1_3" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGameInternational</td>
+<td class="gt_row gt_right" headers="stub_1_3 N">44</td>
+<td class="gt_row gt_right" headers="stub_1_3 N_obs">21120</td>
 </tr>
 <tr class="even">
-<th id="stub_1_4" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGamePCS</th>
-<td class="gt_row gt_right" headers="stub_1_4 N">500</td>
-<td class="gt_row gt_right" headers="stub_1_4 N_obs">240000</td>
+<td id="stub_1_4" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGameSuggestibility</td>
+<td class="gt_row gt_right" headers="stub_1_4 N">780</td>
+<td class="gt_row gt_right" headers="stub_1_4 N_obs">374400</td>
 </tr>
 <tr class="odd">
-<th id="grand_summary_stub_1" class="gt_row gt_left gt_stub gt_grand_summary_row gt_first_grand_summary_row gt_last_summary_row" data-quarto-table-cell-role="th" scope="row">Total</th>
-<td class="gt_row gt_right gt_grand_summary_row gt_first_grand_summary_row gt_last_summary_row" headers="grand_summary_stub_1 N">2036</td>
-<td class="gt_row gt_right gt_grand_summary_row gt_first_grand_summary_row gt_last_summary_row" headers="grand_summary_stub_1 N_obs">904488</td>
+<td id="stub_1_5" class="gt_row gt_left gt_stub" data-quarto-table-cell-role="th" scope="row">IllusionGamePCS</td>
+<td class="gt_row gt_right" headers="stub_1_5 N">500</td>
+<td class="gt_row gt_right" headers="stub_1_5 N_obs">240000</td>
+</tr>
+<tr class="even">
+<td id="grand_summary_stub_1" class="gt_row gt_left gt_stub gt_grand_summary_row gt_first_grand_summary_row gt_last_summary_row" data-quarto-table-cell-role="th" scope="row">Total</td>
+<td class="gt_row gt_right gt_grand_summary_row gt_first_grand_summary_row gt_last_summary_row" headers="grand_summary_stub_1 N">2080</td>
+<td class="gt_row gt_right gt_grand_summary_row gt_first_grand_summary_row gt_last_summary_row" headers="grand_summary_stub_1 N_obs">925608</td>
 </tr>
 </tbody>
 </table>
@@ -743,13 +759,13 @@ Caused by warning:
 <h2 class="anchored" data-anchor-id="cleaning">Cleaning</h2>
 <section id="extreme-rts" class="level3">
 <h3 class="anchored" data-anchor-id="extreme-rts">Extreme RTs</h3>
-<p>We removed 1314 trials (0.15% of the data) with RTs longer than 6 seconds, as these likely reflect participants taking breaks during the task.</p>
+<p>We removed 1407 trials (0.15% of the data) with RTs longer than 6 seconds, as these likely reflect participants taking breaks during the task.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&lt;</span> <span class="dv">7</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&lt;</span> <span class="dv">7</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
-<p>We removed 79 trials (8.75e-03%) where RT equaled 0, as these likely reflect early responses that coincided with stimulus onset.</p>
+<p>We removed 94 trials (0.01%) where RT equaled 0, as these likely reflect early responses that coincided with stimulus onset.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&gt;</span> <span class="dv">0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&gt;</span> <span class="dv">0</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="outlying-participants" class="level3">
@@ -757,67 +773,67 @@ Caused by warning:
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"IllusionGameValidation"</span> <span class="ot">=</span> <span class="st">"#4CAF50"</span>, <span class="st">"IllusionGameReliability"</span> <span class="ot">=</span> <span class="st">"#FF5722"</span>, <span class="st">"IllusionGameSuggestibility"</span> <span class="ot">=</span> <span class="st">"#9C27B0"</span>, <span class="st">"IllusionGamePCS"</span> <span class="ot">=</span> <span class="st">"#2196F3"</span>)</span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>binwidth <span class="ot">&lt;-</span> <span class="fl">0.03</span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Get density of lognormal distribution</span></span>
-<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>xrange <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">6</span>, <span class="at">by =</span> <span class="fl">0.01</span>)</span>
-<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>dlognorm <span class="ot">&lt;-</span> <span class="fu">dlnorm</span>(xrange, <span class="at">meanlog =</span> <span class="fu">mean</span>(<span class="fu">log</span>(illu<span class="sc">$</span>RT)), <span class="at">sdlog =</span> <span class="fl">0.4</span>)</span>
-<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
-<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> RT)) <span class="sc">+</span></span>
-<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density)), <span class="at">binwidth =</span> binwidth) <span class="sc">+</span> </span>
-<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>  <span class="co"># stat_bin(aes(y=after_stat(density), color = Dataset), geom="step",</span></span>
-<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>  <span class="co">#          binwidth = binwidth,</span></span>
-<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>  <span class="co">#          position = position_nudge(x = -0.5 * binwidth)) +</span></span>
-<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density</span>(<span class="fu">aes</span>(<span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
-<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>  <span class="co"># geom_line(data = data.frame(x = xrange, y = dlognorm), aes(x = x, y = y), color = "black", linetype = "dashed") +</span></span>
-<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_sqrt</span>(<span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.15</span>, <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>),</span>
-<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>               <span class="at">minor_breaks =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
-<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
-<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"RTs Distribution"</span>) <span class="sc">+</span></span>
-<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>) <span class="sc">+</span></span>
-<span id="cb11-21"><a href="#cb11-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb11-22"><a href="#cb11-22" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-23"><a href="#cb11-23" aria-hidden="true" tabindex="-1"></a>p_tail1 <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
-<span id="cb11-24"><a href="#cb11-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(RT <span class="sc">&lt;</span> <span class="fl">0.3</span>) <span class="sc">|&gt;</span></span>
-<span id="cb11-25"><a href="#cb11-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> RT)) <span class="sc">+</span></span>
-<span id="cb11-26"><a href="#cb11-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density)), <span class="at">binwidth =</span> binwidth) <span class="sc">+</span> </span>
-<span id="cb11-27"><a href="#cb11-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_bin</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density), <span class="at">color =</span> Dataset), <span class="at">geom=</span><span class="st">"step"</span>,</span>
-<span id="cb11-28"><a href="#cb11-28" aria-hidden="true" tabindex="-1"></a>           <span class="at">binwidth =</span> binwidth,</span>
-<span id="cb11-29"><a href="#cb11-29" aria-hidden="true" tabindex="-1"></a>           <span class="at">position =</span> <span class="fu">position_nudge</span>(<span class="at">x =</span> <span class="sc">-</span><span class="fl">0.5</span> <span class="sc">*</span> binwidth)) <span class="sc">+</span></span>
-<span id="cb11-30"><a href="#cb11-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">6</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb11-31"><a href="#cb11-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_sqrt</span>() <span class="sc">+</span></span>
-<span id="cb11-32"><a href="#cb11-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
-<span id="cb11-33"><a href="#cb11-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Zoom on Lower Tail"</span>) <span class="sc">+</span></span>
-<span id="cb11-34"><a href="#cb11-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb11-35"><a href="#cb11-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-36"><a href="#cb11-36" aria-hidden="true" tabindex="-1"></a>p_tail2 <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
-<span id="cb11-37"><a href="#cb11-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(RT <span class="sc">&gt;</span> <span class="fl">2.5</span>) <span class="sc">|&gt;</span></span>
-<span id="cb11-38"><a href="#cb11-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> RT)) <span class="sc">+</span></span>
-<span id="cb11-39"><a href="#cb11-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density)), <span class="at">binwidth =</span> binwidth) <span class="sc">+</span> </span>
-<span id="cb11-40"><a href="#cb11-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_bin</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density), <span class="at">color =</span> Dataset), <span class="at">geom=</span><span class="st">"step"</span>,</span>
-<span id="cb11-41"><a href="#cb11-41" aria-hidden="true" tabindex="-1"></a>           <span class="at">binwidth =</span> binwidth,</span>
-<span id="cb11-42"><a href="#cb11-42" aria-hidden="true" tabindex="-1"></a>           <span class="at">position =</span> <span class="fu">position_nudge</span>(<span class="at">x =</span> <span class="sc">-</span><span class="fl">0.5</span> <span class="sc">*</span> binwidth)) <span class="sc">+</span></span>
-<span id="cb11-43"><a href="#cb11-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">4</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb11-44"><a href="#cb11-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_sqrt</span>() <span class="sc">+</span></span>
-<span id="cb11-45"><a href="#cb11-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
-<span id="cb11-46"><a href="#cb11-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Zoom on Upper Tail"</span>) <span class="sc">+</span></span>
-<span id="cb11-47"><a href="#cb11-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb11-48"><a href="#cb11-48" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb11-49"><a href="#cb11-49" aria-hidden="true" tabindex="-1"></a>p1 <span class="sc">|</span> (p_tail1 <span class="sc">/</span> p_tail2 ) <span class="sc">+</span> <span class="fu">plot_layout</span>(<span class="at">guides =</span> <span class="st">"collect"</span>) <span class="sc">&amp;</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"top"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>cols <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"IllusionGameValidation"</span> <span class="ot">=</span> <span class="st">"#4CAF50"</span>, <span class="st">"IllusionGameReliability"</span> <span class="ot">=</span> <span class="st">"#FF5722"</span>, <span class="st">"IllusionGameInternational"</span> <span class="ot">=</span> <span class="st">"#FFBE65"</span>, <span class="st">"IllusionGameSuggestibility"</span> <span class="ot">=</span> <span class="st">"#9C27B0"</span>, <span class="st">"IllusionGamePCS"</span> <span class="ot">=</span> <span class="st">"#2196F3"</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>binwidth <span class="ot">&lt;-</span> <span class="fl">0.03</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Get density of lognormal distribution</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>xrange <span class="ot">&lt;-</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">6</span>, <span class="at">by =</span> <span class="fl">0.01</span>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>dlognorm <span class="ot">&lt;-</span> <span class="fu">dlnorm</span>(xrange, <span class="at">meanlog =</span> <span class="fu">mean</span>(<span class="fu">log</span>(illu<span class="sc">$</span>RT)), <span class="at">sdlog =</span> <span class="fl">0.4</span>)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>p1 <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> RT)) <span class="sc">+</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density)), <span class="at">binwidth =</span> binwidth) <span class="sc">+</span> </span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>  <span class="co"># stat_bin(aes(y=after_stat(density), color = Dataset), geom="step",</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>  <span class="co">#          binwidth = binwidth,</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>  <span class="co">#          position = position_nudge(x = -0.5 * binwidth)) +</span></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density</span>(<span class="fu">aes</span>(<span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>  <span class="co"># geom_line(data = data.frame(x = xrange, y = dlognorm), aes(x = x, y = y), color = "black", linetype = "dashed") +</span></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_sqrt</span>(<span class="at">breaks =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="fl">0.15</span>, <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="dv">2</span>, <span class="dv">3</span>, <span class="dv">4</span>, <span class="dv">5</span>, <span class="dv">6</span>),</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>               <span class="at">minor_breaks =</span> <span class="cn">NULL</span>) <span class="sc">+</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"RTs Distribution"</span>) <span class="sc">+</span></span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"none"</span>) <span class="sc">+</span></span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>p_tail1 <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(RT <span class="sc">&lt;</span> <span class="fl">0.3</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> RT)) <span class="sc">+</span></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density)), <span class="at">binwidth =</span> binwidth) <span class="sc">+</span> </span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_bin</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density), <span class="at">color =</span> Dataset), <span class="at">geom=</span><span class="st">"step"</span>,</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>           <span class="at">binwidth =</span> binwidth,</span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>           <span class="at">position =</span> <span class="fu">position_nudge</span>(<span class="at">x =</span> <span class="sc">-</span><span class="fl">0.5</span> <span class="sc">*</span> binwidth)) <span class="sc">+</span></span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">6</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_sqrt</span>() <span class="sc">+</span></span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Zoom on Lower Tail"</span>) <span class="sc">+</span></span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>p_tail2 <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(RT <span class="sc">&gt;</span> <span class="fl">2.5</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> RT)) <span class="sc">+</span></span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_histogram</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density)), <span class="at">binwidth =</span> binwidth) <span class="sc">+</span> </span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a>  <span class="fu">stat_bin</span>(<span class="fu">aes</span>(<span class="at">y=</span><span class="fu">after_stat</span>(density), <span class="at">color =</span> Dataset), <span class="at">geom=</span><span class="st">"step"</span>,</span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>           <span class="at">binwidth =</span> binwidth,</span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>           <span class="at">position =</span> <span class="fu">position_nudge</span>(<span class="at">x =</span> <span class="sc">-</span><span class="fl">0.5</span> <span class="sc">*</span> binwidth)) <span class="sc">+</span></span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="dv">4</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_sqrt</span>() <span class="sc">+</span></span>
+<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
+<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Zoom on Upper Tail"</span>) <span class="sc">+</span></span>
+<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a>p1 <span class="sc">|</span> (p_tail1 <span class="sc">/</span> p_tail2 ) <span class="sc">+</span> <span class="fu">plot_layout</span>(<span class="at">guides =</span> <span class="st">"collect"</span>) <span class="sc">&amp;</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"top"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="0_preprocessing_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid figure-img" width="1152"></p>
+<p><img src="0_preprocessing_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid figure-img" width="1152"></p>
 </figure>
 </div>
 </div>
 </div>
-<p>We removed 6810 trials (0.75%) with RTs shorter than 1/6 seconds, as these likely reflect anticipatory responses, and 3327 trials (0.37%) with RTs longer than 4 seconds.</p>
+<p>We removed 6993 trials (0.76%) with RTs shorter than 1/6 seconds, as these likely reflect anticipatory responses, and 3619 trials (0.39%) with RTs longer than 4 seconds.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&gt;</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">6</span>) <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&lt;</span> <span class="dv">4</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&gt;</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">6</span>) <span class="sc">|&gt;</span> <span class="fu">filter</span>(RT <span class="sc">&lt;</span> <span class="dv">4</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 <section id="extreme-participants" class="level3">
@@ -825,62 +841,62 @@ Caused by warning:
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>outliers <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
-<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">Error =</span> <span class="fu">mean</span>(Error), </span>
-<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">RT_SD =</span> <span class="fu">sd</span>(RT), </span>
-<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>            <span class="co"># RT_Skew = datawizard::skewness(RT),</span></span>
-<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>            <span class="co"># RT_Kurtosis = datawizard::kurtosis(RT),</span></span>
-<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">RT =</span> <span class="fu">mean</span>(RT), </span>
-<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">.by =</span> <span class="fu">c</span>(<span class="st">"Participant"</span>, <span class="st">"Illusion_Type"</span>, <span class="st">"Block"</span>, <span class="st">"Dataset"</span>)) <span class="sc">|&gt;</span> </span>
-<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">RT_SD =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(RT_SD), <span class="dv">1</span>, RT_SD)) <span class="sc">|&gt;</span> </span>
-<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(Error), <span class="fu">desc</span>(RT))</span>
-<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Rules</span></span>
-<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>outliers<span class="sc">$</span>Outlier <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(outliers<span class="sc">$</span>RT <span class="sc">&lt;</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">3</span>, <span class="st">"Outlier"</span>, <span class="st">"Normal"</span>)</span>
-<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>outliers<span class="sc">$</span>Outlier <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(outliers<span class="sc">$</span>RT <span class="sc">&gt;</span> <span class="dv">3</span>, <span class="st">"Outlier"</span>, outliers<span class="sc">$</span>Outlier)</span>
-<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a>outliers<span class="sc">$</span>Outlier <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(outliers<span class="sc">$</span>Error <span class="sc">&gt;=</span> <span class="fl">0.45</span>, <span class="st">"Outlier"</span>, outliers<span class="sc">$</span>Outlier)</span>
-<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>outliers <span class="sc">|&gt;</span> </span>
-<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Error, <span class="at">y =</span> RT)) <span class="sc">+</span></span>
-<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">color =</span> Outlier, <span class="at">size =</span> RT_SD), <span class="at">alpha =</span> <span class="fl">0.35</span>) <span class="sc">+</span></span>
-<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density_2d</span>(<span class="at">color =</span> <span class="st">"black"</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>, <span class="at">bins =</span> <span class="dv">10</span>, <span class="at">show.legend =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
-<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>, <span class="at">xmin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">xmax =</span> <span class="fl">0.45</span>, <span class="at">ymin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">ymax =</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.1</span>, <span class="at">fill =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>, <span class="at">xmin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">xmax =</span> <span class="fl">0.45</span>, <span class="at">ymin =</span> <span class="dv">3</span>, <span class="at">ymax =</span> <span class="cn">Inf</span>, <span class="at">alpha =</span> <span class="fl">0.1</span>, <span class="at">fill =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>, <span class="at">xmin =</span> <span class="fl">0.45</span>, <span class="at">xmax =</span> <span class="cn">Inf</span>, <span class="at">ymin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">ymax =</span> <span class="cn">Inf</span>, <span class="at">alpha =</span> <span class="fl">0.1</span>, <span class="at">fill =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
-<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fu">c</span>(<span class="dv">1</span><span class="sc">/</span><span class="dv">3</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fl">0.5</span>, <span class="at">linetype =</span> <span class="st">"dotted"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">intercept =</span> <span class="fl">2.5</span>, <span class="at">slope =</span> <span class="sc">-</span><span class="fl">4.25</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
-<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Outlier"</span> <span class="ot">=</span> <span class="st">"red"</span>, <span class="st">"Normal"</span> <span class="ot">=</span> <span class="st">"steelblue"</span>)) <span class="sc">+</span></span>
-<span id="cb13-28"><a href="#cb13-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_size_continuous</span>(<span class="at">range =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="dv">3</span>)) <span class="sc">+</span></span>
-<span id="cb13-29"><a href="#cb13-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">breaks =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="at">by =</span> <span class="fl">0.2</span>), <span class="at">labels =</span> scales<span class="sc">::</span>percent) <span class="sc">+</span></span>
-<span id="cb13-30"><a href="#cb13-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Outlier Detection"</span>, <span class="at">x =</span> <span class="st">"Errors"</span>) <span class="sc">+</span> </span>
-<span id="cb13-31"><a href="#cb13-31" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ggside::geom_xsidedensity(aes(y = after_stat(density)), alpha = 0.5) +</span></span>
-<span id="cb13-32"><a href="#cb13-32" aria-hidden="true" tabindex="-1"></a>  ggside<span class="sc">::</span><span class="fu">geom_xsidedensity</span>(<span class="fu">aes</span>(<span class="at">y =</span> <span class="fu">after_stat</span>(density), <span class="at">color =</span> Outlier), <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb13-33"><a href="#cb13-33" aria-hidden="true" tabindex="-1"></a>  ggside<span class="sc">::</span><span class="fu">geom_ysidedensity</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">after_stat</span>(density), <span class="at">color =</span> Outlier), <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
-<span id="cb13-34"><a href="#cb13-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
-<span id="cb13-35"><a href="#cb13-35" aria-hidden="true" tabindex="-1"></a>  ggside<span class="sc">::</span><span class="fu">theme_ggside_void</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>outliers <span class="ot">&lt;-</span> illu <span class="sc">|&gt;</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarize</span>(<span class="at">Error =</span> <span class="fu">mean</span>(Error), </span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>            <span class="at">RT_SD =</span> <span class="fu">sd</span>(RT), </span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>            <span class="co"># RT_Skew = datawizard::skewness(RT),</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>            <span class="co"># RT_Kurtosis = datawizard::kurtosis(RT),</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>            <span class="at">RT =</span> <span class="fu">mean</span>(RT), </span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">.by =</span> <span class="fu">c</span>(<span class="st">"Participant"</span>, <span class="st">"Illusion_Type"</span>, <span class="st">"Block"</span>, <span class="st">"Dataset"</span>)) <span class="sc">|&gt;</span> </span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">RT_SD =</span> <span class="fu">ifelse</span>(<span class="fu">is.na</span>(RT_SD), <span class="dv">1</span>, RT_SD)) <span class="sc">|&gt;</span> </span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(Error), <span class="fu">desc</span>(RT))</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Rules</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>outliers<span class="sc">$</span>Outlier <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(outliers<span class="sc">$</span>RT <span class="sc">&lt;</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">3</span>, <span class="st">"Outlier"</span>, <span class="st">"Normal"</span>)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>outliers<span class="sc">$</span>Outlier <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(outliers<span class="sc">$</span>RT <span class="sc">&gt;</span> <span class="dv">3</span>, <span class="st">"Outlier"</span>, outliers<span class="sc">$</span>Outlier)</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>outliers<span class="sc">$</span>Outlier <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(outliers<span class="sc">$</span>Error <span class="sc">&gt;=</span> <span class="fl">0.45</span>, <span class="st">"Outlier"</span>, outliers<span class="sc">$</span>Outlier)</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>outliers <span class="sc">|&gt;</span> </span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Error, <span class="at">y =</span> RT)) <span class="sc">+</span></span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">color =</span> Outlier, <span class="at">size =</span> RT_SD), <span class="at">alpha =</span> <span class="fl">0.35</span>) <span class="sc">+</span></span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_density_2d</span>(<span class="at">color =</span> <span class="st">"black"</span>, <span class="at">alpha =</span> <span class="fl">0.6</span>, <span class="at">bins =</span> <span class="dv">10</span>, <span class="at">show.legend =</span> <span class="cn">FALSE</span>) <span class="sc">+</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>, <span class="at">xmin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">xmax =</span> <span class="fl">0.45</span>, <span class="at">ymin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">ymax =</span> <span class="dv">1</span><span class="sc">/</span><span class="dv">3</span>, <span class="at">alpha =</span> <span class="fl">0.1</span>, <span class="at">fill =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>, <span class="at">xmin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">xmax =</span> <span class="fl">0.45</span>, <span class="at">ymin =</span> <span class="dv">3</span>, <span class="at">ymax =</span> <span class="cn">Inf</span>, <span class="at">alpha =</span> <span class="fl">0.1</span>, <span class="at">fill =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">annotate</span>(<span class="st">"rect"</span>, <span class="at">xmin =</span> <span class="fl">0.45</span>, <span class="at">xmax =</span> <span class="cn">Inf</span>, <span class="at">ymin =</span> <span class="sc">-</span><span class="cn">Inf</span>, <span class="at">ymax =</span> <span class="cn">Inf</span>, <span class="at">alpha =</span> <span class="fl">0.1</span>, <span class="at">fill =</span> <span class="st">"red"</span>) <span class="sc">+</span></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_hline</span>(<span class="at">yintercept =</span> <span class="fu">c</span>(<span class="dv">1</span><span class="sc">/</span><span class="dv">3</span>), <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_vline</span>(<span class="at">xintercept =</span> <span class="fl">0.5</span>, <span class="at">linetype =</span> <span class="st">"dotted"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_abline</span>(<span class="at">intercept =</span> <span class="fl">2.5</span>, <span class="at">slope =</span> <span class="sc">-</span><span class="fl">4.25</span>, <span class="at">linetype =</span> <span class="st">"dashed"</span>, <span class="at">color =</span> <span class="st">"black"</span>) <span class="sc">+</span></span>
+<span id="cb12-27"><a href="#cb12-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"Outlier"</span> <span class="ot">=</span> <span class="st">"red"</span>, <span class="st">"Normal"</span> <span class="ot">=</span> <span class="st">"steelblue"</span>)) <span class="sc">+</span></span>
+<span id="cb12-28"><a href="#cb12-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_size_continuous</span>(<span class="at">range =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="dv">3</span>)) <span class="sc">+</span></span>
+<span id="cb12-29"><a href="#cb12-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_x_continuous</span>(<span class="at">limits =</span> <span class="fu">c</span>(<span class="dv">0</span>, <span class="dv">1</span>), <span class="at">breaks =</span> <span class="fu">seq</span>(<span class="dv">0</span>, <span class="dv">1</span>, <span class="at">by =</span> <span class="fl">0.2</span>), <span class="at">labels =</span> scales<span class="sc">::</span>percent) <span class="sc">+</span></span>
+<span id="cb12-30"><a href="#cb12-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Outlier Detection"</span>, <span class="at">x =</span> <span class="st">"Errors"</span>) <span class="sc">+</span> </span>
+<span id="cb12-31"><a href="#cb12-31" aria-hidden="true" tabindex="-1"></a>  <span class="co"># ggside::geom_xsidedensity(aes(y = after_stat(density)), alpha = 0.5) +</span></span>
+<span id="cb12-32"><a href="#cb12-32" aria-hidden="true" tabindex="-1"></a>  ggside<span class="sc">::</span><span class="fu">geom_xsidedensity</span>(<span class="fu">aes</span>(<span class="at">y =</span> <span class="fu">after_stat</span>(density), <span class="at">color =</span> Outlier), <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb12-33"><a href="#cb12-33" aria-hidden="true" tabindex="-1"></a>  ggside<span class="sc">::</span><span class="fu">geom_ysidedensity</span>(<span class="fu">aes</span>(<span class="at">x =</span> <span class="fu">after_stat</span>(density), <span class="at">color =</span> Outlier), <span class="at">alpha =</span> <span class="fl">0.5</span>) <span class="sc">+</span></span>
+<span id="cb12-34"><a href="#cb12-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
+<span id="cb12-35"><a href="#cb12-35" aria-hidden="true" tabindex="-1"></a>  ggside<span class="sc">::</span><span class="fu">theme_ggside_void</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="0_preprocessing_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid figure-img" width="1152"></p>
+<p><img src="0_preprocessing_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid figure-img" width="1152"></p>
 </figure>
 </div>
 </div>
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>outliers <span class="ot">&lt;-</span> outliers <span class="sc">|&gt;</span> </span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Section =</span> <span class="fu">paste</span>(Participant, Illusion_Type, Block, Dataset)) <span class="sc">|&gt;</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Outlier <span class="sc">==</span> <span class="st">"Outlier"</span>) <span class="sc">|&gt;</span> </span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(Section)</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>flagged <span class="ot">&lt;-</span> <span class="fu">paste</span>(illu<span class="sc">$</span>Participant, illu<span class="sc">$</span>Illusion_Type, illu<span class="sc">$</span>Block, illu<span class="sc">$</span>Dataset) <span class="sc">%in%</span> outliers</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>outliers <span class="ot">&lt;-</span> outliers <span class="sc">|&gt;</span> </span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Section =</span> <span class="fu">paste</span>(Participant, Illusion_Type, Block, Dataset)) <span class="sc">|&gt;</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(Outlier <span class="sc">==</span> <span class="st">"Outlier"</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(Section)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>flagged <span class="ot">&lt;-</span> <span class="fu">paste</span>(illu<span class="sc">$</span>Participant, illu<span class="sc">$</span>Illusion_Type, illu<span class="sc">$</span>Block, illu<span class="sc">$</span>Dataset) <span class="sc">%in%</span> outliers</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
-<p>We removed 10570 trials (1.18%) from 109 participants flagged as outliers based on their overall error rate and RT distribution.</p>
+<p>We removed 10618 trials (1.16%) from 110 participants flagged as outliers based on their overall error rate and RT distribution.</p>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu[<span class="sc">!</span>flagged,]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>illu <span class="ot">&lt;-</span> illu[<span class="sc">!</span>flagged,]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 </section>
@@ -889,83 +905,83 @@ Caused by warning:
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># RTs</span></span>
-<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------------</span></span>
-<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>m_diff1 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(RT <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Difference, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>),</span>
-<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
-<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>p_diff1 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_diff1, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
-<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
-<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Difference, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
-<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
-<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
-<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Response Time (s)"</span>, <span class="at">x =</span> <span class="st">"Task Difficulty"</span>) <span class="sc">+</span></span>
-<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>m_strength1 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(RT <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Strength, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>),</span>
-<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, </span>
-<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">*</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>),</span>
-<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
-<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>p_strength1 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_strength1, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
-<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
-<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>),</span>
-<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">/</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Strength, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
-<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
-<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
-<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Response Time (s)"</span>, <span class="at">x =</span> <span class="st">"Illusion Strength"</span>) <span class="sc">+</span></span>
-<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># RTs</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------------</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>m_diff1 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(RT <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Difference, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>),</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>p_diff1 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_diff1, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Difference, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Response Time (s)"</span>, <span class="at">x =</span> <span class="st">"Task Difficulty"</span>) <span class="sc">+</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>m_strength1 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(RT <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Strength, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>),</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, </span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">*</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>),</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>p_strength1 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_strength1, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>),</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">/</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb15-25"><a href="#cb15-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Strength, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
+<span id="cb15-26"><a href="#cb15-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb15-27"><a href="#cb15-27" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
+<span id="cb15-28"><a href="#cb15-28" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
+<span id="cb15-29"><a href="#cb15-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"Response Time (s)"</span>, <span class="at">x =</span> <span class="st">"Illusion Strength"</span>) <span class="sc">+</span></span>
+<span id="cb15-30"><a href="#cb15-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 </div>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Responses</span></span>
-<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------------</span></span>
-<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>m_diff2 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(RightDown <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Difference, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>), </span>
-<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>),</span>
-<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, </span>
-<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">RightDown =</span> <span class="fu">ifelse</span>(Response <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"down"</span>, <span class="st">"right"</span>), <span class="dv">1</span>, <span class="dv">0</span>),</span>
-<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
-<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>p_diff2 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_diff2, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
-<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
-<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Difference, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
-<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
-<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
-<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"P(Right/Down Arrow Response)"</span>, <span class="at">x =</span> <span class="st">"Task Difficulty"</span>) <span class="sc">+</span></span>
-<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() </span>
-<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>m_strength2 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(Error <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Strength, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>), </span>
-<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>),</span>
-<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, </span>
-<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">*</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>),</span>
-<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
-<span id="cb17-24"><a href="#cb17-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-25"><a href="#cb17-25" aria-hidden="true" tabindex="-1"></a>p_strength2 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_strength2, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
-<span id="cb17-26"><a href="#cb17-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
-<span id="cb17-27"><a href="#cb17-27" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>),</span>
-<span id="cb17-28"><a href="#cb17-28" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">/</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
-<span id="cb17-29"><a href="#cb17-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Strength, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
-<span id="cb17-30"><a href="#cb17-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
-<span id="cb17-31"><a href="#cb17-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
-<span id="cb17-32"><a href="#cb17-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
-<span id="cb17-33"><a href="#cb17-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"P(Error)"</span>, <span class="at">x =</span> <span class="st">"Illusion Strength"</span>) <span class="sc">+</span></span>
-<span id="cb17-34"><a href="#cb17-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
-<span id="cb17-35"><a href="#cb17-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb17-36"><a href="#cb17-36" aria-hidden="true" tabindex="-1"></a>(p_diff1 <span class="sc">|</span> p_strength1) <span class="sc">/</span> (p_diff2 <span class="sc">|</span> p_strength2) <span class="sc">+</span> </span>
-<span id="cb17-37"><a href="#cb17-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_layout</span>(<span class="at">guides =</span> <span class="st">"collect"</span>) <span class="sc">&amp;</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"top"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Responses</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a><span class="co"># ---------------</span></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>m_diff2 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(RightDown <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Difference, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>), </span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>),</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, </span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">RightDown =</span> <span class="fu">ifelse</span>(Response <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"down"</span>, <span class="st">"right"</span>), <span class="dv">1</span>, <span class="dv">0</span>),</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>p_diff2 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_diff2, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Difference, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"P(Right/Down Arrow Response)"</span>, <span class="at">x =</span> <span class="st">"Task Difficulty"</span>) <span class="sc">+</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() </span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a>m_strength2 <span class="ot">&lt;-</span> mgcv<span class="sc">::</span><span class="fu">bam</span>(Error <span class="sc">~</span> Group <span class="sc">+</span> <span class="fu">s</span>(Illusion_Strength, <span class="at">k =</span> <span class="sc">-</span><span class="dv">1</span>, <span class="at">by =</span> <span class="st">`</span><span class="at">Group</span><span class="st">`</span>, <span class="at">bs =</span> <span class="st">"ts"</span>), </span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a>                    <span class="at">family =</span> <span class="fu">binomial</span>(<span class="at">link =</span> <span class="st">"logit"</span>),</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> <span class="fu">mutate</span>(illu, </span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">*</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>),</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>                                  <span class="at">Group =</span> <span class="fu">as.factor</span>(<span class="fu">paste0</span>(Dataset, <span class="st">"_"</span>, Illusion_Type))))</span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>p_strength2 <span class="ot">&lt;-</span> <span class="fu">estimate_relation</span>(m_strength2, <span class="at">length =</span> <span class="dv">1000</span>) <span class="sc">|&gt;</span> </span>
+<span id="cb16-26"><a href="#cb16-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">Dataset =</span> <span class="fu">str_remove</span>(Group, <span class="st">"_.*"</span>),</span>
+<span id="cb16-27"><a href="#cb16-27" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Type =</span> <span class="fu">str_remove</span>(Group, <span class="st">".*_"</span>),</span>
+<span id="cb16-28"><a href="#cb16-28" aria-hidden="true" tabindex="-1"></a>         <span class="at">Illusion_Strength =</span> Illusion_Strength <span class="sc">/</span> <span class="fu">ifelse</span>(Illusion_Type <span class="sc">==</span> <span class="st">"Ebbinghaus"</span>, <span class="dv">30</span>, <span class="dv">1</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb16-29"><a href="#cb16-29" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> Illusion_Strength, <span class="at">y =</span> Predicted, <span class="at">color =</span> Dataset)) <span class="sc">+</span></span>
+<span id="cb16-30"><a href="#cb16-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">linewidth =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb16-31"><a href="#cb16-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_color_manual</span>(<span class="at">values =</span> cols) <span class="sc">+</span></span>
+<span id="cb16-32"><a href="#cb16-32" aria-hidden="true" tabindex="-1"></a>  <span class="fu">facet_wrap</span>(<span class="sc">~</span>Illusion_Type, <span class="at">scales =</span> <span class="st">"free_x"</span>) <span class="sc">+</span></span>
+<span id="cb16-33"><a href="#cb16-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">y =</span> <span class="st">"P(Error)"</span>, <span class="at">x =</span> <span class="st">"Illusion Strength"</span>) <span class="sc">+</span></span>
+<span id="cb16-34"><a href="#cb16-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span>
+<span id="cb16-35"><a href="#cb16-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-36"><a href="#cb16-36" aria-hidden="true" tabindex="-1"></a>(p_diff1 <span class="sc">|</span> p_strength1) <span class="sc">/</span> (p_diff2 <span class="sc">|</span> p_strength2) <span class="sc">+</span> </span>
+<span id="cb16-37"><a href="#cb16-37" aria-hidden="true" tabindex="-1"></a>  <span class="fu">plot_layout</span>(<span class="at">guides =</span> <span class="st">"collect"</span>) <span class="sc">&amp;</span> <span class="fu">theme</span>(<span class="at">legend.position =</span> <span class="st">"top"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </details>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
-<p><img src="0_preprocessing_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid figure-img" width="1152"></p>
+<p><img src="0_preprocessing_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid figure-img" width="1152"></p>
 </figure>
 </div>
 </div>
@@ -974,10 +990,10 @@ Caused by warning:
 <section id="save" class="level2">
 <h2 class="anchored" data-anchor-id="save">Save</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Split file to avoid GitHub upload limits</span></span>
-<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(illu[<span class="dv">1</span><span class="sc">:</span><span class="dv">400000</span>, ], <span class="st">"../data/illusion_part1.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(illu[<span class="dv">400001</span><span class="sc">:</span><span class="dv">800000</span>, ], <span class="st">"../data/illusion_part2.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
-<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(illu[<span class="dv">800001</span><span class="sc">:</span><span class="fu">nrow</span>(illu), ], <span class="st">"../data/illusion_part3.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Split file to avoid GitHub upload limits</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(illu[<span class="dv">1</span><span class="sc">:</span><span class="dv">400000</span>, ], <span class="st">"../data/illusion_part1.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(illu[<span class="dv">400001</span><span class="sc">:</span><span class="dv">800000</span>, ], <span class="st">"../data/illusion_part2.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="fu">write.csv</span>(illu[<span class="dv">800001</span><span class="sc">:</span><span class="fu">nrow</span>(illu), ], <span class="st">"../data/illusion_part3.csv"</span>, <span class="at">row.names =</span> <span class="cn">FALSE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 
@@ -1034,14 +1050,13 @@ Caused by warning:
       e.clearSelection();
     }
     const getTextToCopy = function(trigger) {
-      const outerScaffold = trigger.parentElement.cloneNode(true);
-      const codeEl = outerScaffold.querySelector('code');
-      for (const childEl of codeEl.children) {
-        if (isCodeAnnotation(childEl)) {
-          childEl.remove();
+        const codeEl = trigger.previousElementSibling.cloneNode(true);
+        for (const childEl of codeEl.children) {
+          if (isCodeAnnotation(childEl)) {
+            childEl.remove();
+          }
         }
-      }
-      return codeEl.innerText;
+        return codeEl.innerText;
     }
     const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
       text: getTextToCopy
