@@ -57,6 +57,33 @@ ppt_validation <- read.csv("https://raw.githubusercontent.com/RealityBending/Ill
   )
 ```
 
+### EEG
+
+- https://github.com/RealityBending/IllusionGameEEG
+
+```{r}
+#| code-fold: false
+
+illu_eeg <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameEEG/refs/heads/main/data/data_beh.csv") |> 
+    mutate(
+    Dataset = "IllusionGameEEG",
+    Participant = paste0("IllusionGameEEG_", Subject_ID),
+    Illusion_Difference = Illusion_Difference * Illusion_Side,
+    Illusion_Type = case_match(Illusion_Type,
+      "Müller-Lyer" ~ "MullerLyer",
+      "Vertical-Horizontal" ~ "VerticalHorizontal",
+      .default = Illusion_Type),
+    Answer = str_remove(Answer, "arrow"),
+    RT = RT / 1000
+  ) |>
+  filter(Illusion_Type %in% c("MullerLyer", "Ebbinghaus", "VerticalHorizontal")) |>
+  select(Participant, Dataset, Illusion_Type, Block, Trial=Event_Number, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response=Answer)
+
+# PP data not on repo
+
+```
+
+
 ### Reliability
 
 - https://github.com/RealityBending/IllusionGameReliability
@@ -156,7 +183,7 @@ ppt_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGa
 ### Summary
 
 ```{r}
-illu <- rbind(illu_validation, illu_reliability, illu_international, illu_suggestibility, illu_pcs)
+illu <- rbind(illu_validation, illu_eeg, illu_reliability, illu_international, illu_suggestibility, illu_pcs)
 
 illu |> 
   summarize(N = n_distinct(Participant),
@@ -196,7 +223,7 @@ illu <- illu |> filter(RT > 0)
 #| fig-width: 12
 #| fig-height: 8
 
-cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameReliability" = "#FF5722", "IllusionGameInternational" = "#FFBE65", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#2196F3")
+cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameEEG" = "#FFC0CB", "IllusionGameReliability" = "#FF5722", "IllusionGameInternational" = "#FFBE65", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#2196F3")
 binwidth <- 0.03
 
 # Get density of lognormal distribution
