@@ -79,10 +79,9 @@ illu_eeg <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionG
   filter(Illusion_Type %in% c("MullerLyer", "Ebbinghaus", "VerticalHorizontal")) |>
   select(Participant, Dataset, Illusion_Type, Block, Trial=Event_Number, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response=Answer)
 
-# PP data not on repo
-
 ```
 
+<!-- TODO: fix preprocessing: add data from missing subjects, make separate df for PP data (as currently not on repo). Also recompute "Block" values to match other scripts (A, B) rather than numbers (1-6 for each subject) -->
 
 ### Reliability
 
@@ -173,6 +172,29 @@ ppt_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGa
   )
 ```
 
+### Self-Association
+
+- https://github.com/RealityBending/IllusionGameSelfAssociation
+
+```{r}
+#| code-fold: false
+
+illu_self <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameSelfAssociation/refs/heads/main/data/rawdata_control_IllusionGame.csv") |>
+  mutate(
+    Dataset = "IllusionGameSelfAssociation",
+    Participant = paste0("IllusionGameSelfAssociation_", Participant),
+    Response = tolower(str_remove(Response, "Arrow"))
+  ) |>
+  select(Participant, Dataset, Illusion_Type, Block, Trial, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response)
+
+ppt_self <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameSelfAssociation/refs/heads/main/data/rawdata_control_participants.csv") |>
+  mutate(
+    Dataset = "IllusionGameSelfAssociation",
+    Participant = paste0("IllusionGameSelfAssociation_", Participant)
+  )
+```
+
+
 :::
 
 <!-- TODO: same for the remaining datasets -->
@@ -183,7 +205,7 @@ ppt_pcs <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGa
 ### Summary
 
 ```{r}
-illu <- rbind(illu_validation, illu_eeg, illu_reliability, illu_international, illu_suggestibility, illu_pcs)
+illu <- rbind(illu_validation, illu_eeg, illu_reliability, illu_international, illu_suggestibility, illu_pcs, illu_self)
 
 illu |> 
   summarize(N = n_distinct(Participant),
@@ -223,7 +245,7 @@ illu <- illu |> filter(RT > 0)
 #| fig-width: 12
 #| fig-height: 8
 
-cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameEEG" = "#FFC0CB", "IllusionGameReliability" = "#FF5722", "IllusionGameInternational" = "#FFBE65", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#2196F3")
+cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameEEG" = "#FFC0CB", "IllusionGameReliability" = "#FF5722", "IllusionGameInternational" = "#FFBE65", "IllusionGameSuggestibility" = "#9C27B0", "IllusionGamePCS" = "#2196F3", "IllusionGameSelfAssociation" = "#000000")
 binwidth <- 0.03
 
 # Get density of lognormal distribution
