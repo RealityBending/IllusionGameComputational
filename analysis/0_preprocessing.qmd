@@ -64,7 +64,7 @@ ppt_validation <- read.csv("https://raw.githubusercontent.com/RealityBending/Ill
 ```{r}
 #| code-fold: false
 
-illu_eeg <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameEEG/refs/heads/main/data/data_beh.csv") |> 
+illu_eeg <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameEEG/refs/heads/main/data/rawdata_beh_illusion.csv") |> 
     mutate(
     Dataset = "IllusionGameEEG",
     Participant = paste0("IllusionGameEEG_", Subject_ID),
@@ -74,14 +74,22 @@ illu_eeg <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionG
       "Vertical-Horizontal" ~ "VerticalHorizontal",
       .default = Illusion_Type),
     Answer = str_remove(Answer, "arrow"),
-    RT = RT / 1000
+    RT = RT / 1000,
+    Block = case_when(
+      Block %in% 1:3 ~ "A",
+      Block %in% 4:6 ~ "B"
+    )
   ) |>
   filter(Illusion_Type %in% c("MullerLyer", "Ebbinghaus", "VerticalHorizontal")) |>
   select(Participant, Dataset, Illusion_Type, Block, Trial=Event_Number, Illusion_Difference, Illusion_Strength, ISI, Error, RT, Response=Answer)
-
+ppt_eeg <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameEEG/refs/heads/main/data/rawdata_beh_participants.csv") |>
+  mutate(
+    Dataset = "IllusionGameEEG",
+    Participant = paste0("IllusionGameEEG_", Participant)
+  )
 ```
 
-<!-- TODO: fix preprocessing: add data from missing subjects, make separate df for PP data (as currently not on repo). Also recompute "Block" values to match other scripts (A, B) rather than numbers (1-6 for each subject) -->
+<!-- TODO: fix preprocessing: recompute "Block" values to match other scripts (A, B) rather than numbers (1-6 for each subject) -->
 
 ### Reliability
 
@@ -198,8 +206,6 @@ ppt_self <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionG
 :::
 
 <!-- TODO: same for the remaining datasets -->
-
-
 
 
 ### Summary
