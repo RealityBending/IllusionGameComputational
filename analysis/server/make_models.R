@@ -6,13 +6,24 @@
 library(brms)
 library(cogmod) # remotes::install_github("DominiqueMakowski/cogmod")
 
+task_id <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "1"))
+total_cores <- as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "2"))
+
+chains_per_node <- 2
+threads_per_chain <- total_cores / chains_per_node  # 16 cores / 2 chains = 8 threads per chain
+
+warmup <- 1000
+iter <- warmup + 200
+
+
 df <- rbind(
   read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameComputational/refs/heads/main/data/illusion_part1.csv"),
-  read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameComputational/refs/heads/main/data/illusion_part2.csv")
+  read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameComputational/refs/heads/main/data/illusion_part2.csv"),
+  read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameComputational/refs/heads/main/data/illusion_part3.csv")
 )
 df$Illusion_Difference <- abs(df$Illusion_Difference)
 
-df <- df[1:1001, ] # TODO: remove this when running on the cluster
+df <- df[1:10001, ] # TODO: remove this when running full models on the cluster.
 
 
 # LNR ---------------------------------------------------------------------
@@ -63,23 +74,28 @@ priors <- brms::validate_prior(priors, f, data = df)
 
 # Fit
 m_lnr_muller <- brm(f,
-  data = df[df$Illusion_Type == "MullerLyer", ],
+  data = df[df$Illusion_Type == "MullerLyer", ], # muller-lyer only? maybe add 1-2 other types? ebbinghaus and vertical-horizontal
   init = 0,
   prior = priors,
   family = lnr(),
   stanvars = lnr_stanvars(),
-  iter = 4000,
-  chains = 8, threads = threading(8),
+  warmup = warmup,
+  iter = iter,
+  chains = chains_per_node,
+  cores = chains_per_node,
+  threads = threading(threads_per_chain),
   backend = "cmdstanr",
   save_pars = save_pars(all = TRUE),
-  algorithm = "pathfinder", max_lbfgs_iters = 6000, draws = 4000
+  algorithm = "sampling" #algorithm = "pathfinder", max_lbfgs_iters = 6000, draws = 4000
 )
 
 # TODO: WAIC instead of loo will probably be faster.
 # m_lnr_muller <- brms::add_criterion(m_lnr_muller, "loo", moment_match = FALSE)
 # m_lnr_muller <- brms::add_criterion(m_lnr_muller, "waic")
 
-saveRDS(m_lnr_muller, "models/m_lnr_muller.rds")
+dir.create("models", showWarnings = FALSE)
+
+saveRDS(m_lnr_muller, sprintf("models/m_lnr_muller_%d.rds", task_id))
 
 
 

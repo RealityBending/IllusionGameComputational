@@ -32,7 +32,7 @@ library(ggdist)
 #| warning: false
 #| error: false
 
-m_lnr_muller <- readRDS("models/m_lnr_muller.rds")
+m_lnr_muller <- readRDS("C:/Users/olive/Documents/m_lnr_muller_combined.rds")
 ```
 
 ## Info
@@ -148,7 +148,7 @@ plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference"
   }
   
   # Step 0: Get predictions
-  pred <- modelbased::estimate_prediction(model, data = datagrid, iterations = 4000, keep_iterations = TRUE, ci = NULL)
+  pred <- modelbased::estimate_prediction(model, data = datagrid, iterations = 3200, keep_iterations = TRUE, ci = NULL)
   
   color_vals_asc  <- sort(unique(round(pred[[color_var]], 2)))
   color_levels_chr <- as.character(color_vals_asc)
