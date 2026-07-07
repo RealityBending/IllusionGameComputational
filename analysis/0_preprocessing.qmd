@@ -214,12 +214,8 @@ ppt_self <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionG
 ### Summary
 
 ```{r}
-illu <- rbind(illu_validation, illu_eeg, illu_reliability, illu_international, illu_suggestibility, illu_pcs, illu_self) |> 
-  mutate(ISI = ISI)
-
-illu |> 
-  summarize(ISI = mean(ISI), .by = c("Dataset", "Illusion_Type"))
-# TODO: Sanitize ISI (directly in the original preprocesing scripts)
+illu <- rbind(illu_validation, illu_eeg, illu_reliability,
+              illu_international, illu_suggestibility, illu_pcs, illu_self) 
 
 illu |> 
   summarize(N = n_distinct(Participant),
@@ -389,42 +385,77 @@ illu <- illu[!flagged,]
 
 ## Observable Patterns
 
+```{r}
+
+```
+
+
 ### ISI
 
 ```{r}
-#| message: false
+pred_isi <- mgcv::bam(RT ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type`, bs = "cr"),
+                   data = illu |> 
+                     mutate(Illusion_Type = as.factor(Illusion_Type)) |> 
+                     filter(Error == 0)) |> 
+  estimate_relation(length = 200, ci = NULL) |> 
+  mutate(Dataset = "Mean")
 
-# TODO: remove the filtering once ISI is consistent
-m_isi1 <- mgcv::bam(RT ~ Group + s(ISI, k = -1, by = `Group`, bs = "cr"),
-                   data = mutate(illu, Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
+for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
+  pred_isi <- mgcv::bam(
+    RT ~ s(ISI, k = -1, bs = "cr"),
+    data = illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ] |> 
+      filter(Error == 0)) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = str_remove(g, "_.*"),
+           Illusion_Type = str_remove(g, ".*_")) |> 
+    rbind(pred_isi)
+}
 
-p_isi1 <- estimate_relation(m_isi1, length = 1000) |>
-  mutate(Dataset = str_remove(Group, "_.*"),
-         Illusion_Type = str_remove(Group, ".*_")) |>
+p_isi1 <- pred_isi |>
   ggplot(aes(x = ISI, y = Predicted, color = Dataset)) +
   geom_line(linewidth = 1) +
-  scale_color_manual(values = cols) +
+  scale_color_manual(values = c(cols, "Mean" = "black")) +
   facet_wrap(~Illusion_Type, scales = "free_x") +
   labs(y = "Response Time (s)", x = "ISI") +
-  theme_minimal()
+  theme_minimal() +
+  scale_y_log10()
+```
 
-m_isi2 <- mgcv::bam(RightDown ~ Group + s(ISI, k = -1, by = `Group`, bs = "cr"),
-                    family = binomial(link = "logit"),
-                    data = mutate(illu,
-                                  RightDown = ifelse(Response %in% c("down", "right"), 1, 0),
-                                  Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
+```{r}
+pred_isi <- mgcv::bam(Error ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type`, bs = "cr"),
+                      family = binomial(link = "logit"),
+                   data = illu |> 
+                     mutate(Illusion_Type = as.factor(Illusion_Type))) |> 
+  estimate_relation(length = 200, ci = NULL) |> 
+  mutate(Dataset = "Mean")
 
-p_isi2 <- estimate_relation(m_isi2, length = 1000) |>
-  mutate(Dataset = str_remove(Group, "_.*"),
-         Illusion_Type = str_remove(Group, ".*_")) |>
+for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
+  pred_isi <- mgcv::bam(
+    Error ~ s(ISI, k = -1, bs = "cr"),
+    family = binomial(link = "logit"),
+    data = illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ]) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = str_remove(g, "_.*"),
+           Illusion_Type = str_remove(g, ".*_")) |> 
+    rbind(pred_isi)
+}
+
+p_isi2 <- pred_isi |>
   ggplot(aes(x = ISI, y = Predicted, color = Dataset)) +
   geom_line(linewidth = 1) +
-  scale_color_manual(values = cols) +
+  scale_color_manual(values = c(cols, "Mean" = "black")) +
   facet_wrap(~Illusion_Type, scales = "free_x") +
-  labs(y = "P(Right/Down Arrow Response)", x = "ISI") +
-  theme_minimal()
+  labs(y = "P(Error)", x = "ISI") +
+  theme_minimal() 
+```
 
-(p_isi1 | p_isi2) +
+
+```{r}
+#| message: false
+#| fig-width: 12
+#| fig-height: 12
+
+(p_isi1 / p_isi2) +
   plot_layout(guides = "collect") & theme(legend.position = "top")
 ```
 
