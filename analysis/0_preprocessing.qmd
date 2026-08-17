@@ -232,15 +232,22 @@ illu |>
 
 ### Extreme RTs
 
-We removed `r sum(illu$RT >= 7)` trials (`r insight::format_percent(sum(illu$RT >= 7) / nrow(illu))` of the data) with RTs longer than 6 seconds, as these likely reflect participants taking breaks during the task. 
+We removed `r sum(illu$RT >= 6)` trials (`r insight::format_percent(sum(illu$RT >= 6) / nrow(illu))` of the data) with RTs longer than 4 seconds, as these likely reflect participants taking breaks during the task. 
 
 ```{r}
 #| code-fold: false
 
-illu <- illu |> filter(RT < 7)
+illu <- illu |> filter(RT < 6)
 ```
 
-We removed `r sum(illu$RT <= 0)` trials (`r insight::format_percent(sum(illu$RT <= 0) / nrow(illu))`) where RT equaled 0, as these likely reflect early responses that coincided with stimulus onset.
+```{r}
+#| code-fold: false
+
+# Make sure no trials have negative RTs, which would indicate an issue
+stopifnot(all(illu$RT >= 0))
+```
+
+We removed `r sum(illu$RT <= 0)` trials (`r insight::format_percent(sum(illu$RT <= 0) / nrow(illu))`) and where RT equaled 0, as these likely reflect early responses that coincided with stimulus onset.
 
 
 ```{r}
@@ -259,7 +266,7 @@ cols <- c("IllusionGameValidation" = "#4CAF50", "IllusionGameEEG" = "#CDDC39", "
 binwidth <- 0.03
 
 # Get density of lognormal distribution
-xrange <- seq(0, 6, by = 0.01)
+xrange <- seq(0, 5, by = 0.01)
 dlognorm <- dlnorm(xrange, meanlog = mean(log(illu$RT)), sdlog = 0.4)
 
 p1 <- illu |>
@@ -270,7 +277,7 @@ p1 <- illu |>
   #          position = position_nudge(x = -0.5 * binwidth)) +
   geom_density(aes(color = Dataset)) +
   # geom_line(data = data.frame(x = xrange, y = dlognorm), aes(x = x, y = y), color = "black", linetype = "dashed") +
-  scale_x_sqrt(breaks = c(0, 0.15, 0.5, 1, 2, 3, 4, 5, 6),
+  scale_x_sqrt(breaks = c(0, 0.15, 0.5, 1, 2, 3, 4, 5),
                minor_breaks = NULL) +
   scale_color_manual(values = cols) +
   labs(title = "RTs Distribution") +
@@ -308,14 +315,14 @@ p1 | (p_tail1 / p_tail2 ) + plot_layout(guides = "collect") & theme(legend.posit
 ```
 
 
-We removed `r sum(illu$RT <= 1/6)` trials (`r insight::format_percent(sum(illu$RT <= 1/6) / nrow(illu))`) with RTs shorter than 1/6 seconds, as these likely reflect anticipatory responses, and `r sum(illu$RT > 4)` trials (`r insight::format_percent(sum(illu$RT > 4) / nrow(illu))`) with RTs longer than 4 seconds.
+<!-- We removed `r sum(illu$RT <= 1/6)` trials (`r insight::format_percent(sum(illu$RT <= 1/6) / nrow(illu))`) with RTs shorter than 1/6 seconds, as these likely reflect anticipatory responses, and `r sum(illu$RT > 4)` trials (`r insight::format_percent(sum(illu$RT > 4) / nrow(illu))`) with RTs longer than 4 seconds. -->
 
 
-```{r}
-#| code-fold: false
+<!-- ```{r} -->
+<!-- #| code-fold: false -->
 
-illu <- illu |> filter(RT > 1/6) |> filter(RT < 4)
-```
+<!-- illu <- illu |> filter(RT > 1/6) |> filter(RT < 4) -->
+<!-- ``` -->
 
 
 
@@ -347,7 +354,7 @@ outliers$Outlier <- ifelse(outliers$Error >= 0.45, "Outlier", outliers$Outlier)
 outliers |> 
   ggplot(aes(x = Error, y = RT)) +
   see::geom_point_borderless(aes(color = Outlier), alpha = 1/4, size = 2) +
-  geom_density_2d(color = "#D500F9", alpha = 0.8, show.legend = FALSE, linewidth = 0.5, 
+  geom_density_2d(color = "orange", alpha = 0.8, show.legend = FALSE, linewidth = 1, 
                   breaks = c(0.5, 1, 2, 4, 8)) +
   annotate("rect", xmin = -Inf, xmax = 0.45, ymin = -Inf, ymax = 1/3, alpha = 0.1, fill = "red") +
   annotate("rect", xmin = -Inf, xmax = 0.45, ymin = 3, ymax = Inf, alpha = 0.1, fill = "red") +
@@ -359,7 +366,7 @@ outliers |>
   scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2), labels = scales::percent) +
   scale_y_continuous(expand = c(0, 0)) +
   coord_cartesian(xlim = c(0, 0.7), ylim = c(0, 3)) +
-  labs(title = "Outlier Detection", x = "Errors") + 
+  labs(title = "Outlier Participants", subtitle = "Mean RT and % Errors per illusion and block for each participant", x = "Errors") + 
   # ggside::geom_xsidedensity(aes(y = after_stat(density)), alpha = 0.5) +
   ggside::geom_xsidedensity(aes(y = after_stat(density), color = Outlier), alpha = 0.5) +
   ggside::geom_ysidedensity(aes(x = after_stat(density), color = Outlier), alpha = 0.5) +
@@ -384,10 +391,6 @@ illu <- illu[!flagged,]
 
 
 ## Observable Patterns
-
-```{r}
-
-```
 
 
 ### ISI
@@ -549,11 +552,10 @@ p_strength2 <- estimate_relation(m_strength2, length = 1000) |>
 
 ```{r}
 #| code-fold: false
+
 # Split file to avoid GitHub upload limits
 write.csv(illu[1:400000, ], "../data/illusion_part1.csv", row.names = FALSE)
 write.csv(illu[400001:800000, ], "../data/illusion_part2.csv", row.names = FALSE)
 write.csv(illu[800001:nrow(illu), ], "../data/illusion_part3.csv", row.names = FALSE)
-
-
 ```
 
