@@ -392,11 +392,47 @@ illu <- illu[!flagged,]
 
 ## Observable Patterns
 
+### Errors vs. RT
+
+
+```{r pred_err}
+pred_err <- mgcv::bam(Error ~ s(RT, k = -1, by = `Illusion_Type`, bs = "ad"), 
+                      family = binomial(link = "logit"),
+                      data = illu |> 
+                        mutate(Illusion_Type = as.factor(Illusion_Type)) |> 
+                        filter(RT <= 2.5)) |> 
+  estimate_relation(length = 200, ci = NULL) |> 
+  mutate(Dataset = "Mean")
+
+for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
+  pred_err <- mgcv::bam(
+    Error ~ s(RT, k = -1, bs = "ad"),
+    family = binomial(link = "logit"),
+    data = filter(illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ], RT <= 2.5)) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = str_remove(g, "_.*"),
+           Illusion_Type = str_remove(g, ".*_")) |> 
+    rbind(pred_err)
+}
+
+pred_err |>
+  ggplot(aes(x = RT, y = Predicted)) +
+  geom_line(aes(color = Dataset), linewidth = 1) +
+  geom_histogram(data = filter(illu, RT <= 2.5), aes(y = after_stat(density) / max(after_stat(density))), 
+                 alpha = 0.2, position = "identity", bins = 50) +
+  scale_color_manual(values = c(cols, "Mean" = "black")) +
+  scale_x_sqrt() +
+  facet_wrap(~Illusion_Type, scales = "free_x") +
+  labs(y = "P(Error)", x = "RT") +
+  theme_minimal()  
+```
+
+
 
 ### ISI
 
-```{r}
-pred_isi <- mgcv::bam(RT ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type`, bs = "cr"),
+```{r pred_isi}
+pred_isi <- mgcv::bam(RT ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type`, bs = "ds"),
                    data = illu |> 
                      mutate(Illusion_Type = as.factor(Illusion_Type)) |> 
                      filter(Error == 0)) |> 
@@ -405,7 +441,7 @@ pred_isi <- mgcv::bam(RT ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type`, 
 
 for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
   pred_isi <- mgcv::bam(
-    RT ~ s(ISI, k = -1, bs = "cr"),
+    RT ~ s(ISI, k = -1, bs = "ds"),
     data = illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ] |> 
       filter(Error == 0)) |> 
     estimate_relation(length = 200, ci = NULL) |> 
@@ -424,8 +460,8 @@ p_isi1 <- pred_isi |>
   scale_y_log10()
 ```
 
-```{r}
-pred_isi <- mgcv::bam(Error ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type`, bs = "cr"),
+```{r pred_isi2}
+pred_isi2 <- mgcv::bam(Error ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type`, bs = "ds"),
                       family = binomial(link = "logit"),
                    data = illu |> 
                      mutate(Illusion_Type = as.factor(Illusion_Type))) |> 
@@ -433,17 +469,17 @@ pred_isi <- mgcv::bam(Error ~ Illusion_Type + s(ISI, k = -1, by = `Illusion_Type
   mutate(Dataset = "Mean")
 
 for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
-  pred_isi <- mgcv::bam(
-    Error ~ s(ISI, k = -1, bs = "cr"),
+  pred_isi2 <- mgcv::bam(
+    Error ~ s(ISI, k = -1, bs = "ds"),
     family = binomial(link = "logit"),
     data = illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ]) |> 
     estimate_relation(length = 200, ci = NULL) |> 
     mutate(Dataset = str_remove(g, "_.*"),
            Illusion_Type = str_remove(g, ".*_")) |> 
-    rbind(pred_isi)
+    rbind(pred_isi2)
 }
 
-p_isi2 <- pred_isi |>
+p_isi2 <- pred_isi2 |>
   ggplot(aes(x = ISI, y = Predicted, color = Dataset)) +
   geom_line(linewidth = 1) +
   scale_color_manual(values = c(cols, "Mean" = "black")) +
@@ -462,95 +498,169 @@ p_isi2 <- pred_isi |>
   plot_layout(guides = "collect") & theme(legend.position = "top")
 ```
 
-### Task Parameters
+### Task Difficulty
 
-```{r}
+
+```{r pred_diff1}
 #| message: false
 
+pred_diff1 <- data.frame()
+for(i in unique(illu$Illusion_Type)) {  
+  pred_diff1 <- mgcv::bam(
+    RT ~ s(Illusion_Difference, k = -1, bs = "ds"),
+    data = illu[paste0(illu$Illusion_Type) %in% i, ]) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = "Mean",
+           Illusion_Type = str_remove(i, ".*_")) |> 
+    rbind(pred_diff1)
+}
 
+for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
+  pred_diff1 <- mgcv::bam(
+    RT ~ s(Illusion_Difference, k = -1, bs = "ds"),
+    data = illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ]) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = str_remove(g, "_.*"),
+           Illusion_Type = str_remove(g, ".*_")) |> 
+    rbind(pred_diff1)
+}
+  
 
-# RTs
-# ---------------
-m_diff1 <- mgcv::bam(RT ~ Group + s(Illusion_Difference, k = -1, by = `Group`, bs = "ts"),
-                    data = mutate(illu, Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
-
-p_diff1 <- estimate_relation(m_diff1, length = 1000) |> 
-  mutate(Dataset = str_remove(Group, "_.*"),
-         Illusion_Type = str_remove(Group, ".*_")) |>
+p_diff1 <- pred_diff1 |>
   ggplot(aes(x = Illusion_Difference, y = Predicted, color = Dataset)) +
   geom_line(linewidth = 1) +
-  scale_color_manual(values = cols) +
+  scale_color_manual(values = c(cols, "Mean" = "black")) +
   facet_wrap(~Illusion_Type, scales = "free_x") +
   labs(y = "Response Time (s)", x = "Task Difficulty") +
   theme_minimal()
+```
 
-m_strength1 <- mgcv::bam(RT ~ Group + s(Illusion_Strength, k = -1, by = `Group`, bs = "ts"),
-                    data = mutate(illu, 
-                                  Illusion_Strength = Illusion_Strength * ifelse(Illusion_Type == "Ebbinghaus", 30, 1),
-                                  Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
+```{r pred_diff2}
 
-p_strength1 <- estimate_relation(m_strength1, length = 1000) |> 
-  mutate(Dataset = str_remove(Group, "_.*"),
-         Illusion_Type = str_remove(Group, ".*_"),
-         Illusion_Strength = Illusion_Strength / ifelse(Illusion_Type == "Ebbinghaus", 30, 1)) |>
-  ggplot(aes(x = Illusion_Strength, y = Predicted, color = Dataset)) +
+pred_diff2 <- data.frame()
+for(i in unique(illu$Illusion_Type)) {  
+  pred_diff2 <- mgcv::bam(
+    RightDown ~ s(Illusion_Difference, k = -1, bs = "ds"),
+    family = binomial(link = "logit"),
+    data = mutate(illu[paste0(illu$Illusion_Type) %in% i, ],
+                  RightDown = ifelse(Response %in% c("down", "right"), 1, 0))) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = "Mean",
+           Illusion_Type = str_remove(i, ".*_")) |> 
+    rbind(pred_diff2)
+}
+
+for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
+  pred_diff2 <- mgcv::bam(
+    RightDown ~ s(Illusion_Difference, k = -1, bs = "ds"), 
+    family = binomial(link = "logit"),
+    data = mutate(illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ],
+                  RightDown = ifelse(Response %in% c("down", "right"), 1, 0))) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = str_remove(g, "_.*"),
+           Illusion_Type = str_remove(g, ".*_")) |> 
+    rbind(pred_diff2)
+}
+  
+
+p_diff2 <- pred_diff2 |>
+  ggplot(aes(x = Illusion_Difference, y = Predicted, color = Dataset)) +
   geom_line(linewidth = 1) +
-  scale_color_manual(values = cols) +
+  scale_color_manual(values = c(cols, "Mean" = "black")) +
   facet_wrap(~Illusion_Type, scales = "free_x") +
-  labs(y = "Response Time (s)", x = "Illusion Strength") +
+  labs(y = "P(Right/Down Arrow Response)", x = "Task Difficulty") +
   theme_minimal()
-
 ```
 
 
-```{r}
+### Illusion Strength
+
+
+```{r pred_strength1}
+#| message: false
+
+
+pred_strength1 <- data.frame()
+for(i in unique(illu$Illusion_Type)) {  
+  pred_strength1 <- mgcv::bam(
+    RT ~ s(Illusion_Strength, k = -1, bs = "ds"),
+    data = illu[paste0(illu$Illusion_Type) %in% i, ]) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = "Mean",
+           Illusion_Type = str_remove(i, ".*_")) |> 
+    rbind(pred_strength1)
+}
+
+for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
+  pred_strength1 <- mgcv::bam(
+    RT ~ s(Illusion_Strength, k = -1, bs = "ds"),
+    data = illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ]) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = str_remove(g, "_.*"),
+           Illusion_Type = str_remove(g, ".*_")) |> 
+    rbind(pred_strength1)
+}
+  
+
+p_strength1 <- pred_strength1 |>
+  ggplot(aes(x = Illusion_Strength, y = Predicted, color = Dataset)) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(values = c(cols, "Mean" = "black")) +
+  facet_wrap(~Illusion_Type, scales = "free_x") +
+  labs(y = "Response Time (s)", x = "Illusion Strength") +
+  theme_minimal()
+```
+
+
+
+```{r pred_strength2}
+
+pred_strength2 <- data.frame()
+for(i in unique(illu$Illusion_Type)) {  
+  pred_strength2 <- mgcv::bam(
+    Error ~ s(Illusion_Strength, k = -1, bs = "ds"), 
+    family = binomial(link = "logit"),
+    data = illu[paste0(illu$Illusion_Type) %in% i, ]) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = "Mean",
+           Illusion_Type = str_remove(i, ".*_")) |> 
+    rbind(pred_strength2)
+}
+
+for(g in unique(paste0(illu$Dataset, "_", illu$Illusion_Type))) {  
+  pred_strength2 <- mgcv::bam(
+    Error ~ s(Illusion_Strength, k = -1, bs = "ds"), 
+    family = binomial(link = "logit"),
+    data = illu[paste0(illu$Dataset, "_", illu$Illusion_Type) %in% g, ]) |> 
+    estimate_relation(length = 200, ci = NULL) |> 
+    mutate(Dataset = str_remove(g, "_.*"),
+           Illusion_Type = str_remove(g, ".*_")) |> 
+    rbind(pred_strength2)
+}
+  
+
+p_strength2 <- pred_strength2 |>
+  ggplot(aes(x = Illusion_Strength, y = Predicted, color = Dataset)) +
+  geom_line(linewidth = 1) +
+  scale_color_manual(values = c(cols, "Mean" = "black")) +
+  facet_wrap(~Illusion_Type, scales = "free_x") +
+  labs(y = "P(Error)", x = "Illusion Strength") +
+  theme_minimal()
+```
+
+```{r p_params}
 #| message: false
 #| fig-width: 12
 #| fig-height: 12
 
-# Responses
-# ---------------
-m_diff2 <- mgcv::bam(RightDown ~ Group + s(Illusion_Difference, k = -1, by = `Group`, bs = "ts"), 
-                    family = binomial(link = "logit"),
-                    data = mutate(illu, 
-                                  RightDown = ifelse(Response %in% c("down", "right"), 1, 0),
-                                  Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
-
-p_diff2 <- estimate_relation(m_diff2, length = 1000) |> 
-  mutate(Dataset = str_remove(Group, "_.*"),
-         Illusion_Type = str_remove(Group, ".*_")) |>
-  ggplot(aes(x = Illusion_Difference, y = Predicted, color = Dataset)) +
-  geom_line(linewidth = 1) +
-  scale_color_manual(values = cols) +
-  facet_wrap(~Illusion_Type, scales = "free_x") +
-  labs(y = "P(Right/Down Arrow Response)", x = "Task Difficulty") +
-  theme_minimal() 
-
-m_strength2 <- mgcv::bam(Error ~ Group + s(Illusion_Strength, k = -1, by = `Group`, bs = "ts"), 
-                    family = binomial(link = "logit"),
-                    data = mutate(illu, 
-                                  Illusion_Strength = Illusion_Strength * ifelse(Illusion_Type == "Ebbinghaus", 30, 1),
-                                  Group = as.factor(paste0(Dataset, "_", Illusion_Type))))
-
-p_strength2 <- estimate_relation(m_strength2, length = 1000) |> 
-  mutate(Dataset = str_remove(Group, "_.*"),
-         Illusion_Type = str_remove(Group, ".*_"),
-         Illusion_Strength = Illusion_Strength / ifelse(Illusion_Type == "Ebbinghaus", 30, 1)) |>
-  ggplot(aes(x = Illusion_Strength, y = Predicted, color = Dataset)) +
-  geom_line(linewidth = 1) +
-  scale_color_manual(values = cols) +
-  facet_wrap(~Illusion_Type, scales = "free_x") +
-  labs(y = "P(Error)", x = "Illusion Strength") +
-  theme_minimal()
 
 (p_diff1 | p_strength1) / (p_diff2 | p_strength2) + 
   plot_layout(guides = "collect") & theme(legend.position = "top")
 ```
 
-
 ## Save
 
-```{r}
+```{r save}
 #| code-fold: false
 
 # Split file to avoid GitHub upload limits
