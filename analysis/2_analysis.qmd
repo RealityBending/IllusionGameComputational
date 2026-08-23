@@ -25,6 +25,26 @@ library(rstan)
 library(patchwork)
 library(ggside)
 library(ggdist)
+
+
+unnormalize <- function(df, illusion = NULL) {
+  if(!is.null(illusion)) df$Illusion_Type <- illusion
+  df <- df |> 
+    mutate(
+      Illusion_Difference = case_when(
+        Illusion_Type == "MullerLyer" ~ Illusion_DifferenceZ * (0.46 - 0.04) + 0.04,
+        Illusion_Type == "Ebbinghaus" ~ Illusion_DifferenceZ * (0.70 - 0.07) + 0.07,
+        Illusion_Type == "VerticalHorizontal" ~ Illusion_DifferenceZ * (0.24 - 0.03) + 0.03,
+        .default = NA
+      ),
+      Illusion_Strength = case_when(
+        Illusion_Type == "MullerLyer" ~ Illusion_StrengthZ * 49,
+        Illusion_Type == "Ebbinghaus" ~ Illusion_StrengthZ * 2.03,
+        Illusion_Type == "VerticalHorizontal" ~ Illusion_StrengthZ * 66.50,
+        .default = NA
+      )
+  )
+}
 ```
 
 
@@ -32,13 +52,17 @@ library(ggdist)
 #| warning: false
 #| error: false
 
-m_lnr_muller <- readRDS("C:/Users/olive/Documents/m_lnr_muller_combined.rds")
+# path <- "C:/Users/olive/Documents/"
+path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
+gam_lnr_muller <- readRDS(paste0(path, "m_lnr_muller_1.rds"))
 ```
 
 ## Info
 
 ```{r}
-m_lnr_muller
+#| code-fold: true
+
+gam_lnr_muller
 ```
 
 
@@ -301,26 +325,46 @@ plot_effect_densities(
 # The exact point where the nuzero and nuone lines cross corresponds to a 50% error rate (assuming sigmazero and sigmaone are roughly equal).
 
 pred <- rbind(
-  estimate_relation(m_lnr_muller, length = c(Illusion_Difference = 3, Illusion_Strength = 10), predict = "mu") |> 
-    mutate(Parameter = "Nu", Type = "Correct"),
-  estimate_relation(m_lnr_muller, length = c(Illusion_Difference = 3, Illusion_Strength = 10), predict = "nuone") |> 
-    mutate(Parameter = "Nu", Type = "Error"),
-  estimate_relation(m_lnr_muller, length = c(Illusion_Difference = 3, Illusion_Strength = 10), predict = "sigmazero") |> 
-    mutate(Parameter = "Sigma", Type = "Correct"),
-  estimate_relation(m_lnr_muller, length = c(Illusion_Difference = 3, Illusion_Strength = 10), predict = "sigmaone") |> 
-    mutate(Parameter = "Sigma", Type = "Error"),
-  estimate_relation(m_lnr_muller, length = c(Illusion_Difference = 3, Illusion_Strength = 10), predict = "tau") |> 
-    mutate(Parameter = "Tau", Type = "Both")
-)
+  # GAM
+  rbind(
+    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "mu") |> 
+      mutate(Parameter = "Nu_Correct", Type = "GAM"),
+    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "nuone") |> 
+      mutate(Parameter = "Nu_Error", Type = "GAM"),
+    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "sigmazero") |> 
+      mutate(Parameter = "Sigma_Correct", Type = "GAM"),
+    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "sigmaone") |> 
+      mutate(Parameter = "Sigma_Error", Type = "GAM"),
+    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "ndt") |> 
+      mutate(Parameter = "NDT", Type = "GAM")
+  ),
+  # LM
+  rbind(
+    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "mu") |> 
+      mutate(Parameter = "Nu_Correct", Type = "LM"),
+    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "nuone") |> 
+      mutate(Parameter = "Nu_Error", Type = "LM"),
+    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "sigmazero") |> 
+      mutate(Parameter = "Sigma_Correct", Type = "LM"),
+    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "sigmaone") |> 
+      mutate(Parameter = "Sigma_Error", Type = "LM"),
+    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "ndt") |> 
+      mutate(Parameter = "NDT", Type = "LM") 
+  ) |> 
+    filter((Illusion_Effect == "Conflicting" & Illusion_DifferenceZ >= 0) | 
+             (Illusion_Effect == "Facilitating" & Illusion_DifferenceZ < 0)) |> 
+    select(-Illusion_Effect)
+) |> 
+  unnormalize(illusion = "MullerLyer") 
 
 pred |> 
   mutate(Illusion_Difference = as.factor(Illusion_Difference)) |> 
   ggplot(aes(x = Illusion_Strength, y = Predicted)) +
   # geom_ribbon(aes(ymin = CI_low, ymax = CI_high, group = Illusion_Difference), alpha = 0.1) +
-  geom_line(aes(color = Illusion_Difference, group = interaction(Illusion_Difference, Type), linetype = Type),
+  geom_line(aes(color = Illusion_Difference, group = interaction(Type, Illusion_Difference), linetype = Type),
             linewidth = 1.5) +
-  scale_color_manual(values = c("#FF5722", "#FFC107", "#8BC34A")) +
-  scale_linetype_manual(values = c("Correct" = "solid", "Error" = "dashed", "Both" = "solid")) +
+  scale_color_manual(values = c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")) +
+  scale_linetype_manual(values = c("GAM" = "solid", "LM" = "dashed")) +
   facet_wrap(~Parameter, scales = "free_y") +
   theme_minimal()
 ```
