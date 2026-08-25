@@ -74,15 +74,9 @@ fit_model <- function(f, data, name = "gam_lnr_muller") {
     cores = chains_per_node,
     threads = threading(threads_per_chain),
     save_pars = save_pars(all = TRUE),
-    algorithm = "sampling"
+    algorithm = "sampling",
+    file = sprintf(paste0("models/", name, "_%d.rds"), task_id)
   )
-
-  # TODO: WAIC instead of loo will probably be faster.
-  # m <- brms::add_criterion(m, "loo", moment_match = FALSE)
-  m <- brms::add_criterion(m, "waic")
-
-
-  saveRDS(m, sprintf(paste0("models/", name, "_%d.rds"), task_id))
 
   return(paste(name, " SUCCESSFUL."))
 }
@@ -120,7 +114,7 @@ f <- bf(
   family = cogmod_lnr()
 )
 
-fit_model(f, df[df$Participant %in% unique(df$Participant)[1:20] & df$Illusion_Type == "MullerLyer", ], name = "gam_lnr_muller")
+fit_model(f, df[df$Illusion_Type == "MullerLyer", ], name = "gam_lnr_muller")
 
 # # =========================================================================
 # # LINEAR ------------------------------------------------------------------
