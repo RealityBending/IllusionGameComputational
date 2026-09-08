@@ -12,4 +12,157 @@ execute:
   cache: false
 ---
 
-TODO
+## Loading
+
+```{r}
+#| warning: false
+#| error: false
+
+library(tidyverse)
+library(easystats)
+library(brms)
+library(rstan)
+library(patchwork)
+library(ggside)
+library(ggdist)
+```
+
+
+```{r}
+#| warning: false
+#| error: false
+
+# path <- "C:/Users/olive/Documents/"
+path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
+gam_lnr_muller <- readRDS(paste0(path, "gam_lnr_muller_mini.rds"))
+gam_ddm4_muller <- readRDS(paste0(path, "gam_ddm4_MullerLyer_1.rds"))
+```
+
+```{r}
+#| eval: false
+#| echo: false
+
+# Generate 'df' by running the make_models.R script start
+warmstart <- rbind(
+  cogmod::cogmod_warmstart(gam_ddm4_muller, data = df)$table |> 
+    mutate(Model = "gam_ddm4_muller"),
+  cogmod::cogmod_warmstart(gam_lnr_muller, data = df)$table |> 
+    mutate(Model = "gam_lnr_muller")
+)
+
+write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")
+```
+
+
+## Posterior Predictive Check
+
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+plot_ppc <- function(models, observed = NULL, ndraws = 500, n_trials = 10000,
+                     rt_range = c(0, 2.5), binwidth = 0.02, n_points = 512,
+                     model_colors = c("#1E88E5", "#212121", "#FB8C00", "#6D4C41")) {
+
+  if (is.null(names(models))) names(models) <- paste("Model", seq_along(models))
+
+  # All models are checked against the same trials, passed in explicitly
+  if (is.null(observed)) observed <- insight::get_data(models[[1]])
+
+  # The predicted curve is the predictive RT distribution marginal over trials,
+  # estimated by simulation. A random subset of trials estimates the same
+  # distribution as all of them - each trial contributes ndraws simulated RTs
+  # either way - so there is no reason to predict 320,000 trials x 50 draws
+  # (16 million RTs per model, minutes per model) to draw a density curve that
+  # 250,000 RTs already pin down. The histogram still uses every observed trial.
+  pred_obs <- if (nrow(observed) > n_trials) {
+    observed[sample.int(nrow(observed), n_trials), , drop = FALSE]
+  } else {
+    observed
+  }
+
+  # Defective densities: each response's curve is scaled by its own rate, so the
+  # two areas sum to 1 and correct/error are directly comparable across models
+  defective_density <- function(rt, response) {
+    keep <- is.finite(rt) & is.finite(response)
+    rt <- rt[keep]
+    response <- response[keep]
+    purrr::map_dfr(c(0, 1), function(r) {
+      x <- rt[response == r]
+      if (length(x) < 2) return(NULL)
+      d <- density(x, from = rt_range[1], to = rt_range[2], n = n_points)
+      data.frame(
+        Response = factor(r, levels = c(0, 1)),
+        x = d$x,
+        y = d$y * (length(x) / length(rt)) * if (r == 0) 1 else -1
+      )
+    })
+  }
+
+  # Observed: histogram, put on the same defective-density scale
+  obs_data <- observed |>
+    mutate(bin = floor(RT / binwidth)) |>
+    count(Error, bin, name = "n") |>
+    mutate(
+      x = (bin + 0.5) * binwidth,
+      y = n / (nrow(observed) * binwidth) * if_else(Error == 0, 1, -1),
+      Response = factor(Error, levels = c(0, 1))
+    ) |>
+    filter(x <= max(rt_range))
+
+  # Predicted. brms::posterior_predict() calls the family's sampler once per
+  # trial (thousands of calls of a few dozen draws each), and most of that is
+  # fixed cost. cogmod's posterior_predict_<family>() methods take a vector of
+  # observations, so the same draws come out of ~50 vectorised calls instead,
+  # about 3x faster for the DDM - see ?posterior_predict_cogmod_ddm.
+  predict_chunked <- function(m, newdata, ndraws, chunk = 50) {
+    prep <- brms::prepare_predictions(m, newdata = newdata, ndraws = ndraws,
+                                      allow_new_levels = TRUE)
+    for (dp in names(prep$dpars)) prep$dpars[[dp]] <- brms::get_dpar(prep, dp)
+    method <- get(paste0("posterior_predict_", m$family$name),
+                  envir = asNamespace("cogmod"))
+    chunks <- split(seq_len(prep$nobs), ceiling(seq_len(prep$nobs) / chunk))
+    do.call(rbind, lapply(chunks, method, prep = prep))   # (draws * N) x 2
+  }
+  pred_data <- purrr::imap_dfr(models, function(m, nm) {
+    pp <- predict_chunked(m, pred_obs, ndraws)
+    rt   <- pp[, 1]
+    resp <- pp[, 2]
+    stopifnot(all(resp %in% c(0, 1)))
+    defective_density(rt, resp) |> mutate(Model = nm)
+  })
+  pred_data$Model <- factor(pred_data$Model, levels = names(models))
+
+  ggplot(mapping = aes(x = x, y = y)) +
+    geom_col(
+      data = obs_data,
+      aes(fill = Response),
+      width = binwidth, alpha = 0.4
+    ) +
+    geom_line(
+      data = pred_data,
+      aes(color = Model, group = interaction(Model, Response)),
+      linewidth = 0.9, alpha = 0.9
+    ) +
+    geom_hline(yintercept = 0, color = "grey30", linewidth = 0.3) +
+    scale_fill_manual(
+      values = c("0" = "#43A047", "1" = "#F44336"),
+      labels = c("0" = "Correct", "1" = "Error")
+    ) +
+    scale_color_manual(values = setNames(model_colors[seq_along(models)], names(models))) +
+    scale_y_continuous(labels = abs) +
+    coord_cartesian(xlim = rt_range) +
+    labs(x = "RT", y = "Density", fill = "Observed", color = "Predicted") +
+    guides(fill = guide_legend(override.aes = list(alpha = 0.6))) +
+    theme_minimal() +
+    theme(legend.position = "bottom")
+}
+
+plot_ppc(
+  list("LNR" = gam_lnr_muller, 
+       "DDM" = gam_ddm4_muller),
+  observed = insight::get_data(gam_lnr_muller),
+  ndraws = 500
+)
+```
