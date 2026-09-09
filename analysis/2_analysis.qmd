@@ -54,7 +54,9 @@ unnormalize <- function(df, illusion = NULL) {
 
 # path <- "C:/Users/olive/Documents/"
 path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
-gam_lnr_muller <- readRDS(paste0(path, "m_lnr_muller_1.rds"))
+# gam <- readRDS(paste0(path, "gam_lnr_muller_mini.rds"))
+gam <- readRDS(paste0(path, "gam_lnr_MullerLyer_1.rds"))
+gam <- readRDS(paste0(path, "gam_ddm4_MullerLyer_1.rds"))
 ```
 
 ## Info
@@ -62,85 +64,9 @@ gam_lnr_muller <- readRDS(paste0(path, "m_lnr_muller_1.rds"))
 ```{r}
 #| code-fold: true
 
-gam_lnr_muller
+gam
 ```
 
-
-## Posterior Predictive Check
-
-```{r}
-#| fig-width: 10
-#| fig-height: 10
-
-pred <- modelbased::estimate_prediction(m_lnr_muller, iterations = 100, keep_iterations = TRUE, ci = NULL) |>
-  mutate(Error = as.factor(Error))
-
-pred_rt <- pred[pred$Component == "rt", ]
-pred_resp <- pred[pred$Component == "response", ]
-pred_long <- bayestestR::reshape_iterations(pred_rt) |>
-  rename(pred_RT = iter_value) |>
-  full_join(
-    bayestestR::reshape_iterations(pred_resp) |>
-      mutate(pred_Response = as.factor(iter_value)) |>
-      select(pred_Response, iter_group, iter_index),
-    by = c("iter_group", "iter_index")
-  )
-
-n_obs_0 <- sum(pred$Error == 0)
-n_pred_0 <- sum(pred_long$pred_Response == 0) / n_distinct(pred_long$iter_group)
-scale_0 <- n_obs_0 / n_pred_0
-
-pred |>
-  ggplot(aes(x = RT)) +
-  geom_histogram(
-    data = filter(pred, Error == 0),
-    aes(y = after_stat(density) * scale_0, fill = Error),
-    binwidth = 0.05, alpha = 0.5
-  ) +
-  geom_histogram(
-    data = filter(pred, Error == 1),
-    aes(y = -after_stat(density), fill = Error),
-    binwidth = 0.05, alpha = 0.5
-  ) +
-  geom_line(
-    data = filter(pred_long, pred_Response == 0),
-    aes(
-      x = pred_RT, y = after_stat(density) * scale_0,
-      group = interaction(iter_group, pred_Response), color = pred_Response
-    ),
-    stat = "density", alpha = 0.2
-  ) +
-  geom_line(
-    data = filter(pred_long, pred_Response == 1),
-    aes(
-      x = pred_RT, y = -after_stat(density),
-      group = interaction(iter_group, pred_Response), color = pred_Response
-    ),
-    stat = "density", alpha = 0.2
-  ) +
-  geom_line(
-    data = filter(pred, Error == 0),
-    aes(
-      x = RT, y = after_stat(density) * scale_0,
-      group = 1
-    ), color = "#43A047", linetype = "dashed",,
-    stat = "density", alpha = 1, linewidth = 1
-  ) +
-  geom_line(
-    data = filter(pred, Error == 1),
-    aes(
-      x = RT, y = -after_stat(density),
-      group = 1
-    ), color = "#F44336", linetype = "dashed",
-    stat = "density", alpha = 1, linewidth = 1
-  ) +
-  scale_fill_manual(values = c("0" = "#43A047", "1" = "#F44336"), labels = c("0" = "Correct", "1" = "Error")) +
-  scale_color_manual(values = c("0" = "#43A047", "1" = "#F44336"), labels = c("0" = "Correct", "1" = "Error")) +
-  scale_y_continuous(labels = abs) +
-  coord_cartesian(xlim = c(0, 2.5)) +
-  guides(fill = guide_legend(override.aes = list(alpha = 1)), color = "none") +
-  theme_minimal()
-```
 
 ## Effects
 
@@ -148,11 +74,13 @@ pred |>
 #| fig-width: 10
 #| fig-height: 7
 
-plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference") {
-  
+plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference",
+                                  illusion = "MullerLyer",
+                                  rt_range = c(0, 2.5), n_points = 512) {
+
   palette_diff     <- c("#FF5722", "#FFC107", "#8BC34A")  # Illusion_Difference
   palette_strength <- c("#2196F3", "grey", "#9C27B0")  # Illusion_Strength
-  
+
   if (y_var == "Illusion_Difference") {
     color_var <- "Illusion_Strength"
     cols   <- palette_strength
@@ -162,91 +90,131 @@ plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference"
     cols   <- palette_diff
     y_cols <- palette_strength
   }
-  
+
   reverse_axes <- identical(color_var, "Illusion_Difference")
-  
+
   nice_name <- function(var) {
     if (var == "Illusion_Strength") "Illusion Strength"
     else if (var == "Illusion_Difference") "Task Difficulty"
     else gsub("_", " ", var)
   }
-  
-  # Step 0: Get predictions
-  pred <- modelbased::estimate_prediction(model, data = datagrid, iterations = 3200, keep_iterations = TRUE, ci = NULL)
-  
-  color_vals_asc  <- sort(unique(round(pred[[color_var]], 2)))
+
+  # Step 0: Get the distributional parameters (posterior means) on the datagrid.
+  # No posterior draws are needed here: the defective densities of the cogmod
+  # choice families are closed-form (LNR) or a fast series (DDM), so we evaluate
+  # them directly rather than simulating trials and running a KDE over them
+  # (exact, noise-free, and orders of magnitude lighter).
+  dpars <- setdiff(model$family$dpars, names(model$formula$pfix))
+  grid <- NULL
+  for (dp in dpars) {
+    r <- as.data.frame(modelbased::estimate_relation(
+      model, data = datagrid, predict = dp, ci = NULL
+    ))
+    if (is.null(grid)) {
+      grid <- r[, !names(r) %in% c("Predicted", "SE", "CI_low", "CI_high", "Residuals"), drop = FALSE]
+      row.names(grid) <- NULL
+    }
+    grid[[dp]] <- r$Predicted
+  }
+
+  # The model is fitted on the normalized predictors: back-transform them so the
+  # facets and the y-axis are labelled in the original units of the illusion.
+  grid <- unnormalize(grid, illusion = illusion)
+  cell_vars <- c(y_var, color_var)
+
+  # Step 1: Defective density per y_var x color_var x pred_Response, from the
+  # model's own density function, dcogmod_<family>(). It is already scaled by
+  # the probability of the response, so the area under each curve *is* that
+  # response's rate (the two sum to 1 per cell) - i.e. it plays the role the
+  # empirical `prop` weighting used to play.
+  # (this `y` sign convention - Correct = +, Error = - - is the mirroring
+  # rule and must never be touched by axis-order logic below)
+  #
+  # The dpars go in by name. brms calls the first one `mu` whatever the family,
+  # while the density function names it after what it is (nuzero for the LNR,
+  # drift for the DDM), so it is renamed to that function's first argument
+  # after `x`. The dpars fixed in the formula are passed at their fixed values.
+  dens_fun <- get(paste0("d", model$family$name), envir = asNamespace("cogmod"))
+  mu_name <- names(formals(dens_fun))[2]
+  fixed <- model$formula$pfix   # named list of the fixed values, or NULL
+  stopifnot(all(dpars %in% names(grid)))
+
+  rt <- seq(1e-4, max(rt_range) * 2.5, length.out = n_points * 3)
+  dx <- rt[2] - rt[1]
+
+  dens_data <- purrr::map_dfr(seq_len(nrow(grid)), function(i) {
+    pars <- setNames(as.list(grid[i, dpars]), sub("^mu$", mu_name, dpars))
+    purrr::map_dfr(c(0, 1), function(resp) {
+      data.frame(
+        grid[i, cell_vars, drop = FALSE],
+        pred_Response = factor(resp, levels = c(0, 1)),
+        x = rt,
+        y = do.call(dens_fun, c(list(rt, response = resp), pars, fixed)),
+        row.names = NULL
+      )
+    })
+  })
+
+  # Response rate and mean RT per response, integrated over the full support
+  # (before the density is truncated to the plotting window)
+  mean_data <- dens_data |>
+    group_by(.data[[y_var]], .data[[color_var]], pred_Response) |>
+    summarise(
+      prop = sum(y) * dx,
+      mean_RT = sum(x * y) / sum(y),
+      .groups = "drop"
+    ) |>
+    filter(prop > 0.005)
+
+  dens_data <- dens_data |>
+    filter(x <= max(rt_range)) |>
+    mutate(y = if_else(pred_Response == 0, y, -y))
+
+  color_vals_asc  <- sort(unique(round(dens_data[[color_var]], 2)))
   color_levels_chr <- as.character(color_vals_asc)
   facet_levels <- if (reverse_axes) rev(color_levels_chr) else color_levels_chr
-  
-  pred <- pred |>
-    mutate(!!sym(color_var) := factor(
+
+  to_factor <- function(d) {
+    mutate(d, !!sym(color_var) := factor(
       as.character(round(.data[[color_var]], 2)),
       levels = facet_levels
     ))
-  
-  pred_rt <- pred[pred$Component == "rt", ]
-  pred_resp <- pred[pred$Component == "response", ]
-  
-  pred_long <- bayestestR::reshape_iterations(pred_rt) |>
-    rename(pred_RT = iter_value) |>
-    full_join(
-      bayestestR::reshape_iterations(pred_resp) |>
-        mutate(pred_Response = as.factor(iter_value)) |>
-        select(pred_Response, iter_group, iter_index),
-      by = c("iter_group", "iter_index")
-    )
-  
-  # Step 1: Density per y_var x color_var x pred_Response
-  # (this `y` sign convention - Correct = +, Error = - - is the mirroring
-  # rule and must never be touched by axis-order logic below)
-  dens_data <- pred_long |>
-    group_by(.data[[y_var]], .data[[color_var]]) |>
-    mutate(n_total = n()) |>
-    group_by(.data[[y_var]], .data[[color_var]], pred_Response) |>
-    filter(n() >= 2) |>
-    reframe(
-      prop = n() / first(n_total), 
-      x = density(pred_RT)$x,
-      y = density(pred_RT)$y * prop 
-    ) |>
-    mutate(y = if_else(pred_Response == 0, y, -y))
-  
-  mean_data <- pred_long |>
-    group_by(.data[[y_var]], .data[[color_var]], pred_Response) |>
-    summarise(mean_RT = mean(pred_RT, na.rm = TRUE), .groups = "drop")
-  
+  }
+  dens_data <- to_factor(dens_data)
+  mean_data <- to_factor(mean_data)
+
   # Step 2: Row position by rank (decoupled from y's internal sign)
   val_levels_sorted <- sort(unique(round(dens_data[[y_var]], 6)))
   n_levels <- length(val_levels_sorted)
   rank_asc <- seq_len(n_levels)
-  
+
   pos_for_level <- if (reverse_axes) {
     setNames(rev(rank_asc), as.character(val_levels_sorted))
   } else {
     setNames(rank_asc, as.character(val_levels_sorted))
   }
-  
+
   scale_factor <- 1.5
-  
+
   dens_data <- dens_data |>
     mutate(
       y_offset = pos_for_level[as.character(round(.data[[y_var]], 6))],
       y_scaled = y_offset + y * scale_factor
     )
-  
+
   mean_data <- mean_data |>
     mutate(y_offset = pos_for_level[as.character(round(.data[[y_var]], 6))])
-  
+
   break_pos <- pos_for_level[as.character(val_levels_sorted)]
   ord <- order(break_pos)
   breaks_pos <- break_pos[ord]          # ascending position: bottom -> top of panel
   breaks_val <- val_levels_sorted[ord]  # the true value sitting at each position
-  
+
   # Step 2b: Baseline lines colored by the y_var gradient (instead of flat grey)
   y_ramp <- scales::colour_ramp(y_cols)
   hline_colors <- y_ramp(scales::rescale(breaks_val, from = range(val_levels_sorted)))
   hline_data <- tibble(y = breaks_pos, line_col = hline_colors)
-  
+
   # Step 3: Plot
   p <- dens_data |>
     ggplot(aes(
@@ -265,7 +233,7 @@ plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference"
     ) +
     geom_ribbon(
       aes(ymin = y_offset, ymax = y_scaled),
-      alpha = 0.4, 
+      alpha = 0.4,
       color = NA
     ) +
     geom_line(alpha = 0.8, linewidth = 1) +
@@ -276,20 +244,20 @@ plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference"
       shape = 21, size = 3, color = "white", stroke = 0.6,
       show.legend = FALSE
     ) +
-    scale_y_continuous(breaks = breaks_pos, labels = breaks_val) +
+    scale_y_continuous(breaks = breaks_pos, labels = round(breaks_val, 2)) +
     scale_x_continuous(expand = c(0, 0), breaks = c(0, 0.5, 1, 1.5, 2)) +
     scale_color_manual(values = setNames(cols, color_levels_chr)) +
     scale_fill_manual(
-      values = c("0" = "#43A047", "1" = "#F44336"), 
+      values = c("0" = "#43A047", "1" = "#F44336"),
       labels = c("0" = "Correct", "1" = "Error")
     ) +
     labs(
-      x = "RT", 
-      y = nice_name(y_var),           
-      color = nice_name(color_var),   
+      x = "RT",
+      y = nice_name(y_var),
+      color = nice_name(color_var),
       fill = "Response"
     ) +
-    coord_cartesian(xlim = c(0, 2.5)) +
+    coord_cartesian(xlim = rt_range) +
     guides(fill = guide_legend(override.aes = list(alpha = 1))) +
     theme_minimal() +
     theme(legend.position = "bottom") +
@@ -297,18 +265,18 @@ plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference"
       vars(.data[[color_var]]),
       labeller = as_labeller(function(x) paste0(nice_name(color_var), " = ", x))
     )
-  
+
   p
 }
 
 plot_effect_densities(
-  model = m_lnr_muller, 
-  datagrid = insight::get_datagrid(m_lnr_muller, length = c(Illusion_Difference = 8, Illusion_Strength = 3)), 
+  model = gam,
+  datagrid = insight::get_datagrid(gam, length = c(Illusion_DifferenceZ = 8, Illusion_StrengthZ = 3)),
   y_var = "Illusion_Difference"
 )
 plot_effect_densities(
-  model = m_lnr_muller, 
-  datagrid = insight::get_datagrid(m_lnr_muller, length = c(Illusion_Difference = 3, Illusion_Strength = 9)), 
+  model = gam,
+  datagrid = insight::get_datagrid(gam, length = c(Illusion_DifferenceZ = 3, Illusion_StrengthZ = 9)),
   y_var = "Illusion_Strength"
 )
 ```
@@ -316,46 +284,49 @@ plot_effect_densities(
 
 ## Parameters
 
+### Curves
+
 ```{r}
 #| fig-width: 9
 #| fig-height: 7
 
+datagrid <- insight::get_datagrid(gam, length = c(Illusion_DifferenceZ = 5, Illusion_StrengthZ = 30))
+pred <- estimate_prediction(gam, data = datagrid, centrality = "mean", 
+                            iterations = 600, keep_iterations = TRUE) |> 
+  mutate(Parameter = Component, Type = "GAM") |> 
+  select(-Component, -Row) |> 
+  mutate(Parameter = ifelse(Parameter == "response", "Error Rate", "Mean RT"))
 
-# Note: In an LNR model, nu represents the mean of the log-finishing times: a higher nu means a slower accumulator.
-# The exact point where the nuzero and nuone lines cross corresponds to a 50% error rate (assuming sigmazero and sigmaone are roughly equal).
+# Only keep iterations of correct responses 
+iters_rt <- data.frame(select(pred[pred$Parameter == "Mean RT", ], starts_with("iter_")))
+iters_rt[data.frame(select(pred[pred$Parameter == "Error Rate", ], starts_with("iter_"))) == 1] <- NA
 
-pred <- rbind(
-  # GAM
-  rbind(
-    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "mu") |> 
-      mutate(Parameter = "Nu_Correct", Type = "GAM"),
-    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "nuone") |> 
-      mutate(Parameter = "Nu_Error", Type = "GAM"),
-    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "sigmazero") |> 
-      mutate(Parameter = "Sigma_Correct", Type = "GAM"),
-    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "sigmaone") |> 
-      mutate(Parameter = "Sigma_Error", Type = "GAM"),
-    estimate_relation(gam_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 15), predict = "ndt") |> 
-      mutate(Parameter = "NDT", Type = "GAM")
-  ),
-  # LM
-  rbind(
-    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "mu") |> 
-      mutate(Parameter = "Nu_Correct", Type = "LM"),
-    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "nuone") |> 
-      mutate(Parameter = "Nu_Error", Type = "LM"),
-    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "sigmazero") |> 
-      mutate(Parameter = "Sigma_Correct", Type = "LM"),
-    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "sigmaone") |> 
-      mutate(Parameter = "Sigma_Error", Type = "LM"),
-    estimate_relation(m1_lnr_muller, length = c(Illusion_DifferenceZ = 4, Illusion_StrengthZ = 10), predict = "ndt") |> 
-      mutate(Parameter = "NDT", Type = "LM") 
-  ) |> 
-    filter((Illusion_Effect == "Conflicting" & Illusion_DifferenceZ >= 0) | 
-             (Illusion_Effect == "Facilitating" & Illusion_DifferenceZ < 0)) |> 
-    select(-Illusion_Effect)
-) |> 
+pred[pred$Parameter == "Mean RT", "Predicted"] <- rowMeans(iters_rt, na.rm = TRUE)
+pred <- select(pred, -starts_with("iter_"))
+
+params <- find_auxiliary(gam)
+params <- c("mu", params[!params %in% c("poutlier")])
+for(p in params) {
+  pred <- rbind(
+    pred,
+    estimate_relation(gam, data = datagrid, predict = p) |> 
+      mutate(Parameter = p, Type = "GAM")
+  )
+}
+pred <- pred |> 
+  mutate(Parameter = fct_relevel(Parameter, c("Error Rate", "Mean RT"))) |> 
+  # , "Nu_Correct", "Nu_Error", "NDT", "Sigma_Correct", "Sigma_Error"))) |>
   unnormalize(illusion = "MullerLyer") 
+
+
+layout <- matrix(c(
+  rep(1, 5), rep(2, 5),  # Column 1 (Left): 5 units for the main outcomes
+  rep(3, 2),             # Column 2 (Right): 2 units each for remaining 5
+  rep(4, 2),
+  rep(5, 2),
+  rep(6, 2),
+  rep(7, 2)
+), ncol = 2, byrow = FALSE)
 
 pred |> 
   mutate(Illusion_Difference = as.factor(Illusion_Difference)) |> 
@@ -363,9 +334,70 @@ pred |>
   # geom_ribbon(aes(ymin = CI_low, ymax = CI_high, group = Illusion_Difference), alpha = 0.1) +
   geom_line(aes(color = Illusion_Difference, group = interaction(Type, Illusion_Difference), linetype = Type),
             linewidth = 1.5) +
-  scale_color_manual(values = c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")) +
+  scale_color_manual(
+    values = colorRampPalette(c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50"))(length(unique(pred$Illusion_Difference)))
+    ) +
   scale_linetype_manual(values = c("GAM" = "solid", "LM" = "dashed")) +
-  facet_wrap(~Parameter, scales = "free_y") +
+  # facet_wrap(~Parameter, scales = "free_y") +
+  ggh4x::facet_manual(vars(Parameter), design = layout, scales = "free_y") +
   theme_minimal()
 ```
 
+### Heatmaps
+
+
+```{r}
+datagrid <- insight::get_datagrid(gam_lnr_muller, by = list(Illusion_DifferenceZ = seq(0, 1, length.out=40),
+                                                            Illusion_StrengthZ = seq(-1, 1, length.out=40)))
+
+pred_heatmap <- rbind(
+  estimate_prediction(gam_lnr_muller, data = datagrid, predict = "mu") |> 
+      mutate(Parameter = "Nu_Correct", Type = "GAM"),
+  estimate_prediction(gam_lnr_muller, data = datagrid, predict = "nuone") |> 
+      mutate(Parameter = "Nu_Error", Type = "GAM"),
+  estimate_prediction(gam_lnr_muller, data = datagrid, predict = "sigmazero") |>
+      mutate(Parameter = "Sigma_Correct", Type = "GAM"),
+    estimate_prediction(gam_lnr_muller, data = datagrid, predict = "sigmaone") |>
+      mutate(Parameter = "Sigma_Error", Type = "GAM"),
+    estimate_prediction(gam_lnr_muller, data = datagrid, predict = "ndt") |>
+      mutate(Parameter = "NDT", Type = "GAM")
+) |> 
+  unnormalize(illusion = "MullerLyer") 
+
+# Split data by Parameter and generate individual plots
+plot_list <- pred_heatmap |> 
+  group_split(Parameter) |> 
+  map(function(df) {
+    param_name <- unique(df$Parameter)
+    
+    ggplot(df, aes(x = Illusion_Strength, y = Illusion_Difference)) +
+      geom_tile(aes(fill = Predicted)) +
+      geom_contour(aes(z = Predicted), color = "white", alpha = 0.6, linewidth = 0.5, bins = 20) +
+      annotate("rect", xmin = -30, xmax = 30, ymin = 0.1, ymax = 0.4, 
+               fill = NA, color = "red", linewidth = 0.5, linetype = "dotted") +
+      scale_fill_viridis_c(option = "turbo") +
+      scale_x_continuous(expand = c(0, 0)) +
+      scale_y_continuous(expand = c(0, 0)) +
+      labs(x = "Illusion Strength", y = "Illusion Difference", fill = NULL, title = param_name) +
+      theme_minimal()
+  })
+
+wrap_plots(plot_list)
+```
+
+#### Transformation Exploration
+
+```{r}
+pred_heatmap |> 
+  mutate(Illusion_Strength_signedlog = sign(Illusion_Strength) * log1p(abs(Illusion_Strength))) |> 
+  ggplot(aes(x = Illusion_Strength_signedlog, y = Illusion_Difference, z = Predicted)) +
+  geom_contour_filled(bins = 20) +
+  geom_contour(color = "white", alpha = 0.5, linewidth = 0.4, bins = 20) +
+  scale_fill_viridis_d() +
+  labs(x = "Transformed Illusion Strength (signed-log)", y = "Illusion Difference", fill = "Nu") +
+  facet_wrap(~Parameter) +
+  theme_minimal()
+```
+
+
+## Reliability

@@ -45,9 +45,9 @@ gam_ddm4_muller <- readRDS(paste0(path, "gam_ddm4_MullerLyer_1.rds"))
 # Generate 'df' by running the make_models.R script start
 warmstart <- rbind(
   cogmod::cogmod_warmstart(gam_ddm4_muller, data = df)$table |> 
-    mutate(Model = "gam_ddm4_muller"),
+    mutate(Model = "gam_ddm4_MullerLyer"),
   cogmod::cogmod_warmstart(gam_lnr_muller, data = df)$table |> 
-    mutate(Model = "gam_lnr_muller")
+    mutate(Model = "gam_lnr_MullerLyer")
 )
 
 write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")

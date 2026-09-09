@@ -16,6 +16,9 @@ threads_per_chain <- total_cores / chains_per_node # 16 cores / 2 chains = 8 thr
 warmup <- 1000
 iter <- warmup + 200
 
+# Data -------------------------------------------------------------------------
+warmstarts <- read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameComputational/refs/heads/main/analysis/warmstart.csv")
+
 
 df <- rbind(
   read.csv("https://raw.githubusercontent.com/RealityBending/IllusionGameComputational/refs/heads/main/data/illusion_part1.csv"),
@@ -43,12 +46,18 @@ df <- mutate(df,
 # plot(df$Illusion_Strength, df$Illusion_StrengthZ, col = as.numeric(as.factor(df$Illusion_Type)), pch = 19, cex = 0.5)
 
 
-# Data subset (to be removed in the final version)
+# FOR LOCAL FITTING:
 # df <- df[
-#   df$Participant %in% unique(df$Participant)[1:30],
+#   df$Participant %in% unique(df$Participant)[1:60],
 # ]
+# task_id <- 1; total_cores <- 4; chains_per_node <- 4; threads_per_chain <- 1; warmup <- 1000; iter <- warmup + 1000
 
-fit_model <- function(f, data, name = "gam_lnr_muller") {
+
+fit_model <- function(f, ill = "MullerLyer", name = "gam_lnr_muller") {
+  # Data
+  data <- df[df$Illusion_Type == ill, ]
+  warmstart <- warmstarts[warmstarts$Model == paste0(name, "_", ill), ]
+
   # Informative priors
   # brms::get_prior(f, data = df)
   priors <- cogmod_priors(f, data)
@@ -60,25 +69,34 @@ fit_model <- function(f, data, name = "gam_lnr_muller") {
     )
   }
 
+
   # Fit
   m <- brm(f,
     data = data,
     prior = priors,
-    init = cogmod_inits(f, data),
+    init = cogmod_inits(f, data), # cogmod_inits(f, data, warmstart = warmstart),
     stanvars = cogmod_stanvars(f),
+    # inv_metric = cogmod_inv_metric(f, data, warmstart = warmstart),
+    # step_size = cogmod_step_size(f, data, warmstart = warmstart),
     backend = "cmdstanr",
     warmup = warmup,
     iter = iter,
-    # algorithm = "pathfinder", chains = 16, single_path_draws = 4000, max_lbfgs_iters = 8000, threads = 8
-    chains = chains_per_node,
     cores = chains_per_node,
     threads = threading(threads_per_chain),
     save_pars = save_pars(all = TRUE),
-    algorithm = "sampling",
-    file = sprintf(paste0("models/", name, "_%d.rds"), task_id)
+    # algorithm = "pathfinder", chains = 16, single_path_draws = 4000, max_lbfgs_iters = 8000, threads = 8
+    # algorithm = "laplace", draws = 4000,
+    algorithm = "sampling", chains = chains_per_node,
+    stan_model_args = list(
+      stanc_options = list("O1"),
+      cpp_options = list(STAN_CPP_OPTIMS = TRUE, STAN_NO_RANGE_CHECKS = TRUE)
+    ),
+    file = sprintf(paste0("models/", name, "_", ill, "_%d.rds"), task_id),
+    file_refit = "always"
   )
 
-  return(paste(name, " SUCCESSFUL."))
+  print(paste(name, "-", ill, ": SUCCESSFUL."))
+  m
 }
 
 
@@ -86,36 +104,97 @@ fit_model <- function(f, data, name = "gam_lnr_muller") {
 # GAMs --------------------------------------------------------------------
 # =========================================================================
 
-# LNR ---------------------------------------------------------------------
+for (ill in c("MullerLyer")) {
+  # LNR ---------------------------------------------------------------------
 
-# Formula
-f <- bf(
-  RT | dec(Error) ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
-    k = c(5, 5),
-    bs = c("cr", "cr")
-  ) + (1 | Participant),
-  nuone ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
-    k = c(5, 5),
-    bs = c("cr", "cr")
-  ) + (1 | Participant),
-  sigmazero ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
-    k = c(5, 5),
-    bs = c("cr", "cr")
-  ) + (1 | Participant),
-  sigmaone ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
-    k = c(5, 5),
-    bs = c("cr", "cr")
-  ) + (1 | Participant),
-  ndt ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
-    k = c(5, 5),
-    bs = c("cr", "cr")
-  ) + (1 | Participant),
-  poutlier ~ 1 + (1 | Participant),
-  family = cogmod_lnr()
-)
+  # Formula
+  f <- bf(
+    RT | dec(Error) ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    nuone ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    sigmazero ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    sigmaone ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    ndt ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    poutlier ~ 1 + (1 | Participant),
+    family = cogmod_lnr()
+  )
 
-fit_model(f, df[df$Illusion_Type == "MullerLyer", ], name = "gam_lnr_muller")
+  fit_model(f, ill, name = "gam_lnr")
 
+
+  # DDM-4 ---------------------------------------------------------------------
+
+  # Formula
+  f <- bf(
+    RT | dec(Error) ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    boundary ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    bias ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    ndt ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    sigmadrift = 0,
+    sigmabias = 0,
+    sigmandt = 0,
+    poutlier ~ 1 + (1 | Participant),
+    family = cogmod_ddm()
+  )
+
+  # DDM-5 ---------------------------------------------------------------------
+
+  # Formula
+  f <- bf(
+    RT | dec(Error) ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    boundary ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    bias ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    ndt ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    sigmadrift ~ t2(Illusion_DifferenceZ, Illusion_StrengthZ,
+      k = c(5, 5),
+      bs = c("cr", "cr")
+    ) + (1 | Participant),
+    sigmabias = 0,
+    sigmandt = 0,
+    poutlier ~ 1 + (1 | Participant),
+    family = cogmod_ddm()
+  )
+
+  fit_model(f, ill, name = "gam_ddm5")
+}
 # # =========================================================================
 # # LINEAR ------------------------------------------------------------------
 # # =========================================================================
