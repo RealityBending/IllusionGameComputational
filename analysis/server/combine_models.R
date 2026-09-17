@@ -9,7 +9,7 @@ options(mc.cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK")))
 task_id <- as.numeric(Sys.getenv("SLURM_ARRAY_TASK_ID", unset = "1"))
 
 
-setwd("/mnt/lustre/users/psych/oc236/IGComputational/models/combined/")
+setwd("/mnt/lustre/users/psych/oc236/IGComputational/models/models/")
 
 # List of models
 model_names <- c("gam_lnr_muller")

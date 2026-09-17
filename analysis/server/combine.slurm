@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --mem=64G
+#SBATCH --mem=128G
 #SBATCH --output=/mnt/lustre/scratch/psych/oc236/IGComputational/combine_%A_%a.out
 #SBATCH --error=/mnt/lustre/scratch/psych/oc236/IGComputational/combine_%A_%a.err
 #SBATCH --partition=long
