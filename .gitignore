@@ -50,3 +50,4 @@ rsconnect/
 
 analysis/models/*
 analysis/bayesflow/posterior_summaries.csv
+analysis/server/server.md

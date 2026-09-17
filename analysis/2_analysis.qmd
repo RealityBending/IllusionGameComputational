@@ -53,10 +53,10 @@ unnormalize <- function(df, illusion = NULL) {
 #| error: false
 
 # path <- "C:/Users/olive/Documents/"
-path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
-# gam <- readRDS(paste0(path, "gam_lnr_muller_mini.rds"))
-gam <- readRDS(paste0(path, "gam_lnr_MullerLyer_1.rds"))
-gam <- readRDS(paste0(path, "gam_ddm4_MullerLyer_1.rds"))
+path <- "models/"
+gam <- readRDS(paste0(path, "gam_lnr_muller.rds"))
+# gam <- readRDS(paste0(path, "gam_lnr_MullerLyer_1.rds"))
+# gam <- readRDS(paste0(path, "gam_ddm4_MullerLyer_1.rds"))
 ```
 
 ## Info
@@ -292,16 +292,18 @@ plot_effect_densities(
 
 datagrid <- insight::get_datagrid(gam, length = c(Illusion_DifferenceZ = 5, Illusion_StrengthZ = 30))
 pred <- estimate_prediction(gam, data = datagrid, centrality = "mean", 
-                            iterations = 600, keep_iterations = TRUE) |> 
+                            iterations = 2500, keep_iterations = TRUE) |> 
   mutate(Parameter = Component, Type = "GAM") |> 
   select(-Component, -Row) |> 
   mutate(Parameter = ifelse(Parameter == "response", "Error Rate", "Mean RT"))
 
-# Only keep iterations of correct responses 
+# Only keep iterations of correct responses to compute mean
 iters_rt <- data.frame(select(pred[pred$Parameter == "Mean RT", ], starts_with("iter_")))
 iters_rt[data.frame(select(pred[pred$Parameter == "Error Rate", ], starts_with("iter_"))) == 1] <- NA
-
 pred[pred$Parameter == "Mean RT", "Predicted"] <- rowMeans(iters_rt, na.rm = TRUE)
+# Remove mean RTs when only a few correct trials as it's noisy 
+pred[pred$Parameter == "Mean RT", "Predicted"][pred[pred$Parameter == "Error Rate", "Predicted"] > 0.9] <- NA
+ 
 pred <- select(pred, -starts_with("iter_"))
 
 params <- find_auxiliary(gam)
@@ -347,19 +349,19 @@ pred |>
 
 
 ```{r}
-datagrid <- insight::get_datagrid(gam_lnr_muller, by = list(Illusion_DifferenceZ = seq(0, 1, length.out=40),
+datagrid <- insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = seq(0, 1, length.out=40),
                                                             Illusion_StrengthZ = seq(-1, 1, length.out=40)))
 
 pred_heatmap <- rbind(
-  estimate_prediction(gam_lnr_muller, data = datagrid, predict = "mu") |> 
+  estimate_prediction(gam, data = datagrid, predict = "mu") |> 
       mutate(Parameter = "Nu_Correct", Type = "GAM"),
-  estimate_prediction(gam_lnr_muller, data = datagrid, predict = "nuone") |> 
+  estimate_prediction(gam, data = datagrid, predict = "nuone") |> 
       mutate(Parameter = "Nu_Error", Type = "GAM"),
-  estimate_prediction(gam_lnr_muller, data = datagrid, predict = "sigmazero") |>
+  estimate_prediction(gam, data = datagrid, predict = "sigmazero") |>
       mutate(Parameter = "Sigma_Correct", Type = "GAM"),
-    estimate_prediction(gam_lnr_muller, data = datagrid, predict = "sigmaone") |>
+    estimate_prediction(gam, data = datagrid, predict = "sigmaone") |>
       mutate(Parameter = "Sigma_Error", Type = "GAM"),
-    estimate_prediction(gam_lnr_muller, data = datagrid, predict = "ndt") |>
+    estimate_prediction(gam, data = datagrid, predict = "ndt") |>
       mutate(Parameter = "NDT", Type = "GAM")
 ) |> 
   unnormalize(illusion = "MullerLyer") 
