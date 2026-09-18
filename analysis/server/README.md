@@ -65,6 +65,33 @@ cd analysis/server
 cluster that no longer exists locally is deleted, so a renamed script can never
 be submitted by accident. `models/`, `tests/` and the logs are untouched.
 
+### How to check job status, cheaply
+
+For a future agent asked to "check on the jobs": two commands, not a log dump.
+
+```bash
+./hpc queue                # one line per array task: STATE, TIME, TIME_LEFT, reason if PENDING
+./hpc sh "grep -h 'Iteration\|REPORT' \$IGC_SCRATCH_DIR/fit_<model>_*.out | tail -40"
+```
+
+`queue` alone answers "is it running, pending, or dead". The `grep` answers "how
+far has it got" without paying for the R/brms/compiler banner that fills the
+rest of a `.out` — a plain `./hpc log <model>` is for when something looks wrong
+and the full log is actually needed. Grep for two things only:
+
+- `REPORT ...` — printed once, at the end of a shard: wall time, `n_leapfrog`,
+  treedepth, step size, divergences, max Rhat, min ESS ratio. This is the line
+  that says whether the fit is healthy (see `AGENT.md` §6.1 for what to expect).
+- `Chain N Iteration: ...` — printed periodically during warmup/sampling; the
+  highest number seen is the only progress signal before a `REPORT` line exists.
+
+Seeing only `Iteration: 1 / 1500` for hours is **not** by itself evidence of a
+hang: cmdstanr's console refresh is spaced through the run, and at full data
+warmup 1000 alone costs 12-17 h (`AGENT.md` §4.4.1, §7 Q1), so the next printed
+iteration count can be a long time coming even on a healthy job. Trust `TIME` in
+`./hpc queue` (climbing, task not requeued) over the absence of a fresh
+`Iteration` line.
+
 Extra arguments to `fit` and `combine` are passed to `sbatch`, so a smoke test
 is:
 
@@ -138,7 +165,7 @@ the declaration lines must stay in the form `  <name> = list(`).
 | `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias` | — |
 | `gam_ddm4` | `cogmod_ddm()` | drift, `boundary`, `bias`, `ndt` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 |
 | `gam_ddm5` | `cogmod_ddm()` | as DDM-4 plus `sigmadrift` | `sigmabias`/`sigmandt` = 0 |
-| `gam_ddm7` | `cogmod_ddm()` | all seven: as DDM-5 plus `sigmabias`, `sigmandt` | — | ⚠ **not viable as specified — do not submit** |
+| `gam_ddm7` | `cogmod_ddm()` | all seven: as DDM-5 plus `sigmabias`, `sigmandt` | — | ⚠ **not viable at full data — subsample only** |
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
 | `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — |
 | `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` |
@@ -165,21 +192,36 @@ scaling constraint — its diffusion coefficient is fixed internally — so free
 `sigmabias` there does not open the ridge that freeing `sigmazero` would in
 `gam_lba`.
 
-### `gam_ddm7`: do not submit it
+### `gam_ddm7`: do not submit it at full data
 
-Smoke-tested on 2026-09-18 and **not viable as specified**. At 30 participants
+Smoke-tested on 2026-09-18 and **not viable at full data**. At 30 participants
 it did not reach iteration 100 in 50 minutes, where every other model in the
 registry finished all 400 in 6-11 minutes — upwards of 25x the per-iteration
 cost on 1/74th of the production data, which scales to roughly a fortnight per
 chain at full data, past `long`'s 8-day ceiling.
 
-That is a geometry problem rather than a compute one, so a longer `--time` will
-not rescue it. The suspects are the three between-trial variabilities, which
-are identified through the shape of the RT distribution rather than its
-location and each carry 25 tensor coefficients here. **A separate investigation
-will decide how to parameterise it**; the entry stays in `models.R` because
-that is what the investigation starts from. `gam_ddm4` and `gam_ddm5` are
-unaffected. Full numbers in `AGENT.md` §4.7.
+The cause was measured later the same day and it is **not** the geometry
+problem this section first guessed at. `cogmod_ddm_decision_lpdf()` routes on an
+exact-zero test, and estimating `sigmabias` or `sigmandt` — as opposed to fixing
+either at `0` in `bf()` — leaves the analytic Wiener density for Stan's adaptive
+numerical quadrature, at 18x (one freed) or 55x (both) the cost of the path
+`gam_ddm5` takes. `sigmadrift` is analytic and costs 2.8x, which is why
+`gam_ddm5` is cheap.
+
+What follows from that, before anyone spends a run rediscovering it:
+
+- **Tighter priors do not help.** Driving both to `1e-5` still costs 26x, and
+  that is a floor — the fast path tests for *exact* zero.
+- **The smooths are not the problem.** The cost is per observation, so making
+  the variabilities intercept-only changes nothing.
+- **A warm start does not help either**, at full data: it buys back warmup,
+  and the retained draws alone are ~18 days.
+- **Subsampling does.** `gam_ddm7` is ~2.7-4.7 days per chain at 200
+  participants with 1 chain x 16 threads, which is the way to get a look at it.
+  Give it its own `IGC_MODELS_DIR`.
+
+`gam_ddm4` and `gam_ddm5` are unaffected. Full numbers and the proposed cogmod
+fix in `AGENT.md` §4.7.1 and `cogmod_ddm_cost_issue.md`.
 
 ### Who runs what
 
@@ -511,5 +553,6 @@ minutes and retry.
 | `combine.slurm` | job for the above |
 | `AGENT.md` | the measurements and the traps — read before changing settings |
 | `cogmod_inits_issue.md` | the cold-start init failures and their root cause |
+| `cogmod_ddm_cost_issue.md` | why `gam_ddm7` is 55x dearer per gradient, and the cogmod fix for it |
 | `hpc.local` | **gitignored** — this machine's account settings, e.g. `IGC_HPC_USER=oc236` |
 | `server.md` | **gitignored** — account, keys, OOD URLs |

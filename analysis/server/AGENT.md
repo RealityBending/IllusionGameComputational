@@ -416,6 +416,15 @@ production data**. Scaled against the 12-20 h per chain that 4.4.1 projects for
 full data, `gam_ddm7` lands near a fortnight per chain — past `long`'s 8-day
 ceiling, let alone the 2-day `--time`.
 
+> **Corrected 2026-09-18, later the same day.** This section originally read
+> "a geometry problem, not a compute problem", and guessed that the three
+> between-trial variabilities were hard to identify because each carries 25
+> tensor coefficients. **That diagnosis was wrong, and it is the expensive kind
+> of wrong**: it makes prior tightening and reparameterising the smooths sound
+> like they might work, and neither does. The cost is a *branch in the
+> likelihood* and the smooths have nothing to do with it. See 4.7.1. The
+> paragraph below is kept because the decision it reached still stands.
+
 This is a geometry problem, not a compute problem, so more hours will not fix
 it. The suspects are the three between-trial variabilities: `sigmadrift`,
 `sigmabias` and `sigmandt` are identified through the *shape* of the RT
@@ -429,6 +438,84 @@ moving.
 separate investigation into how to parameterise it. `gam_ddm4` and `gam_ddm5`
 are unaffected, and so are the other new families. Leave the entry in
 `models.R` — it is the thing that investigation will start from.
+
+#### 4.7.1 Why it is slow: a branch into numerical quadrature, not geometry
+
+Measured 2026-09-18 with a standalone Stan program calling `wiener_lpdf` in
+each of its forms, cost normalised by `n_leapfrog__` so the variants are
+comparable. Full report, including the reproduction script and the proposed
+cogmod fixes, in **`cogmod_ddm_cost_issue.md`**.
+
+`cogmod_ddm_decision_lpdf()` routes on an **exact-zero test**:
+
+```stan
+if (sw == 0 && sigmandt == 0) { ... analytic fast paths ... }
+...
+return wiener_lpdf(y | boundary, tau0, w, v, sigmadrift, sw, sigmandt);
+```
+
+The 7-parameter form falls back to adaptive numerical quadrature — cogmod's own
+comment above that line says so. `sigmadrift` is handled analytically, which is
+why `gam_ddm5` is cheap; the other two are not.
+
+| density variant | µs/obs/gradient | x the DDM-5 path |
+| --- | --- | --- |
+| classic 4-parameter (`gam_ddm4`) | 1.97 | 0.36 |
+| 5-parameter, `sigmadrift` free (`gam_ddm5`) | 5.56 | 1.0 |
+| one of `sigmabias`/`sigmandt` free (1-D quadrature) | 100.0 | **18.0** |
+| both free (2-D quadrature, `gam_ddm7`) | 307.1 | **55.3** |
+| both free but driven to `1e-5` | 144.7 | 26.0 |
+
+The benchmark reproduces the 4.7 table it is explaining: it predicts
+`gam_ddm4` at 5.2 min against the 7.1 measured, and `gam_ddm7` reaching ~9
+iterations in 46 min against the observed "did not reach 100". At full data
+with 8 threads the classic path predicts 80 ms per gradient against the 78 ms
+4.4.1 measured for `gam_lnr`.
+
+**What this rules out, and what it leaves open:**
+
+- **Tight priors near zero do not work.** 55x → 26x and no further: `1e-3` and
+  `1e-5` measure the same, because the fast path tests for *exact* zero and an
+  estimated parameter never satisfies it. Note also that "zero" is on the link
+  scale — `sigmabias` is logit (η = 0 is *half* the maximum start-point range)
+  and `sigmandt` is log (η = 0 is **one second** of non-decision-time range).
+  A prior centred at 0 there is pathological, not conservative. cogmod's own
+  `normal(-2, 1)` and `normal(-3, 1)` are already the sensible locations.
+- **The smooths are innocent.** The cost is per-observation and independent of
+  how many coefficients feed the linear predictor, so making the three
+  variabilities intercept-only changes nothing. Do not spend a run finding
+  this out.
+- **A warm start does not close the gap either.** It buys back warmup, not
+  per-gradient cost; 500 retained draws alone are ~18 days at full data.
+- **Freeing exactly one variability costs 18x, not 55x** — the same either way
+  (18.0 against 18.0 to three figures), so which one is a modelling choice,
+  not a performance one. If one is ever freed it should be **`sigmabias`**:
+  freeing `sigmandt` silently redefines `ndt` as the *lower bound* of a
+  between-trial distribution rather than its midpoint (cogmod documents this),
+  and `ndt` carries its own 2-D smooth in every model in the registry, so the
+  `ndt` surface would stop being comparable across the model set.
+- **Subsampling works, and is the only thing here that does.** The cost is per
+  row, so per chain at warmup 1000 + 500 draws, 16 threads, 1 chain per task:
+
+  | | full data | fits ~5 days on `long` |
+  | --- | --- | --- |
+  | `gam_ddm7` as specified | ~54 days | ~240 participants |
+  | `gam_ddm7`, the two pinned tight | ~26 days | ~500 participants |
+  | a six-parameter DDM | ~18 days | ~700 participants |
+
+  At 200 participants `gam_ddm7` is 2.7 days per chain if leapfrog settles at
+  255 and 4.7 at 511, against 8.7 — over the wall — if treedepth stays pinned
+  at 10. That last case is itself the finding, so the run is informative
+  whether or not it completes. Give it **1 chain x 16 threads** (4.4.1:
+  threading scales, more chains per task does not) and **its own
+  `IGC_MODELS_DIR`**.
+- **The real fix is in cogmod**, not here: replace the delegation to Stan's
+  adaptive quadrature with cogmod's own fixed-node Gauss-Legendre rule, the
+  pattern already used for the inverse-Gaussian's drift integral
+  (`.pwald_sv()` / `.WALD_STAN_PRELUDE` in `R/core_shifted.R`). A 3x3 rule
+  projects to ~6x faster, which is what would make a six-parameter DDM routine
+  and a seven-parameter one reachable in combination with a warm start.
+  `cogmod_ddm_cost_issue.md` §4.1 has the design constraints.
 
 ---
 
@@ -517,6 +604,39 @@ No user paths are hard-coded; `./hpc` passes them via `sbatch --export`.
 Every fit prints one `REPORT <model> | wall | n_leapfrog | treedepth | stepsize |
 divergent | accept | max Rhat | min neff_ratio` line to the `.out` log, so runs
 can be compared without pulling the `.rds`.
+
+### 5.7 The slope prior fills flats only; it does not overwrite cogmod's
+
+`fit_model.R` adds `normal(0, 1)` on class `b` because brms leaves slopes flat.
+Until 2026-09-18 it did that **unconditionally**, with `replace = TRUE`, which
+overwrote the slope priors cogmod sets for the dpars it knows to be hard to
+identify. Measured over the registry, before and after the loop:
+
+| dpar | cogmod sets | the old loop made it |
+| --- | --- | --- |
+| `mu`, `bias`, `boundary` (DDM) | *flat* | `normal(0, 1)` — correct, keep |
+| `ndt` | `normal(0, 0.2)` | `normal(0, 1)` — **5x wider** |
+| `sigmadrift`, `sigmabias`, `sigmandt`, `sigmaone`, `boundary` (race) | `normal(0, 0.5)` | `normal(0, 1)` — **2x wider** |
+| `driftone` (`gam_rdm`, `gam_rdm5`) | `normal(0, 2)` | `normal(0, 1)` — **2x narrower** |
+| `driftone` (`gam_lba`) | `normal(0, 1.5)` | `normal(0, 1)` — **1.5x narrower** |
+
+So it was not a uniform loosening: it loosened the shift and the variability
+parameters and **tightened the second accumulator's drift**, which is an effect
+of interest rather than a nuisance term. The loop now skips any dpar whose
+blanket `b` row cogmod already filled.
+
+**The production runs launched on 2026-09-18 predate this fix** and carry the
+old priors. Whether that is worth a restart is a judgement call and not one to
+make silently — the variability terms are merely less regularised than
+intended, but `driftone` in `gam_rdm` / `gam_rdm5` / `gam_lba` is shrunk
+harder than cogmod intends, and those are the models where it matters.
+
+One thing the loop still does **not** touch: `sds`, the smooth wiggliness SD,
+which stays on brms's `student_t(3, 0, 2.5)` for every dpar. On a logit or log
+link that is close to flat in effect — half-t with a median near 1.9 — and
+cogmod does not set it either (`cogmod_ddm_cost_issue.md` §4.2 proposes that it
+should). It is the loosest prior in the model and the one to tighten first if a
+smoothed variability parameter ever needs regularising.
 
 ---
 

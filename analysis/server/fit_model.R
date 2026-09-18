@@ -97,10 +97,22 @@ cat("participants:", length(unique(data$Participant)), " rows:", nrow(data), "\n
 
 f <- spec$formula()
 
-# cogmod's family-aware priors, plus a standard normal on every slope (brms's
-# default is flat). poutlier keeps cogmod's own prior.
+# cogmod's family-aware priors, plus a standard normal on the slopes brms would
+# otherwise leave flat. poutlier keeps cogmod's own prior.
+#
+# Only the FLAT ones. cogmod already names a slope prior for the dpars it knows
+# to be hard to identify, and it is tighter than normal(0, 1) on purpose:
+# normal(0, 0.2) for `ndt` and normal(0, 0.5) for `sigmadrift` / `sigmabias` /
+# `sigmandt`. Until 2026-09-18 this loop overwrote those with normal(0, 1)
+# unconditionally, i.e. it widened by 5x and 2x exactly the priors cogmod had
+# tightened. Measured over gam_ddm7: `mu`, `bias` and `boundary` arrive flat and
+# want filling; the other four arrive set and must be left alone.
 priors <- cogmod_priors(f, data)
 for (par in c("", setdiff(unique(priors$dpar), c("poutlier", "")))) {
+  # The blanket `b` row for this dpar: class "b" with no coef, no group.
+  blanket <- priors$class == "b" & priors$dpar == par &
+    !nzchar(priors$coef) & !nzchar(priors$group)
+  if (any(blanket & nzchar(priors$prior))) next # cogmod set it; keep it
   priors <- c(priors, brms::prior_string("normal(0, 1)", class = "b", dpar = par),
               replace = TRUE)
 }

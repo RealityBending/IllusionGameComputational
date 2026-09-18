@@ -126,18 +126,25 @@ igc_models <- list(
   # The full DDM: nothing fixed. Every one of cogmod_ddm()'s seven parameters
   # gets its own 2-D smooth, including all three between-trial variabilities.
   #
-  # DO NOT SUBMIT THIS AS IT STANDS (measured 2026-09-18, AGENT.md 4.7). At 30
-  # participants it did not reach iteration 100 in 50 minutes, where every
-  # other model in the registry finished all 400 in 6-11 -- upwards of 25x the
-  # per-iteration cost on 1/74th of the production data, which scales to about
-  # a fortnight per chain at full data, past long's 8-day ceiling.
+  # DO NOT SUBMIT THIS AT FULL DATA (measured 2026-09-18, AGENT.md 4.7/4.7.1).
+  # At 30 participants it did not reach iteration 100 in 50 minutes, where
+  # every other model in the registry finished all 400 in 6-11.
   #
-  # That is geometry, not compute, so a longer --time will not rescue it.
-  # sigmadrift, sigmabias and sigmandt are identified through the shape of the
-  # RT distribution rather than its location, weakly so even with flat
-  # predictors, and here each carries 25 tensor coefficients plus a participant
-  # intercept. The entry stays because it is where the investigation into
-  # reparameterising it starts.
+  # The reason is NOT geometry, which is what this comment said first and what
+  # the smooth-heavy formula invites you to assume. cogmod_ddm_decision_lpdf()
+  # branches on `sw == 0 && sigmandt == 0`: estimating sigmabias or sigmandt
+  # (as opposed to fixing them at 0, as gam_ddm4 and gam_ddm5 do) leaves the
+  # analytic Wiener density for Stan's adaptive numerical quadrature, at 18x
+  # the per-gradient cost with one freed and 55x with both. sigmadrift is
+  # analytic and costs 2.8x, which is the whole reason gam_ddm5 is affordable.
+  #
+  # So: tighter priors do not rescue it (26x is the floor, because the test is
+  # for EXACT zero); dropping the smooths on the variabilities does not either
+  # (the cost is per observation, not per coefficient); and neither does a warm
+  # start (it buys back warmup, not per-gradient cost). What does work is fewer
+  # participants -- about 2.7-4.7 days per chain at 200, with 1 chain x 16
+  # threads and its own IGC_MODELS_DIR. The real fix is a fixed-node quadrature
+  # rule in cogmod; see cogmod_ddm_cost_issue.md.
   gam_ddm7 = list(
     illusion = "MullerLyer",
     formula = function() {

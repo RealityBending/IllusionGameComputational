@@ -20,6 +20,10 @@ Everything for that lives in `analysis/server/`:
   carelessly cost a failed run, and they are written up with the evidence.
 - `analysis/server/cogmod_inits_issue.md` — the cold-start initialisation
   failures and their root cause, fixed in cogmod 0.3.3.
+- `analysis/server/cogmod_ddm_cost_issue.md` — why `gam_ddm7` costs 55x per
+  gradient (a branch into numerical quadrature, not model geometry), what does
+  and does not fix it, and the change cogmod would need. Read it before
+  proposing anything about the seven-parameter DDM.
 
 The workflow, in one line:
 
@@ -35,9 +39,10 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   definition of what a model is — adding one is a single entry there and
   nothing else. Do not hard-code a formula into a fitting script.
 - **Not every model in the registry should be submitted.** `gam_ddm7` is known
-  not to be viable as specified (README → "`gam_ddm7`: do not submit it", and
-  `AGENT.md` §4.7). Check the README's "Who runs what" table before launching
-  anything.
+  not to be viable **at full data** (README → "`gam_ddm7`: do not submit it at full data",
+  and `AGENT.md` §4.7). It is viable on a subsample — roughly 200 participants
+  — and that run is worth doing; what is ruled out is the full 2,215. Check the
+  README's "Who runs what" table before launching anything.
 - **Never hard-code an account or a path.** Everything is an `IGC_*` variable
   with a default (see README → Paths). A second cluster account sets its own in
   `analysis/server/hpc.local`, which is gitignored.
