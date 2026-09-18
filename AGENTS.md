@@ -34,6 +34,10 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
 - **One job fits one model.** `analysis/server/models.R` is the single
   definition of what a model is — adding one is a single entry there and
   nothing else. Do not hard-code a formula into a fitting script.
+- **Not every model in the registry should be submitted.** `gam_ddm7` is known
+  not to be viable as specified (README → "`gam_ddm7`: do not submit it", and
+  `AGENT.md` §4.7). Check the README's "Who runs what" table before launching
+  anything.
 - **Never hard-code an account or a path.** Everything is an `IGC_*` variable
   with a default (see README → Paths). A second cluster account sets its own in
   `analysis/server/hpc.local`, which is gitignored.

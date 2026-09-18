@@ -132,17 +132,62 @@ function returning the brms formula. It is the only place a model is defined —
 same one, and `./hpc` reads the *names* straight out of the file (which is why
 the declaration lines must stay in the form `  <name> = list(`).
 
-| model | family | distributional parameters with a 2-D smooth |
-| --- | --- | --- |
-| `gam_lnr` | `cogmod_lnr()` | drift, `nuone`, `sigmazero`, `sigmaone`, `ndt` (`sigmabias = 0`) |
-| `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias`, the between-trial start-point range |
-| `gam_ddm4` | `cogmod_ddm()` | drift, `boundary`, `bias`, `ndt` (all three between-trial SDs 0) |
-| `gam_ddm5` | `cogmod_ddm()` | as DDM-4 plus `sigmadrift` |
+| model | family | distributional parameters with a 2-D smooth | fixed | |
+| --- | --- | --- | --- | --- |
+| `gam_lnr` | `cogmod_lnr()` | drift, `nuone`, `sigmazero`, `sigmaone`, `ndt` | `sigmabias = 0` |
+| `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias` | — |
+| `gam_ddm4` | `cogmod_ddm()` | drift, `boundary`, `bias`, `ndt` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 |
+| `gam_ddm5` | `cogmod_ddm()` | as DDM-4 plus `sigmadrift` | `sigmabias`/`sigmandt` = 0 |
+| `gam_ddm7` | `cogmod_ddm()` | all seven: as DDM-5 plus `sigmabias`, `sigmandt` | — | ⚠ **not viable as specified — do not submit** |
+| `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
+| `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — |
+| `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` |
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =
 c("cr", "cr")) + (1 | Participant)`; `poutlier` is `1 + (1 | Participant)`.
-Production is `gam_lnr`, `gam_lnr6` and `gam_ddm4`; `gam_ddm5` is defined and
-submittable but is not part of the final run. Note that `gam_lnr6` should cost
+Two modelling choices in that table are worth knowing about before reading any
+output:
+
+- **`gam_lba` is `cogmod_lba2`, not `lba1`.** `lba1` has a single drift and no
+  second accumulator, so it cannot model the choice that `dec(Error)` carries.
+- **`sigmazero = 1` in `gam_lba` is a scaling constraint, not a simplification.**
+  The LBA is identified only up to a scale — multiply every drift, the
+  start-point range and the boundary by one constant and the likelihood does
+  not move — so one parameter must be pinned, and cogmod's own convention is
+  the first accumulator's drift SD. `sigmaone` stays free, which is what lets
+  the accumulators differ. Freeing `sigmazero` without substituting another
+  constraint leaves a ridge for the chains to wander along.
+
+`gam_rdm` fixes `sigmabias = 0`, the plain racing diffusion with both
+accumulators starting from the same point; `gam_rdm5` frees it, and stands to
+`gam_rdm` as `gam_lnr6` does to `gam_lnr`. Unlike the LBA the RDM needs no
+scaling constraint — its diffusion coefficient is fixed internally — so freeing
+`sigmabias` there does not open the ridge that freeing `sigmazero` would in
+`gam_lba`.
+
+### `gam_ddm7`: do not submit it
+
+Smoke-tested on 2026-09-18 and **not viable as specified**. At 30 participants
+it did not reach iteration 100 in 50 minutes, where every other model in the
+registry finished all 400 in 6-11 minutes — upwards of 25x the per-iteration
+cost on 1/74th of the production data, which scales to roughly a fortnight per
+chain at full data, past `long`'s 8-day ceiling.
+
+That is a geometry problem rather than a compute one, so a longer `--time` will
+not rescue it. The suspects are the three between-trial variabilities, which
+are identified through the shape of the RT distribution rather than its
+location and each carry 25 tensor coefficients here. **A separate investigation
+will decide how to parameterise it**; the entry stays in `models.R` because
+that is what the investigation starts from. `gam_ddm4` and `gam_ddm5` are
+unaffected. Full numbers in `AGENT.md` §4.7.
+
+### Who runs what
+
+| account | models |
+| --- | --- |
+| `dmm56` | `gam_lnr`, `gam_lnr6`, `gam_ddm4` — running since 2026-09-18 |
+| second account | `gam_rdm`, `gam_rdm5`, `gam_lba` |
+| nobody, for now | `gam_ddm7` (above), `gam_ddm5` (defined and submittable, not part of the run) | Note that `gam_lnr6` should cost
 *more* per gradient than `gam_lnr`, not less: a free `sigmabias` takes cogmod's
 erfc-based two-tail path instead of the single-tail shortcut, which 0.3.3
 measured at ~15% dearer (and ~20% cheaper for `sigmabias = 0`).
@@ -204,11 +249,22 @@ Then split the models by name. Both sides have the same `models.R`, so the only
 thing to agree on is who runs what:
 
 ```bash
-# dmm56
+# dmm56 -- running since 2026-09-18
 ./hpc fit gam_lnr ; ./hpc fit gam_lnr6 ; ./hpc fit gam_ddm4
-# oc236
-./hpc fit gam_ddm5 ; ./hpc fit <whatever is added next>
+# second account
+./hpc fit gam_rdm ; ./hpc fit gam_rdm5 ; ./hpc fit gam_lba
 ```
+
+Three jobs x 4 tasks x 16 CPUs is 192 against the 140-CPU cap, so the third
+waits for the first to finish — as it does on `dmm56`. That is fine and costs
+nothing (`--time` is per task), but if the wall matters, submit two and hold the
+third, or drop to `--array=1-2` and take 2,000 draws per model instead of
+4,000.
+
+Both of those three smoke-tested clean at 30 participants (`AGENT.md` §4.7):
+`gam_rdm` is the best-behaved model in the registry, and `gam_lba`'s 6%
+divergences at warmup 300 are the one number to check in its production
+`REPORT`, where warmup 1000 is expected to clear them.
 
 A model that only one of you fits still has to be **defined in the shared
 `models.R` and committed**, or `./hpc fit` will reject the name. That is the

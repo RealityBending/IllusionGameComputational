@@ -356,7 +356,9 @@ sampling, not only as surviving chains.
 
 **Unverified at production scale** — the first full-data run is the test. Watch
 the `.err` files for "Rejecting initial value" and the `REPORT` line's
-divergence count.
+divergence count. So far 8 of 8 chains at 30 participants (2026-09-18 smoke,
+`gam_lnr` + `gam_ddm4`) and 6 of 6 across the three new families (4.7) started
+cleanly, against a measured 7% rejection rate at that size under 0.3.2.
 
 Practical consequence while it is unverified: **keep 2 chains per task.** One
 chain x 16 threads halves the wall per chain and is the obvious next move once
@@ -377,6 +379,56 @@ more data**:
 The alarming escalation seen earlier (0% -> 2% -> 25% divergences) was entirely
 a short-warmup artifact. There is currently **no evidence of a model-geometry
 problem**. Re-check at full data, but expect it to be fine.
+
+### 4.7 The new families, smoke-tested (2026-09-18)
+
+First fits of `cogmod_rdm`, `cogmod_lba2` and the full seven-parameter
+`cogmod_ddm`, all at 30 participants / 3,806 rows, warmup 300 + 100 draws,
+2 chains x 4 threads on `short`. Same settings for all three, so the columns
+are comparable; `gam_lnr` and `gam_ddm4` from the same matrix are included for
+scale.
+
+| model | wall | n_leapfrog | stepsize | divergent | max Rhat | params |
+| --- | --- | --- | --- | --- | --- | --- |
+| `gam_rdm` | 10.9 min | 129 | 0.041 | **0** | 1.119 | 276 |
+| `gam_lba` | 9.5 min | 233 | 0.027 | **6%** | 1.199 | 396 |
+| `gam_lnr` | 6.0 min | 267 | 0.015 | 1% | 1.321 | 336 |
+| `gam_ddm4` | 7.1 min | 128 | 0.033 | 0% | 1.440 | 278 |
+| `gam_ddm7` | **did not reach iteration 100 in 50 min** | — | — | — | — | — |
+
+All three new families compile, and `cogmod_priors()` / `cogmod_inits()` handle
+the hand-fixed dpars — including `gam_lba`'s `sigmazero = 1`, the only non-zero
+constant in the registry. No chain was rejected at initialisation.
+
+**`gam_rdm` is the best-behaved model in the registry**: no divergences, the
+largest step size, the lowest Rhat. **`gam_lba`'s 6% divergences** are an order
+of magnitude above the others here; warmup 300 is short enough that 4.6 would
+predict this to clear at warmup 1000, but it is the number to check first in
+its production `REPORT`.
+
+#### `gam_ddm7` is not viable as specified
+
+It did not reach iteration 100 in **50 minutes at 30 participants**, where the
+other four finished all 400 in 6-11. CmdStan only refreshes every 100
+iterations so the exact count is unknown, but netting off compile time that is
+**upwards of 25x the per-iteration cost of its siblings, on 1/74th of the
+production data**. Scaled against the 12-20 h per chain that 4.4.1 projects for
+full data, `gam_ddm7` lands near a fortnight per chain — past `long`'s 8-day
+ceiling, let alone the 2-day `--time`.
+
+This is a geometry problem, not a compute problem, so more hours will not fix
+it. The suspects are the three between-trial variabilities: `sigmadrift`,
+`sigmabias` and `sigmandt` are identified through the *shape* of the RT
+distribution rather than its location, weakly so even with flat predictors, and
+here each carries 25 tensor coefficients plus a participant intercept. The
+confirming diagnostic is `n_leapfrog` pinned at 1023 (treedepth 10), which
+would say the sampler is taking maximum-length trajectories and still not
+moving.
+
+**Decision 2026-09-18: `gam_ddm7` is out of the production set**, pending a
+separate investigation into how to parameterise it. `gam_ddm4` and `gam_ddm5`
+are unaffected, and so are the other new families. Leave the entry in
+`models.R` — it is the thing that investigation will start from.
 
 ---
 
@@ -493,6 +545,29 @@ defaults *are* this configuration, so the production run is two bare commands:
 `gam_ddm5` is defined in `models.R` and submittable, but is not part of the
 final run. It carries one more 2-D smooth than DDM-4, so give it its own
 `--time` if it is ever wanted.
+
+`gam_ddm7`, `gam_rdm`, `gam_rdm5` and `gam_lba` (added 2026-09-18) are for the
+**second account** — the CPU quota is per user, so a colleague fits those three while
+`dmm56` fits the LNR pair and DDM-4. See README -> "Running from a second
+cluster account". Two things about them that are decisions rather than
+defaults, and that would be expensive to discover from the output:
+
+- `gam_lba` uses `cogmod_lba2`. `cogmod_lba1` has one drift and no second
+  accumulator, so it cannot model the choice in `dec(Error)`.
+- `sigmazero = 1` in `gam_lba` is the LBA's **scaling constraint**, not a
+  simplification: the likelihood is invariant to multiplying every drift, the
+  start-point range and the boundary by a common constant, so exactly one
+  parameter has to be pinned. `sigmaone` stays free. Freeing `sigmazero` too
+  puts the chains on a ridge, which will read as poor Rhat rather than as an
+  error.
+
+`gam_ddm7` frees all three between-trial variabilities and smooths each. They
+are identified through the shape of the RT distribution rather than its
+location, weakly so even with flat predictors, and here each carries 25 tensor
+coefficients plus a participant intercept. Read Rhat and ESS on `sigmadrift`,
+`sigmabias` and `sigmandt` before trusting its `waic`; of everything in the
+registry this is the one most likely to need reparameterising rather than more
+hours.
 
 `gam_lnr6` (added 2026-09-18) is the LNR with `sigmabias` estimated and
 smoothed like the other parameters. It is the one model expected to be *slower*
