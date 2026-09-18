@@ -603,6 +603,67 @@ It doubles as the measurement that closes open question 7.1. In the `.out`:
 - **Not** a shorter warmup: at full data the cold-start transient alone exceeds
   300 iterations at ~80 s each (4.4.1).
 - **Not** `verylong`: 30 days at half the CPUs is a net loss.
+- **Not** many short chains on `general` to exploit its larger CPU allowance —
+  warmup is per chain and would multiply. See 6.3, which works the arithmetic.
+
+### 6.3 Many short chains on `general` instead of few long ones — no, not at full data
+
+A recurring and reasonable-sounding proposal: `general` allows 400 CPUs against
+`long`'s 140, so if a chain could manage a few hundred iterations inside the 8 h
+wall, why not run far more chains of far fewer draws and let `combine_model.R`
+pool them? The shards are combined anyway.
+
+It does not work at full data, and the reason is worth writing down because the
+idea will come up again.
+
+**Warmup is per chain and cannot be amortised.** For `N` total draws at `d`
+draws per chain the cost is
+
+```
+N x D  +  (N / d) x W
+```
+
+— sampling scales with the number of draws, warmup with the number of *chains*.
+Halving `d` doubles the warmup bill. Going from 500 draws per chain to 125
+costs **4x the warmup** to buy **2.86x** the CPUs (400 / 140). That is a net
+loss before the wall is even considered.
+
+**And the wall is binding anyway.** Measured on the first production run
+(job 11385713, 2026-09-18): at full data `gam_lnr` had not printed iteration
+100 after 1 h 15 m, i.e. **>40 s per warmup iteration**, matching the ~58 s of
+the 4.4.1 pilot. Warmup 1000 alone is therefore **12-17 h** before a single
+retained draw. No arrangement of chain counts fits that into 8 h, because every
+chain pays it independently. The only mechanism that would amortise adaptation
+across chains is carrying a metric and step size over from a pilot — a warm
+start, closed by decision (5.5).
+
+**The statistical objection is the more serious one.** 4.4.1 showed `lp__`
+still rising monotonically after 300 warmup iterations at full data: those
+chains had not reached the typical set. Pooling many such chains does not
+average the transient away — it returns 4,000 draws of the same bias, and the
+extra draws make the posterior look *tighter* while being wrong. Split-Rhat off
+60-draw halves is too noisy to catch it. Whenever warmup dominates the chain
+(here ~70% of it), few well-adapted chains beat many short ones.
+
+**Where the idea is right:** below full data. At <= 480 participants a chain
+finishes in about 1 h 48 m (4.4), so `general` plus many tasks is the better buy
+— 6.6 already says this. It is also the right home for the `gam_ddm7`
+reparameterisation experiments, where short exploratory chains are exactly what
+is wanted.
+
+**Free throughput that *is* available:** the per-partition quotas are separate.
+On 2026-09-18 three `short` jobs started immediately while `gam_ddm4` sat in
+`QOSMaxCpuPerUserLimit` against the `long` cap. So work that genuinely fits in
+2 h or 8 h can run alongside the full-data jobs at no cost to them. The
+constraint is the wall, not the quota.
+
+**The lever that does convert CPUs into a shorter wall** is threads per chain,
+not more chains: 4.4.1 found within-chain threading scales nearly linearly,
+while 4 chains x 4 threads bought no throughput over 2 x 8. That shortens a
+chain instead of multiplying warmup. It still does not reach 8 h at full data
+(halving ~19 h leaves ~10 h), and 1 chain per task stakes the task on one
+chain's survival — defensible now that 0.3.3 has fixed the init failures (4.5),
+but unproven at scale.
 
 ---
 
@@ -612,6 +673,11 @@ It doubles as the measurement that closes open question 7.1. In the `.out`:
    clear it?** The warmup-300 pilot (4.4.1) shows > 300 iterations at 1023
    leapfrog steps (~80 s each) and no adaptation. Warmup 1000 has never been
    run at full data. The first production `gam_lnr` job answers this — see 6.1.
+   *Interim, 2026-09-18:* 1 h 15 m in, job 11385713 had not reached iteration
+   100, i.e. >40 s per warmup iteration, so warmup 1000 costs 12-17 h. That is
+   consistent with the 12-20 h per chain projected in 4.4.1 and comfortably
+   inside the 2-day `--time`, but it is also what rules out the 8 h partition
+   for full data (6.3).
 2. **Does cogmod 0.3.3 hold at production scale?** (4.5) The init rejections
    and their root cause are understood and fixed, and a 30-participant smoke
    test on 2026-09-18 started all four chains cleanly, but the failure rate
