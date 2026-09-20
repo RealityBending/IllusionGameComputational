@@ -220,8 +220,10 @@ submit_per_model() {
   remote "mkdir -p '${SCRATCH_DIR}' '${MODELS_DIR}'"
   # Forward run-shaping vars when the caller sets them, e.g.
   #   IGC_NPARTICIPANTS=30 IGC_WARMUP=300 ./hpc fit gam_lnr
+  #   IGC_CRITERION=waic IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_lnr
   local extra="" v val
-  for v in IGC_NPARTICIPANTS IGC_WARMUP IGC_SAMPLES IGC_CHAINS IGC_KEEP_SHARDS; do
+  for v in IGC_NPARTICIPANTS IGC_WARMUP IGC_SAMPLES IGC_CHAINS \
+           IGC_CRITERION IGC_CRITERION_NDRAWS IGC_DELETE_SHARDS; do
     eval "val=\${$v:-}"
     [ -n "$val" ] && extra="${extra},${v}='${val}'"
   done

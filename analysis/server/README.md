@@ -57,7 +57,7 @@ cd analysis/server
 ./hpc queue                # what's running
 ./hpc log gam_lnr          # tail that model's newest .out/.err
 ./hpc ls                   # fitted .rds on the cluster
-./hpc combine gam_lnr      # merge its shards, add waic, delete the shards
+./hpc combine gam_lnr      # merge its shards and add loo (shards are kept)
 ./hpc pull                 # bring combined fits into analysis/models/
 ```
 
@@ -98,8 +98,12 @@ is:
 ```bash
 IGC_MODELS_DIR=/mnt/lustre/users/psych/dmm56/IGComputational/smoke \
 IGC_NPARTICIPANTS=30 IGC_WARMUP=300 IGC_SAMPLES=100 \
-  ./hpc fit gam_lnr --array=1-2 --partition=short --time=01:00:00 --cpus-per-task=8 --mem=16G
+  ./hpc fit gam_lnr --array=1-2 --partition=short --cpus-per-task=8 --mem=16G
 ```
+
+`--partition=short` is the only wall-clock setting needed: with no `--time`,
+the task gets that partition's maximum (2 h), which is all a smoke test can
+use anyway.
 
 Always give a test run its **own `IGC_MODELS_DIR`**. Shards are named
 `<model>_<illusion>_<shard>.rds` and `file_refit = "never"` means a shard that
@@ -121,9 +125,10 @@ Settings below are the ones measured in `AGENT.md` §4. Full data, cold starts,
 ```
 
 The defaults in `fit.slurm` are that production configuration: `--array=1-4`,
-`--cpus-per-task=16`, `--mem=32G`, `--partition=long`, `--time=2-00:00:00`,
-with `IGC_NPARTICIPANTS=all`, `IGC_WARMUP=1000`, `IGC_SAMPLES=500` and
-`IGC_CHAINS=2`. That is 4 shards x 2 chains x 500 = **4,000 draws per model**.
+`--cpus-per-task=16`, `--mem=32G`, `--partition=long` and no `--time` (so each
+task gets `long`'s 8-day maximum), with `IGC_NPARTICIPANTS=all`,
+`IGC_WARMUP=1000`, `IGC_SAMPLES=500` and `IGC_CHAINS=2`. That is 4 shards x 2
+chains x 500 = **4,000 draws per model**.
 
 Three models is 12 tasks against `long`'s 140-CPU per-user cap, which allows
 `140 / 16 = 8` at a time, so the last four start as earlier ones finish. That
@@ -140,9 +145,28 @@ When they are done:
 ```
 
 `combine` is one job, not an array, and its constraint is memory rather than
-CPU: `--mem=128G` on `general` for 6 h, because `add_criterion("waic")` builds
-a 1500 x 323,981 pointwise log-likelihood matrix (~3.9 GB) through an R-level
-`log_lik` called once per response.
+CPU: `--mem=128G` on `general`, because `add_criterion()` builds a
+draws x 323,981 pointwise log-likelihood matrix (7.2 GB over all draws) through
+an R-level `log_lik` called once per response. Measured peak was 45 GB.
+
+Since 2026-09-20 it adds **`loo` over every draw** and **keeps the shards**.
+Both were measured rather than assumed: `loo` over all 3,000 draws of the
+3-shard `gam_lnr` took 9.5 minutes against an 8 h wall, and costs only 1.9x
+what 500 draws cost, so subsampling trades real precision for almost no time.
+`cores` does not help (6% at 16 CPUs). AGENT.md §4.8 has the table.
+
+Override per run when a model actually overruns — not pre-emptively:
+
+```bash
+IGC_CRITERION=waic ./hpc combine gam_ddm7          # cheaper criterion
+IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_ddm7   # or fewer draws
+IGC_CRITERION=none ./hpc combine gam_ddm7          # merge only
+```
+
+Keeping shards reopens the trap that deleting them used to close: `file_refit =
+"never"` means a shard on disk is silently reused even when the formula or the
+data changed. **A changed parametrisation needs its own `IGC_MODELS_DIR`, or
+`IGC_FILE_REFIT=always`.**
 
 It strips each shard's `$file` slot before merging. A shard is written by
 `brm(file = ...)` and so remembers its own path; `combine_models()` keeps the
@@ -326,8 +350,8 @@ IGC_MODELS_DIR=/mnt/lustre/users/psych/oc236/IGComputational/models ./hpc pull
 
 This reads over SSH as *your* account and writes into your local
 `analysis/models/`, which is gitignored. Ask them to run `./hpc combine
-<model>` first — a directory of raw shards is not what you want, and the
-shards are deleted once combined.
+<model>` first — a directory of raw shards is not what you want. The shards
+stay on their disk after combining, so `combined/*.rds` is the thing to pull.
 
 If they would rather hand the files over than have you read their directory,
 `./hpc pull` on their side puts the same files in their own
@@ -345,7 +369,9 @@ the script default.
 | `IGC_SAMPLES` | `500` | post-warmup draws per chain |
 | `IGC_CHAINS` | `2` | chains per array task; threads per chain is `cpus / chains` |
 | `IGC_FILE_REFIT` | `never` | `always` forces a clean refit |
-| `IGC_KEEP_SHARDS` | unset | set to keep shards after combining |
+| `IGC_CRITERION` | `loo` | `waic` is cheaper; `none` skips it |
+| `IGC_CRITERION_NDRAWS` | all | subsample the draws the criterion uses |
+| `IGC_DELETE_SHARDS` | unset | set to `1` to drop shards after combining |
 | `IGC_COGMOD_REF` | `dev` | which cogmod branch/tag `./hpc install` tracks |
 
 Each fit prints a `REPORT ...` line (wall time, mean leapfrog steps,
@@ -419,8 +445,14 @@ Per-user quotas, confirmed live with
 | `gpu` | 3 days | 300 | 2.1 TB |
 
 There is **no 24-hour tier**, and the 3-day `gpu` partition is GPU-only by
-policy. Shorter runtime buys a bigger allowance. Defaults if you ask for
-nothing are 1 CPU per task, 4 GB RAM per CPU, and the `general` partition.
+policy. A shorter-runtime *partition* buys a bigger CPU allowance. Defaults if
+you ask for nothing are 1 CPU per task, 4 GB RAM per CPU, and the `general`
+partition.
+
+Every partition has `DefaultTime=NONE` (`scontrol show partition long`), so the
+max runtime above is also what a job that passes **no** `--time` receives.
+Choosing the partition is therefore the whole wall-clock decision — see
+"Getting jobs dispatched sooner" below.
 
 **This directly caps concurrency**, at `floor(140 / cpus-per-task)` on `long`.
 With `--cpus-per-task=16` that is 8 tasks at once across *all* your jobs —
@@ -436,10 +468,15 @@ Slurm priority is dominated by **Partition** and **Association** (both "high"),
 then Age and TRES. JobSize is inversely proportional to the request, so
 slimmer jobs start sooner. Practical consequences:
 
-- **Always set `--time` explicitly** rather than inheriting the partition
-  default. Reserving 8 days for a 20-hour job inflates predicted consumption
-  and delays dispatch. `fit.slurm` sets `2-00:00:00`; override with
-  `./hpc fit gam_lnr --time=12:00:00`.
+- **Do not set `--time` at all** — pick the partition and let the job take that
+  partition's maximum. What queues these jobs is `long`'s 140-CPU association,
+  not the wall clock (see above), so trimming the request buys no dispatch
+  speed, while a task killed at the wall loses its entire chain: Stan cannot
+  checkpoint mid-run (3.6), so the overrun costs the whole fit, not the
+  overrun. `fit.slurm` shipped with `--time=2-00:00:00`, reasoned from a
+  12-20 h/chain estimate; on 2026-09-20 real shards measured 42.7-44 h and the
+  rest were still running when the 2-day wall arrived. It no longer sets
+  `--time` (AGENT.md §3.7).
 - Request only the CPUs/RAM actually used — over-requesting blocks resources
   and enlarges your apparent job size.
 - Many small tasks beat one huge one.
@@ -452,7 +489,9 @@ Check where you stand with `sprio -u dmm56`, or:
 ./hpc sh "squeue --Format=JobID,State,Reason,PriorityLong,Partition -u dmm56"
 ```
 
-Jobs longer than a partition's limit are killed with a message in the log. Stan
+A job that outruns its partition's limit is killed with a message in the log —
+with no `--time` set, that limit is the one in the table above, and the remedy
+is a longer partition (`verylong`), never a larger `--time`. Stan
 sampling cannot checkpoint mid-chain — our equivalent is the array itself: each
 task writes its own `.rds`, so a lost task costs one shard rather than the
 whole run, and resubmitting skips the shards that finished.

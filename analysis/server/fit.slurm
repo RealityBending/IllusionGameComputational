@@ -6,7 +6,6 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=32G
 #SBATCH --partition=long
-#SBATCH --time=2-00:00:00
 #SBATCH --output=fit_%A_%a.out
 #SBATCH --error=fit_%A_%a.err
 #SBATCH --mail-type=END,FAIL

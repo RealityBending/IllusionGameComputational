@@ -3,18 +3,32 @@
 # =========================================================================
 # fit_model.R runs as an array; shard N writes <model>_<illusion>_N.rds into
 # IGC_MODELS_DIR. This merges all of one model's shards into
-# IGC_MODELS_DIR/combined/<model>_<illusion>.rds, adds waic, then deletes the
-# shards. Which model is IGC_MODEL. Submitted by `./hpc combine <model>`.
+# IGC_MODELS_DIR/combined/<model>_<illusion>.rds and adds a criterion.
+# Which model is IGC_MODEL. Submitted by `./hpc combine <model>`.
 #
-# Deleting matters: fit_model.R uses file_refit = "never", so a shard left on
-# disk is silently reused even if the formula or data changed. Removing shards
-# once they are safely combined keeps "the file exists" equivalent to "this fit
-# is finished and banked". Set IGC_KEEP_SHARDS=1 to skip the cleanup.
+#   IGC_CRITERION         "loo" (default), "waic", or "none"
+#   IGC_CRITERION_NDRAWS  a draw count, or unset / "all" (default) for all
+#   IGC_DELETE_SHARDS     set to 1 to remove the shards once combined
+#
+# All three defaults changed on 2026-09-20, and all three are measured
+# (AGENT.md 4.8): loo over every draw took 9.5 min on the 3-shard gam_lnr,
+# against an 8 h wall, so there is no reason to spend accuracy on speed. Fall
+# back to a draw count, or to waic, only for a model that actually overruns.
+#
+# Shards are KEPT now. A combined fit is minutes to rebuild from them -- a
+# different criterion, a re-run after a cogmod change -- and each shard is
+# ~43 h of compute, against disk that is free.
+#
+# But the hazard that deleting used to guard against is still live:
+# fit_model.R uses file_refit = "never", so a shard left on disk is silently
+# reused even when the formula or the data changed (3.6). With shards kept
+# that guard is now manual -- give a changed parametrisation its own
+# IGC_MODELS_DIR, or pass IGC_FILE_REFIT=always.
 
 library(brms)
 library(cmdstanr)
-# cogmod is needed here too, not just to fit: add_criterion("waic") calls
-# log_lik(), which for a custom family resolves log_lik_cogmod_<family>().
+# cogmod is needed here too, not just to fit: add_criterion() calls log_lik(),
+# which for a custom family resolves log_lik_cogmod_<family>().
 library(cogmod)
 library(loo)
 
@@ -51,36 +65,41 @@ read_shard <- function(f) {
   fit
 }
 
-# How many draws to subsample for waic. add_criterion() errors outright if
-# ndraws exceeds what the fit has ("should be between 1 and the maximum number
-# of draws"), which a short test run or a part-finished array will, so ask for
-# the target or everything available, whichever is smaller. Production has
-# 4 shards x 2 chains x 500 = 4000 draws, so the full fit gets the 1500.
-waic_draws <- function(m, target) max(1L, min(as.integer(target), brms::ndraws(m)))
+criterion <- tolower(Sys.getenv("IGC_CRITERION", unset = "loo"))
+crit_ndraws <- Sys.getenv("IGC_CRITERION_NDRAWS", unset = "")
 
 # Full
 out <- file.path(combined_dir, paste0(name, ".rds"))
 m <- brms::combine_models(mlist = lapply(files, read_shard))
 m$file <- NULL
-m <- brms::add_criterion(m, "waic", ndraws = waic_draws(m, 1500)) # waic is faster than loo
+if (identical(criterion, "none")) {
+  cat("** IGC_CRITERION=none, no criterion added\n")
+} else {
+  t0 <- Sys.time()
+  if (nzchar(crit_ndraws) && !identical(tolower(crit_ndraws), "all")) {
+    # Subsampling: cap at what the fit has. add_criterion() errors outright
+    # above it ("should be between 1 and the maximum number of draws"), which
+    # a short test run or a part-finished array would hit.
+    nd <- max(1L, min(as.integer(crit_ndraws), brms::ndraws(m)))
+    m <- brms::add_criterion(m, criterion, ndraws = nd)
+  } else {
+    # No ndraws argument at all, rather than ndraws = ndraws(m): that keeps
+    # the draws in their chains, which is what loo's r_eff needs to discount
+    # autocorrelation. Subsampling flattens them and r_eff degrades.
+    nd <- brms::ndraws(m)
+    m <- brms::add_criterion(m, criterion)
+  }
+  cat(sprintf("** %s over %d draws in %.1f min\n", criterion, nd,
+              as.numeric(difftime(Sys.time(), t0, units = "mins"))))
+}
 saveRDS(m, out)
 cat("** wrote", out, "with", brms::ndraws(m), "draws\n")
 
-# Mini (first two shards only) -- handy for quick local inspection
-if (length(files) >= 2) {
-  out_mini <- file.path(combined_dir, paste0(name, "_mini.rds"))
-  mini <- brms::combine_models(mlist = lapply(files[1:2], read_shard))
-  mini$file <- NULL
-  mini <- brms::add_criterion(mini, "waic", ndraws = waic_draws(mini, 500))
-  saveRDS(mini, out_mini)
-  cat("** wrote", out_mini, "with", brms::ndraws(mini), "draws\n")
-} else {
-  cat("** skipping mini: needs >= 2 shards\n")
-}
 
-# Only drop the shards once the combined fit is on disk and reads back.
-if (nzchar(Sys.getenv("IGC_KEEP_SHARDS", unset = ""))) {
-  cat("** IGC_KEEP_SHARDS set, keeping", length(files), "shards\n")
+# Shards are kept unless deletion is asked for, and then only once the
+# combined fit is on disk and reads back.
+if (!nzchar(Sys.getenv("IGC_DELETE_SHARDS", unset = ""))) {
+  cat("** keeping", length(files), "shards (set IGC_DELETE_SHARDS=1 to drop)\n")
 } else {
   readable <- tryCatch(
     {

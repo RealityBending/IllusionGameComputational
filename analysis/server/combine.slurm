@@ -5,7 +5,6 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=128G
 #SBATCH --partition=general
-#SBATCH --time=06:00:00
 #SBATCH --output=combine_%j.out
 #SBATCH --error=combine_%j.err
 #SBATCH --mail-type=END,FAIL
@@ -19,8 +18,10 @@
 # before R makes a copy of it. Hence 128G and only 4 CPUs -- the custom
 # family's log_lik is R code called once per response and is not parallelised,
 # so extra cores buy nothing and a slimmer request dispatches sooner. That
-# serial loop over 324k responses is also why this gets 6 h rather than a
-# slot on `short`. See the note in fit.slurm about the command-line overrides.
+# serial loop over 324k responses is also why this runs on `general` rather
+# than a slot on `short`. No --time is set, so the job takes general's 8 h
+# maximum (see README, "Getting jobs dispatched sooner"). See the note in
+# fit.slurm about the command-line overrides.
 
 PROJECT_DIR="${IGC_USERS_DIR:-$SLURM_SUBMIT_DIR}"
 export IGC_MODELS_DIR="${IGC_MODELS_DIR:-$PROJECT_DIR/models}"

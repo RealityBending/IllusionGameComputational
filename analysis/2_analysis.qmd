@@ -27,14 +27,20 @@ library(ggside)
 library(ggdist)
 
 
-unnormalize <- function(df, illusion = NULL) {
+restore_units <- function(df, illusion = NULL) {
   if(!is.null(illusion)) df$Illusion_Type <- illusion
   df <- df |> 
     mutate(
+      # Inverse of fit_model.R's normalisation. Difference is on [-1, 1] with 0
+      # at the per-illusion mid-point difficulty (2026-09-20); a fit made before
+      # that is on [0, 1] and cannot be read with this function. The bounds are
+      # the observed per-illusion min/max of abs(Illusion_Difference) -- the
+      # Ebbinghaus min (0.05, not 0.07) and the VerticalHorizontal max (0.30,
+      # not 0.24) were wrong until 2026-09-20.
       Illusion_Difference = case_when(
-        Illusion_Type == "MullerLyer" ~ Illusion_DifferenceZ * (0.46 - 0.04) + 0.04,
-        Illusion_Type == "Ebbinghaus" ~ Illusion_DifferenceZ * (0.70 - 0.07) + 0.07,
-        Illusion_Type == "VerticalHorizontal" ~ Illusion_DifferenceZ * (0.24 - 0.03) + 0.03,
+        Illusion_Type == "MullerLyer" ~ (Illusion_DifferenceZ + 1) / 2 * (0.46 - 0.04) + 0.04,
+        Illusion_Type == "Ebbinghaus" ~ (Illusion_DifferenceZ + 1) / 2 * (0.70 - 0.05) + 0.05,
+        Illusion_Type == "VerticalHorizontal" ~ (Illusion_DifferenceZ + 1) / 2 * (0.30 - 0.03) + 0.03,
         .default = NA
       ),
       Illusion_Strength = case_when(
@@ -119,7 +125,7 @@ plot_effect_densities <- function(model, datagrid, y_var = "Illusion_Difference"
 
   # The model is fitted on the normalized predictors: back-transform them so the
   # facets and the y-axis are labelled in the original units of the illusion.
-  grid <- unnormalize(grid, illusion = illusion)
+  grid <- restore_units(grid, illusion = illusion)
   cell_vars <- c(y_var, color_var)
 
   # Step 1: Defective density per y_var x color_var x pred_Response, from the
@@ -284,90 +290,50 @@ plot_effect_densities(
 
 ## Parameters
 
-### Curves
-
-```{r}
-#| fig-width: 9
-#| fig-height: 7
-
-datagrid <- insight::get_datagrid(gam, length = c(Illusion_DifferenceZ = 5, Illusion_StrengthZ = 30))
-pred <- estimate_prediction(gam, data = datagrid, centrality = "mean", 
-                            iterations = 2500, keep_iterations = TRUE) |> 
-  mutate(Parameter = Component, Type = "GAM") |> 
-  select(-Component, -Row) |> 
-  mutate(Parameter = ifelse(Parameter == "response", "Error Rate", "Mean RT"))
-
-# Only keep iterations of correct responses to compute mean
-iters_rt <- data.frame(select(pred[pred$Parameter == "Mean RT", ], starts_with("iter_")))
-iters_rt[data.frame(select(pred[pred$Parameter == "Error Rate", ], starts_with("iter_"))) == 1] <- NA
-pred[pred$Parameter == "Mean RT", "Predicted"] <- rowMeans(iters_rt, na.rm = TRUE)
-# Remove mean RTs when only a few correct trials as it's noisy 
-pred[pred$Parameter == "Mean RT", "Predicted"][pred[pred$Parameter == "Error Rate", "Predicted"] > 0.9] <- NA
- 
-pred <- select(pred, -starts_with("iter_"))
-
-params <- find_auxiliary(gam)
-params <- c("mu", params[!params %in% c("poutlier")])
-for(p in params) {
-  pred <- rbind(
-    pred,
-    estimate_relation(gam, data = datagrid, predict = p) |> 
-      mutate(Parameter = p, Type = "GAM")
-  )
-}
-pred <- pred |> 
-  mutate(Parameter = fct_relevel(Parameter, c("Error Rate", "Mean RT"))) |> 
-  # , "Nu_Correct", "Nu_Error", "NDT", "Sigma_Correct", "Sigma_Error"))) |>
-  unnormalize(illusion = "MullerLyer") 
-
-
-layout <- matrix(c(
-  rep(1, 5), rep(2, 5),  # Column 1 (Left): 5 units for the main outcomes
-  rep(3, 2),             # Column 2 (Right): 2 units each for remaining 5
-  rep(4, 2),
-  rep(5, 2),
-  rep(6, 2),
-  rep(7, 2)
-), ncol = 2, byrow = FALSE)
-
-pred |> 
-  mutate(Illusion_Difference = as.factor(Illusion_Difference)) |> 
-  ggplot(aes(x = Illusion_Strength, y = Predicted)) +
-  # geom_ribbon(aes(ymin = CI_low, ymax = CI_high, group = Illusion_Difference), alpha = 0.1) +
-  geom_line(aes(color = Illusion_Difference, group = interaction(Type, Illusion_Difference), linetype = Type),
-            linewidth = 1.5) +
-  scale_color_manual(
-    values = colorRampPalette(c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50"))(length(unique(pred$Illusion_Difference)))
-    ) +
-  scale_linetype_manual(values = c("GAM" = "solid", "LM" = "dashed")) +
-  # facet_wrap(~Parameter, scales = "free_y") +
-  ggh4x::facet_manual(vars(Parameter), design = layout, scales = "free_y") +
-  theme_minimal()
-```
 
 ### Heatmaps
 
 
 ```{r}
-datagrid <- insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = seq(0, 1, length.out=40),
-                                                            Illusion_StrengthZ = seq(-1, 1, length.out=40)))
+datagrid <- insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = seq(-1, 1, length.out=40),
+                                                 Illusion_StrengthZ = seq(-1, 1, length.out=40)))
 
-pred_heatmap <- rbind(
-  estimate_prediction(gam, data = datagrid, predict = "mu") |> 
-      mutate(Parameter = "Nu_Correct", Type = "GAM"),
-  estimate_prediction(gam, data = datagrid, predict = "nuone") |> 
-      mutate(Parameter = "Nu_Error", Type = "GAM"),
-  estimate_prediction(gam, data = datagrid, predict = "sigmazero") |>
-      mutate(Parameter = "Sigma_Correct", Type = "GAM"),
-    estimate_prediction(gam, data = datagrid, predict = "sigmaone") |>
-      mutate(Parameter = "Sigma_Error", Type = "GAM"),
-    estimate_prediction(gam, data = datagrid, predict = "ndt") |>
-      mutate(Parameter = "NDT", Type = "GAM")
-) |> 
-  unnormalize(illusion = "MullerLyer") 
+params <- insight::find_auxiliary(gam)
+params <- c("mu", params[!params %in% c("poutlier")])
+pred <- data.frame()
+for(p in params) {
+  pred <- rbind(
+    pred,
+    estimate_relation(gam, data = datagrid, predict = p) |> 
+      mutate(Parameter = p)
+  )
+}
+pred <- restore_units(pred, illusion = "MullerLyer") 
+
+# Rename and safely reorder parameters
+fam <- insight::get_family(gam)$name
+name_mu <- case_when(
+  fam == "cogmod_ddm" ~ "Drift",
+  fam == "cogmod_lnr" ~ "Nu (Correct)",
+  TRUE ~ "mu"
+)
+lvls <- c("Error Rate" = "Error Rate",
+          "Mean RT" = "Mean RT",
+          "mu" = name_mu, "nuone" = "Nu (Errors)", 
+          "sigmadrift" = "Drift Variability", 
+          "sigmazero" = "Nu Variability (Correct)", 
+          "sigmaone" = "Nu Variability (Errors)",
+          "boundary" = "Boundary", 
+          "bias" = "Bias", "sigmabias" = "Sigma_Bias", 
+          "ndt" = "NDT", "sigmandt" = "NDT Variability")
+lvls <- lvls[names(lvls) %in% unique(pred$Parameter)]
+pred$Parameter <- factor(pred$Parameter, levels = names(lvls))
+levels(pred$Parameter) <-  as.character(lvls[levels(pred$Parameter)])
+  
+
 
 # Split data by Parameter and generate individual plots
-plot_list <- pred_heatmap |> 
+plot_list <- pred |> 
   group_split(Parameter) |> 
   map(function(df) {
     param_name <- unique(df$Parameter)

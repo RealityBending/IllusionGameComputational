@@ -25,6 +25,31 @@ library(rstan)
 library(patchwork)
 library(ggside)
 library(ggdist)
+
+restore_units <- function(df, illusion = NULL) {
+  if(!is.null(illusion)) df$Illusion_Type <- illusion
+  df <- df |> 
+    mutate(
+      # Inverse of fit_model.R's normalisation. Difference is on [-1, 1] with 0
+      # at the per-illusion mid-point difficulty (2026-09-20); a fit made before
+      # that is on [0, 1] and cannot be read with this function. The bounds are
+      # the observed per-illusion min/max of abs(Illusion_Difference) -- the
+      # Ebbinghaus min (0.05, not 0.07) and the VerticalHorizontal max (0.30,
+      # not 0.24) were wrong until 2026-09-20.
+      Illusion_Difference = case_when(
+        Illusion_Type == "MullerLyer" ~ (Illusion_DifferenceZ + 1) / 2 * (0.46 - 0.04) + 0.04,
+        Illusion_Type == "Ebbinghaus" ~ (Illusion_DifferenceZ + 1) / 2 * (0.70 - 0.05) + 0.05,
+        Illusion_Type == "VerticalHorizontal" ~ (Illusion_DifferenceZ + 1) / 2 * (0.30 - 0.03) + 0.03,
+        .default = NA
+      ),
+      Illusion_Strength = case_when(
+        Illusion_Type == "MullerLyer" ~ Illusion_StrengthZ * 49,
+        Illusion_Type == "Ebbinghaus" ~ Illusion_StrengthZ * 2.03,
+        Illusion_Type == "VerticalHorizontal" ~ Illusion_StrengthZ * 66.50,
+        .default = NA
+      )
+  )
+}
 ```
 
 
@@ -34,25 +59,112 @@ library(ggdist)
 
 # path <- "C:/Users/olive/Documents/"
 path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
-gam_lnr_muller <- readRDS(paste0(path, "gam_lnr_muller_mini.rds"))
+gam_lnr_muller <- readRDS(paste0(path, "gam_lnr_MullerLyer.rds"))
 gam_ddm4_muller <- readRDS(paste0(path, "gam_ddm4_MullerLyer_1.rds"))
+
+# The models to compare, in the order they should appear in the plots below.
+# Everything downstream loops over this list, so adding a model here is the only
+# change needed to get it into the predictive check, the curves and the heatmaps.
+models <- list(
+  "LNR" = gam_lnr_muller,
+  "DDM-4" = gam_ddm4_muller
+)
 ```
 
 ```{r}
 #| eval: false
 #| echo: false
 
-# Generate 'df' by running the make_models.R script start
-warmstart <- rbind(
-  cogmod::cogmod_warmstart(gam_ddm4_muller, data = df)$table |> 
-    mutate(Model = "gam_ddm4_MullerLyer"),
-  cogmod::cogmod_warmstart(gam_lnr_muller, data = df)$table |> 
-    mutate(Model = "gam_lnr_MullerLyer")
-)
-
-write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")
+# # Generate 'df' by running the make_models.R script start
+# warmstart <- rbind(
+#   cogmod::cogmod_warmstart(gam_ddm4_muller, data = df)$table |> 
+#     mutate(Model = "gam_ddm4_MullerLyer"),
+#   cogmod::cogmod_warmstart(gam_lnr_muller, data = df)$table |> 
+#     mutate(Model = "gam_lnr_MullerLyer")
+# )
+# 
+# write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")
 ```
 
+## Computational Cost
+
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+# Sampling efficiency: bulk effective sample size per second of sampling wall
+# clock, computed chain by chain so that the spread across chains is visible.
+# Only the population-level parameters are counted (the smooth coefficients,
+# their SDs and the group-level SDs): the thousands of participant offsets would
+# otherwise dominate the average and say more about the data than the sampler.
+data_efficiency <- function(m, pars = "^b_|^bs_|^sd_|^sds_") {
+  draws <- posterior::as_draws_array(m, variable = pars, regex = TRUE)
+  # Time per chain. Efficiency is per second of *sampling*, the usual
+  # convention, but what one actually waits for is warmup + sampling, so both
+  # are kept. This is wall clock, so it is only comparable between fits of the
+  # same data with the same number of threads per chain - hence those are
+  # carried along too and printed under the plot.
+  time <- rstan::get_elapsed_time(m$fit)
+  threads <- as.numeric(m$fit@stan_args[[1]]$num_threads)
+
+  purrr::map_dfr(seq_len(posterior::nchains(draws)), function(chain) {
+    # Parameters that were fixed rather than estimated (sigmadrift = 0 and the
+    # like) have no effective sample size, hence the na.rm
+    ess <- posterior::summarise_draws(
+      posterior::subset_draws(draws, chain = chain),
+      ess_bulk = posterior::ess_bulk
+    )$ess_bulk
+    data.frame(
+      Chain = chain,
+      ESS = mean(ess, na.rm = TRUE),
+      Time_warmup = time[[chain, "warmup"]],
+      Time_sample = time[[chain, "sample"]],
+      Time_total = time[[chain, "warmup"]] + time[[chain, "sample"]],
+      ESS_per_sec = mean(ess, na.rm = TRUE) / time[[chain, "sample"]],
+      Threads = if (length(threads) == 1) threads else NA_real_,
+      N = stats::nobs(m)
+    )
+  })
+}
+
+efficiency <- purrr::imap_dfr(models, \(m, name) mutate(data_efficiency(m), Model = name)) |>
+  mutate(Model = factor(Model, levels = names(models)))
+
+# Model-level summary: the chains of a model average to one point
+efficiency_means <- efficiency |>
+  summarise(.by = Model,
+            ESS_per_sec = mean(ESS_per_sec),
+            Time_total = mean(Time_total))
+
+# What each fit was: two models are only comparable here if these match
+caption <- efficiency |>
+  summarise(.by = Model,
+            label = sprintf("%s: %d chains, %g threads/chain, n = %s",
+                            first(Model), n(), first(Threads),
+                            format(first(N), big.mark = ","))) |>
+  pull(label) |>
+  paste(collapse = "\n")
+
+efficiency |>
+  ggplot(aes(x = ESS_per_sec, y = Time_total / 3600, colour = Model)) +
+  # One point per chain, and the model's mean on top of them
+  geom_point(size = 2.5, alpha = 0.35) +
+  geom_point(data = efficiency_means, size = 5, shape = 18) +
+  # Both axes log: families differ in cost per gradient by orders of magnitude
+  # (the DDM's numerical quadrature is 55x, see cogmod_ddm_cost_issue.md), and
+  # on a linear axis the cheap ones collapse onto the origin
+  scale_x_log10() +
+  scale_y_log10() +
+  labs(
+    x = "Effective sample size per second of sampling (bulk ESS / s, log)",
+    y = "Wall clock per chain, warmup included (hours, log)",
+    title = "Computational cost",
+    subtitle = "One point per chain, diamond is the model's mean. Bottom right is cheap and efficient.",
+    caption = caption
+  ) +
+  theme_minimal() +
+  theme(plot.caption = element_text(hjust = 0, colour = "grey40"))
+```
 
 ## Posterior Predictive Check
 
@@ -160,9 +272,300 @@ plot_ppc <- function(models, observed = NULL, ndraws = 500, n_trials = 10000,
 }
 
 plot_ppc(
-  list("LNR" = gam_lnr_muller, 
-       "DDM" = gam_ddm4_muller),
-  observed = insight::get_data(gam_lnr_muller),
+  models,
+  observed = insight::get_data(models[[1]]),
   ndraws = 500
 )
+```
+
+## Parameter Curves
+
+### Compute Predictions
+
+```{r}
+#| fig-width: 9
+#| fig-height: 7
+
+# Display names for the parameters, in the order they are plotted. Names are
+# the family's own ("mu", "ndt", ...), values are what goes in the panel
+# titles. Several parameters mean different things from one family to the next
+# - "mu" is a drift rate in the DDM and the log-mean of the correct response in
+# the LNR, and "sigmabias" is the variability of the starting point in the DDM
+# but its maximum (A) in the racing models - so the map is built per model.
+param_labels <- function(gam) {
+  lvls <- c("Error Rate" = "Error Rate",
+            "Mean RT" = "Mean RT",
+            "mu" = "mu",
+            "nuone" = "Nu (Errors)",
+            "driftone" = "Drift (Errors)",
+            "sigmadrift" = "Drift Variability",
+            "sigmazero" = "Sigma (Correct)",
+            "sigmaone" = "Sigma (Errors)",
+            "boundary" = "Boundary",
+            "bias" = "Bias",
+            "sigmabias" = "Bias Variability",
+            "ndt" = "NDT",
+            "sigmandt" = "NDT Variability")
+  switch(
+    insight::get_family(gam)$name,
+    "cogmod_ddm" = {
+      lvls["mu"] <- "Drift"
+    },
+    "cogmod_lnr" = {
+      lvls[c("mu", "sigmazero", "sigmaone")] <-
+        c("Nu (Correct)", "Nu Variability (Correct)", "Nu Variability (Errors)")
+    },
+    # Both racing families: mu is the drift of the accumulator for correct
+    # responses and driftone that of the other one, and sigmabias is the
+    # start-point range A rather than a variability around a bias
+    "cogmod_rdm" = {
+      lvls[c("mu", "sigmabias")] <- c("Drift (Correct)", "Start Point Range")
+    },
+    "cogmod_lba2" = {
+      lvls[c("mu", "sigmabias", "sigmazero", "sigmaone")] <-
+        c("Drift (Correct)", "Start Point Range",
+          "Drift SD (Correct)", "Drift SD (Errors)")
+    }
+  )
+  lvls
+}
+
+# Rename the parameters and put them in canonical order. Parameter_Order keeps
+# that order recoverable once the models are stacked together, where the factor
+# levels of families that do not share their parameters get merged in whatever
+# order the models happen to come in.
+format_parameters <- function(pred, gam) {
+  lvls <- param_labels(gam)
+  found <- unique(as.character(pred$Parameter))
+  # A parameter the map does not know about (a family added later) keeps its
+  # own name and goes last, rather than silently becoming an NA panel
+  unknown <- setdiff(found, names(lvls))
+  if (length(unknown) > 0) lvls <- c(lvls, setNames(unknown, unknown))
+  lvls <- lvls[names(lvls) %in% found]
+
+  pred$Parameter_Order <- match(as.character(pred$Parameter), names(lvls))
+  pred$Parameter <- factor(unname(lvls[as.character(pred$Parameter)]),
+                           levels = unname(lvls))
+  pred
+}
+
+# Predictions for each of the model's own parameters (mu and the auxiliaries,
+# minus the outlier weight) over whatever grid is passed. The curves and the
+# heatmaps below differ only in that grid, so they share this.
+predict_parameters <- function(gam, datagrid) {
+  params <- insight::find_auxiliary(gam)
+  params <- c("mu", params[!params %in% c("poutlier")])
+  purrr::map_dfr(params, function(p) {
+    estimate_relation(gam, data = datagrid, predict = p) |>
+      mutate(Parameter = p)
+  })
+}
+
+# Parameters against illusion strength, one curve per illusion difficulty
+data_curves <- function(gam) {
+  datagrid <- insight::get_datagrid(gam, length = c(Illusion_DifferenceZ = 5, Illusion_StrengthZ = 30))
+  pred <- estimate_prediction(gam, data = datagrid, centrality = "mean",
+                              # TODO: increase iterations
+                              iterations = 500, keep_iterations = TRUE) |>
+    mutate(Parameter = Component, Type = "GAM") |>
+    select(-Component, -Row) |>
+    mutate(Parameter = ifelse(Parameter == "response", "Error Rate", "Mean RT"))
+
+  # Only keep iterations of correct responses to compute mean
+  iters_rt <- data.frame(select(pred[pred$Parameter == "Mean RT", ], starts_with("iter_")))
+  iters_rt[data.frame(select(pred[pred$Parameter == "Error Rate", ], starts_with("iter_"))) == 1] <- NA
+  pred[pred$Parameter == "Mean RT", "Predicted"] <- rowMeans(iters_rt, na.rm = TRUE)
+  # Remove mean RTs when only a few correct trials as it's noisy
+  pred[pred$Parameter == "Mean RT", "Predicted"][pred[pred$Parameter == "Error Rate", "Predicted"] > 0.9] <- NA
+  pred <- select(pred, -starts_with("iter_"))
+
+  # Add the predictions for the parameters of the model itself
+  pred <- rbind(pred, mutate(predict_parameters(gam, datagrid), Type = "GAM"))
+
+  pred |>
+    format_parameters(gam) |>
+    # Restore the original scale of the illusion strength and difference
+    restore_units(illusion = "MullerLyer")
+}
+
+# Stack the models. Adding one to `models` in the loading chunk is all it takes
+# for it to get its own column in every plot below.
+preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m), Model = name)) |>
+  mutate(Model = factor(Model, levels = names(models)))
+```
+
+
+
+### Visualize
+
+```{r}
+# Column header
+make_header <- function(label) {
+  ggplot() +
+    annotate(
+      "text",
+      x = 0, y = 0,
+      label = label,
+      fontface = "bold",
+      size = 5
+    ) +
+    coord_cartesian(xlim = c(-1, 1), ylim = c(-1, 1)) +
+    theme_void()
+}
+
+# One column per model, one row per parameter, with panel(model, parameter)
+# drawing each cell. The models do not share their parameters, so rows cannot
+# be matched by name: each model's parameters are packed from the top in
+# canonical order (which lines up the drift rates and the nus, both "mu"), and
+# the non-decision time - the one parameter every family has - is anchored to
+# the bottom row. Models with fewer parameters get spacers in between, so the
+# columns stay aligned however many parameters they have.
+plot_parameter_grid <- function(data, panel,
+                                anchor_bottom = c("NDT", "NDT Variability"),
+                                header_height = 0.35) {
+  data$Model <- droplevels(factor(data$Model))
+  model_names <- levels(data$Model)
+
+  slots <- lapply(model_names, function(model) {
+    d <- data[data$Model == model, ]
+    params <- unique(as.character(d$Parameter[order(d$Parameter_Order)]))
+    list(top = params[!params %in% anchor_bottom],
+         bottom = params[params %in% anchor_bottom])
+  })
+  n_top <- max(lengths(lapply(slots, `[[`, "top")))
+  n_bottom <- max(lengths(lapply(slots, `[[`, "bottom")))
+
+  columns <- Map(function(model, s) {
+    rows <- c(s$top, rep(NA_character_, n_top - length(s$top)),
+              rep(NA_character_, n_bottom - length(s$bottom)), s$bottom)
+    panels <- lapply(rows, function(p) if (is.na(p)) plot_spacer() else panel(model, p))
+    wrap_plots(c(list(make_header(model)), panels), ncol = 1,
+               heights = c(header_height, rep(1, length(rows))))
+  }, model_names, slots)
+
+  wrap_plots(columns, nrow = 1)
+}
+
+# Prepare data
+curves <- preds_curves |>
+  filter(!Parameter %in% c("Error Rate", "Mean RT")) |>
+  mutate(Illusion_Difference = factor(Illusion_Difference))
+
+# Colour scale
+curve_cols <- colorRampPalette(
+  c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")
+)(nlevels(curves$Illusion_Difference))
+
+# Function for individual panels
+make_curve <- function(model, parameter) {
+  ggplot(
+    filter(curves, Model == model, Parameter == parameter),
+    aes(Illusion_Strength, Predicted, colour = Illusion_Difference)
+  ) +
+    geom_line(linewidth = 1.3) +
+    scale_colour_manual(values = curve_cols) +
+    labs(title = parameter) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(
+        hjust = 0.5,
+        size = 11,
+        margin = margin(b = 4)
+      ),
+      axis.title = element_blank()
+    )
+}
+
+plot_parameter_grid(curves, make_curve) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "right",
+    plot.margin = margin(4, 4, 4, 4)
+  )
+```
+
+## Parameter Heatmaps
+
+### Compute Predictions
+
+```{r}
+# The same parameters as the curves, but over the full 2-D grid of illusion
+# strength x illusion difference rather than five difficulty levels
+data_heatmaps <- function(gam, n = 40) {
+  datagrid <- insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = seq(-1, 1, length.out = n),
+                                                   Illusion_StrengthZ = seq(-1, 1, length.out = n)))
+  predict_parameters(gam, datagrid) |>
+    format_parameters(gam) |>
+    restore_units(illusion = "MullerLyer")
+}
+
+preds_heatmaps <- purrr::imap_dfr(models, \(m, name) mutate(data_heatmaps(m), Model = name)) |>
+  mutate(Model = factor(Model, levels = names(models)))
+```
+
+### Visualize
+
+```{r}
+#| fig-width: 9
+#| fig-height: 12
+
+# Function for individual panels
+make_heatmap <- function(model, parameter) {
+  ggplot(
+    filter(preds_heatmaps, Model == model, Parameter == parameter),
+    aes(x = Illusion_Strength, y = Illusion_Difference)
+  ) +
+    geom_tile(aes(fill = Predicted)) +
+    geom_contour(aes(z = Predicted), color = "white", alpha = 0.3, linewidth = 0.5, bins = 20) +
+    # The region of the space that might be psychometrically optimal
+    annotate("rect", xmin = -30, xmax = 30, ymin = 0.1, ymax = 0.4,
+             fill = NA, color = "red", linewidth = 0.5, linetype = "dotted") +
+    scale_fill_viridis_c(option = "turbo") +
+    scale_x_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = c(0, 0)) +
+    labs(title = parameter, fill = NULL) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(hjust = 0.5, size = 11, margin = margin(b = 4)),
+      axis.title = element_blank(),
+      legend.key.width = grid::unit(0.25, "cm"),
+      legend.text = element_text(size = 7)
+    )
+}
+
+# Each parameter is on its own scale, so unlike the curves the fill guides
+# cannot be collected: every panel keeps its own colour bar
+plot_parameter_grid(preds_heatmaps, make_heatmap) &
+  theme(plot.margin = margin(4, 4, 4, 4))
+```
+
+
+## Best Model
+
+A bespoke visualization of the best model.
+
+```{r}
+layout <- matrix(c(
+  rep(1, 5), rep(2, 5),  # Column 1 (Left): 5 units for the main outcomes
+  rep(3, 2),             # Column 2 (Right): 2 units each for remaining 5
+  rep(4, 2),
+  rep(5, 2),
+  rep(6, 2),
+  rep(7, 2)
+), ncol = 2, byrow = FALSE)
+
+preds_curves |> 
+  filter(Model == "LNR") |>
+  mutate(Illusion_Difference = as.factor(Illusion_Difference)) |> 
+  ggplot(aes(x = Illusion_Strength, y = Predicted)) +
+  # geom_ribbon(aes(ymin = CI_low, ymax = CI_high, group = Illusion_Difference), alpha = 0.1) +
+  geom_line(aes(color = Illusion_Difference, group = interaction(Type, Illusion_Difference), linetype = Type),
+            linewidth = 1.5) +
+  scale_color_manual(
+    values = colorRampPalette(c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50"))(length(unique(preds_curves$Illusion_Difference)))
+    ) +
+  scale_linetype_manual(values = c("GAM" = "solid", "LM" = "dashed")) +
+  # facet_wrap(~Parameter, scales = "free_y") +
+  ggh4x::facet_manual(vars(Parameter), design = layout, scales = "free_y") +
+  theme_minimal()
 ```

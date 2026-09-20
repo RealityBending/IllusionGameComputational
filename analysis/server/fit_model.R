@@ -76,8 +76,22 @@ df$Illusion_Effect <- factor(
 
 # Normalize the predictors within illusion, keeping the sign of the strength
 # (which side of the illusion the trial is on).
+#
+# Difference is centred on [-1, 1] rather than [0, 1] (2026-09-20): 0 is the
+# per-illusion mid-point difficulty instead of the hardest trial. For the t2()
+# smooths this is an affine reparametrisation and changes nothing -- the basis
+# moves with the data, and mgcv centres the smooth regardless, so the intercept
+# was never the value at difficulty 0. It is for the parametric predictors
+# planned next, where it puts the intercept at mid-difficulty rather than at the
+# near-impossible end (noisiest data, and collinear with the slope).
+#
+# Strength is already centred: normalize(abs()) over a range that starts at 0,
+# times the sign, puts 0 at "no illusion".
+#
+# restore_units() in the .qmd files is the inverse and must match it: a fit made
+# under one parametrisation cannot be read with the other.
 df <- mutate(df,
-  Illusion_DifferenceZ = as.numeric(datawizard::normalize(Illusion_Difference)),
+  Illusion_DifferenceZ = 2 * as.numeric(datawizard::normalize(Illusion_Difference)) - 1,
   Illusion_StrengthZ = sign(Illusion_Strength) * as.numeric(datawizard::normalize(abs(Illusion_Strength))),
   .by = "Illusion_Type"
 )

@@ -134,6 +134,20 @@ never be mistaken for production shards. Since 2026-09-18 `./hpc push` also
 mirrors rather than merges, so a renamed script cannot be left behind on the
 cluster and submitted by accident — the same class of bug one level up.
 
+### 3.7 Do not set `--time` below the partition's max for a job of uncertain length
+
+`fit.slurm` shipped with `--time=2-00:00:00` on `long`, reasoned from the
+4.4.1 projection of 12-20 h per chain. On 2026-09-20 that projection was wrong
+in the expensive direction: three `gam_lnr` shards finished at 42.7-44 h wall
+(REPORT `n_leapfrog` ~510, treedepth ~9, divergent <0.5% — healthy, just
+slower than projected), and the fourth `gam_lnr` shard plus all four
+`gam_lnr6` shards were still short of it when the 2-day wall arrived, at real
+risk of being killed with nothing to show for it — Stan cannot checkpoint
+mid-chain, so a killed task loses its entire chain, not just the overrun part.
+
+**Lesson: for a job whose runtime is a projection rather than a measurement,
+use the partition's actual maximum, not a tighter guess.** 
+
 ---
 
 ## 4. Measurements
@@ -517,6 +531,78 @@ with 8 threads the classic path predicts 80 ms per gradient against the 78 ms
   and a seven-parameter one reachable in combination with a warm start.
   `cogmod_ddm_cost_issue.md` §4.1 has the design constraints.
 
+### 4.8 Criterion cost — `loo` over every draw is affordable (2026-09-20)
+
+Measured on the 3-shard `gam_lnr` combined fit (6 chains x 500 = **3,000
+draws** over **323,981** responses) on `general`, 16 CPUs, 256 GB requested.
+Elapsed seconds for `brms::waic()` / `brms::loo()`, the calls `add_criterion()`
+makes:
+
+| draws | `waic` | `loo` |
+| --- | --- | --- |
+| 500 | 169 s | 300 s |
+| 1500 | 229 s | 435 s |
+| 3000 (all) | 487 s | **569 s** |
+| 500, `cores = 16` | — | 328 s |
+| 3000, `cores = 16` | — | 535 s |
+
+Reading and merging the three shards is 8 s of that. The log-likelihood matrix
+is 3.6 GB at 1500 draws and 7.2 GB at 3000. On memory, use the **45 GB** that
+the real `waic`-at-1500 combine reported, not the 185 GB peak of the probe job:
+the probe ran all five cells in one R session and kept every result, so its
+peak says nothing about a single combine. `combine.slurm`'s 128 GB stands.
+
+Three measurements set the defaults:
+
+- **Nothing is near the wall.** The dearest cell is under 10 minutes against
+  `general`'s 8 h (4.2). `combine.slurm`'s 128 GB and its original 6 h were
+  reasoned from an assumption that the custom family's R-level `log_lik` would
+  dominate a serial loop over 324k responses. It does not.
+- **Cost is strongly sublinear in draws.** `loo` over all 3,000 draws costs
+  **1.9x** what it costs over 500 — for **6x** the draws. Most of the price is
+  fixed overhead, not per-draw work, so subsampling buys very little wall clock
+  while throwing away precision.
+- **`cores` does not help, and can hurt.** It does reach `log_lik()` —
+  `add_criterion()` passes `...` to `waic.brmsfit`/`loo.brmsfit` and on to
+  `log_lik.brmsfit`, which takes it — but at 3,000 draws `cores = 16` moved
+  569 s to 535 s (6% for 16x the CPUs), and at 500 draws it moved 300 s to
+  **328 s**, i.e. 9% *slower*: the fork and the copies cost more than the work
+  they split. Do not reach for it again, and do not size `combine.slurm` on
+  the expectation that it will pay — 4 CPUs is deliberate.
+
+Hence `combine_model.R` defaults to `loo` over every draw. `loo` is also the
+criterion the comparison wants on its own merits: PSIS-LOO carries per-observation
+Pareto-k diagnostics that say when the estimate is untrustworthy, and WAIC has
+none. `waic` is 1.2-1.5x cheaper at equal draws and stays available through
+`IGC_CRITERION=waic`, as does a draw count through `IGC_CRITERION_NDRAWS` — for
+a model that actually overruns, not pre-emptively.
+
+#### Pass no `ndraws` rather than `ndraws = ndraws(m)`
+
+They are not the same call. Omitting the argument leaves the draws in their
+chains, which is what `loo`'s `r_eff` needs in order to discount
+autocorrelation; passing a count routes through the subsampling path, which
+flattens the chain structure and degrades `r_eff`. Since every draw is the
+default, `combine_model.R` omits the argument on that path rather than passing
+the total.
+
+#### Shards are kept by default now, and that reopens 3.6
+
+Deleting shards after a successful combine was a guard, not housekeeping:
+`file_refit = "never"` means a shard left on disk is silently reused even when
+the formula or the data changed (3.6), and deleting kept "the file exists"
+equivalent to "this fit is finished and banked".
+
+It is still worth keeping them. A combined fit is ~10 minutes to rebuild from
+shards — a different criterion, a re-run after a cogmod change — while each
+shard is ~43 h of compute (4.4), against disk that is free. The 2026-09-20
+combine would otherwise have destroyed three shards that were about to be
+re-combined under `loo`.
+
+So the guard is now manual, and it is the one thing to remember about this
+change: **a changed parametrisation or formula needs its own `IGC_MODELS_DIR`,
+or `IGC_FILE_REFIT=always`.** `IGC_DELETE_SHARDS=1` restores the old behaviour.
+
 ---
 
 ## 5. Design decisions
@@ -654,7 +740,7 @@ defaults *are* this configuration, so the production run is two bare commands:
 
 | setting | value | why |
 | --- | --- | --- |
-| partition | `long`, `--time=2-00:00:00` | 12-20 h per chain expected (4.4.1); 8 h is out of reach and there is no 24 h tier |
+| partition | `long`, `--time=8-00:00:00` | `long`'s actual max (3.7) — 12-20 h per chain was the projection (4.4.1), but three `gam_lnr` shards measured 42.7-44 h on 2026-09-20, so request the ceiling rather than the guess; `--time` doesn't affect dispatch here (4.2's CPU cap does) |
 | participants | `IGC_NPARTICIPANTS=all` (default) | 2,215 participants, 323,981 rows |
 | warmup | `IGC_WARMUP=1000` | the only value shown to adapt at full data; 300 provably does not (4.4.1) |
 | draws | `IGC_SAMPLES=500` | 8 chains x 500 = 4,000 draws per model; at ESS/draw ~0.3 that is ~1,200 ESS on population terms |
