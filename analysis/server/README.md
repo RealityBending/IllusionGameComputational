@@ -329,24 +329,44 @@ point: the definition is reviewed and version-controlled, the account is not.
 
 ### Collecting the results
 
-Lustre home directories are world-readable within the cluster (`drwxr-xr-x`,
-and the fits themselves `-rw-r--r--`), so whoever is assembling the analysis
-can pull the other account's combined fits directly, without either of them
-copying anything by hand:
+You cannot read another account's fits on the cluster. Every user directory
+under `/mnt/lustre/users/psych/` is **`drwx------`**, including yours (checked
+2026-09-20). The project directory inside is `drwxr-xr-x` and the fits
+themselves `-rw-r--r--`, which is what makes this look like it should work, but
+a 700 parent cannot be traversed, so the path fails with `Permission denied`
+before it reaches them. Shared group membership does not bridge it either:
+each user directory is owned by that user's own personal group (`dmm56_g`),
+not by any group you have in common. Scratch is `drwx------` too.
+
+**So the files are handed over.** Whoever fitted the model runs:
 
 ```bash
-# from dmm56's machine, after oc236 has run ./hpc combine
-IGC_MODELS_DIR=/mnt/lustre/users/psych/oc236/IGComputational/models ./hpc pull
+./hpc combine <model>   # adds loo; the shards stay put
+./hpc pull              # combined/*.rds -> their own analysis/models/
 ```
 
-This reads over SSH as *your* account and writes into your local
-`analysis/models/`, which is gitignored. Ask them to run `./hpc combine
-<model>` first — a directory of raw shards is not what you want. The shards
-stay on their disk after combining, so `combined/*.rds` is the thing to pull.
+and then sends the file. Pull `combined/*.rds`, not raw shards — since
+2026-09-20 `combine` keeps the shards, so their `models/` holds both and each
+shard is ~214 MB.
 
-If they would rather hand the files over than have you read their directory,
-`./hpc pull` on their side puts the same files in their own
-`analysis/models/`.
+A combined fit is large: the 3-shard `gam_lnr` was 428 MB, so a 4-shard one
+with `loo` attached is ~600 MB. That is a file-transfer service rather than
+email, and `.rds` is already gzipped by `saveRDS()`, so zipping it again buys
+nothing. We use **MyAirBridge** (20 GB free). Another option is **Sussex OneDrive**, 
+if both ends are Sussex accounts — no link expiry
+and no size ceiling that matters.
+
+If you would rather read their directory than be sent files, they can open a
+traversal path on their account with
+
+```bash
+chmod o+x /mnt/lustre/users/psych/<them>     # execute-only: still not listable
+```
+
+after which `IGC_MODELS_DIR=/mnt/lustre/users/psych/<them>/IGComputational/models
+./hpc pull` works, reading over SSH as your account. Reversible with
+`chmod o-x`. It is a permission change on someone else's account, so it is
+theirs to make, not yours to assume.
 
 ## Run-shaping variables
 
