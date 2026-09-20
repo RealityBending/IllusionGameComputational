@@ -247,18 +247,9 @@ What follows from that, before anyone spends a run rediscovering it:
 `gam_ddm4` and `gam_ddm5` are unaffected. Full numbers and the proposed cogmod
 fix in `AGENT.md` §4.7.1 and `cogmod_ddm_cost_issue.md`.
 
-### Who runs what
-
-| account | models |
-| --- | --- |
-| `dmm56` | `gam_lnr`, `gam_lnr6`, `gam_ddm4` — running since 2026-09-18 |
-| second account | `gam_rdm`, `gam_rdm5`, `gam_lba` |
-| nobody, for now | `gam_ddm7` (above), `gam_ddm5` (defined and submittable, not part of the run) | Note that `gam_lnr6` should cost
-*more* per gradient than `gam_lnr`, not less: a free `sigmabias` takes cogmod's
-erfc-based two-tail path instead of the single-tail shortcut, which 0.3.3
-measured at ~15% dearer (and ~20% cheaper for `sigmabias = 0`).
-
-Adding a model is one entry in `models.R` and nothing else.
+Adding a model is one entry in `models.R` and nothing else. Which account is
+fitting what is deliberately not recorded here — it changes, and `./hpc queue`
+answers it live.
 
 ## Paths
 
@@ -315,14 +306,14 @@ Then split the models by name. Both sides have the same `models.R`, so the only
 thing to agree on is who runs what:
 
 ```bash
-# dmm56 -- running since 2026-09-18
+# one account
 ./hpc fit gam_lnr ; ./hpc fit gam_lnr6 ; ./hpc fit gam_ddm4
-# second account
+# the other
 ./hpc fit gam_rdm ; ./hpc fit gam_rdm5 ; ./hpc fit gam_lba
 ```
 
 Three jobs x 4 tasks x 16 CPUs is 192 against the 140-CPU cap, so the third
-waits for the first to finish — as it does on `dmm56`. That is fine and costs
+waits for the first to finish. That is fine and costs
 nothing (`--time` is per task), but if the wall matters, submit two and hold the
 third, or drop to `--array=1-2` and take 2,000 draws per model instead of
 4,000.
