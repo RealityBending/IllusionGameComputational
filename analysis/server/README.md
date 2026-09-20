@@ -69,6 +69,11 @@ be submitted by accident. `models/`, `tests/` and the logs are untouched.
 
 For a future agent asked to "check on the jobs": two commands, not a log dump.
 
+**Whenever a user asks for status or progress, always report:** the state of
+every job (`./hpc queue`), and for each chain the highest iteration number
+seen and a rough ETA — estimated from iterations-so-far vs. elapsed `TIME`,
+extrapolated to that model's warmup + samples total.
+
 ```bash
 ./hpc queue                # one line per array task: STATE, TIME, TIME_LEFT, reason if PENDING
 ./hpc sh "grep -h 'Iteration\|REPORT' \$IGC_SCRATCH_DIR/fit_<model>_*.out | tail -40"

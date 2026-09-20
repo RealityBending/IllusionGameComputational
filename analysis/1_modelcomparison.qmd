@@ -413,35 +413,49 @@ make_header <- function(label) {
     theme_void()
 }
 
-# One column per model, one row per parameter, with panel(model, parameter)
-# drawing each cell. The models do not share their parameters, so rows cannot
-# be matched by name: each model's parameters are packed from the top in
-# canonical order (which lines up the drift rates and the nus, both "mu"), and
-# the non-decision time - the one parameter every family has - is anchored to
-# the bottom row. Models with fewer parameters get spacers in between, so the
-# columns stay aligned however many parameters they have.
-plot_parameter_grid <- function(data, panel,
-                                anchor_bottom = c("NDT", "NDT Variability"),
-                                header_height = 0.35) {
-  data$Model <- droplevels(factor(data$Model))
-  model_names <- levels(data$Model)
+# Height of the column-header row, in units of one panel row. A figure that
+# puts something alongside the grid has to skip the headers to line up with the
+# panels, so this is a shared constant rather than a default buried in the
+# function below.
+parameter_grid_header <- 0.35
 
-  slots <- lapply(model_names, function(model) {
+# Which parameter goes in which row of which column. The models do not share
+# their parameters, so rows cannot be matched by name: each model's parameters
+# are packed from the top in canonical order (which lines up the drift rates and
+# the nus, both "mu"), and the non-decision time - the one parameter every
+# family has - is anchored to the bottom row. Models with fewer parameters get
+# NA in between, drawn as spacers, so the columns stay aligned however many
+# parameters they have.
+parameter_grid_rows <- function(data, anchor_bottom = c("NDT", "NDT Variability")) {
+  data$Model <- droplevels(factor(data$Model))
+
+  slots <- lapply(levels(data$Model), function(model) {
     d <- data[data$Model == model, ]
     params <- unique(as.character(d$Parameter[order(d$Parameter_Order)]))
     list(top = params[!params %in% anchor_bottom],
          bottom = params[params %in% anchor_bottom])
   })
+  names(slots) <- levels(data$Model)
   n_top <- max(lengths(lapply(slots, `[[`, "top")))
   n_bottom <- max(lengths(lapply(slots, `[[`, "bottom")))
 
-  columns <- Map(function(model, s) {
-    rows <- c(s$top, rep(NA_character_, n_top - length(s$top)),
-              rep(NA_character_, n_bottom - length(s$bottom)), s$bottom)
+  lapply(slots, function(s) {
+    c(s$top, rep(NA_character_, n_top - length(s$top)),
+      rep(NA_character_, n_bottom - length(s$bottom)), s$bottom)
+  })
+}
+
+# One column per model, one row per parameter, with panel(model, parameter)
+# drawing each cell
+plot_parameter_grid <- function(data, panel,
+                                anchor_bottom = c("NDT", "NDT Variability"),
+                                header_height = parameter_grid_header) {
+  rows_by_model <- parameter_grid_rows(data, anchor_bottom)
+  columns <- Map(function(model, rows) {
     panels <- lapply(rows, function(p) if (is.na(p)) plot_spacer() else panel(model, p))
     wrap_plots(c(list(make_header(model)), panels), ncol = 1,
                heights = c(header_height, rep(1, length(rows))))
-  }, model_names, slots)
+  }, names(rows_by_model), rows_by_model)
 
   wrap_plots(columns, nrow = 1)
 }
@@ -507,7 +521,7 @@ preds_heatmaps <- purrr::imap_dfr(models, \(m, name) mutate(data_heatmaps(m), Mo
 
 ```{r}
 #| fig-width: 9
-#| fig-height: 12
+#| fig-height: 14
 
 # Function for individual panels
 make_heatmap <- function(model, parameter) {
@@ -517,6 +531,7 @@ make_heatmap <- function(model, parameter) {
   ) +
     geom_tile(aes(fill = Predicted)) +
     geom_contour(aes(z = Predicted), color = "white", alpha = 0.3, linewidth = 0.5, bins = 20) +
+    geom_vline(xintercept = 0, color = "white", linewidth = 0.3, linetype = "dashed") +
     # The region of the space that might be psychometrically optimal
     annotate("rect", xmin = -30, xmax = 30, ymin = 0.1, ymax = 0.4,
              fill = NA, color = "red", linewidth = 0.5, linetype = "dotted") +
@@ -529,14 +544,83 @@ make_heatmap <- function(model, parameter) {
       plot.title = element_text(hjust = 0.5, size = 11, margin = margin(b = 4)),
       axis.title = element_blank(),
       legend.key.width = grid::unit(0.25, "cm"),
+      legend.ticks = element_blank(),
       legend.text = element_text(size = 7)
     )
 }
 
 # Each parameter is on its own scale, so unlike the curves the fill guides
 # cannot be collected: every panel keeps its own colour bar
-plot_parameter_grid(preds_heatmaps, make_heatmap) &
+heatmaps <- plot_parameter_grid(preds_heatmaps, make_heatmap) &
   theme(plot.margin = margin(4, 4, 4, 4))
+
+# Every panel shares the same axes, so the titles are dropped from the panels
+# (see make_heatmap) and written once around the whole grid, next to a strip of
+# stimuli showing what each axis means. patchwork has no shared axis title: the
+# titles and the images each get their own row/column of the layout (the
+# plot.tag route needs two nested wrap_elements, which renders the grid blank in
+# patchwork 1.3.2).
+axis_title <- function(label, rot = 0) {
+  wrap_elements(grid::textGrob(label, rot = rot, gp = grid::gpar(fontsize = 13)))
+}
+
+# Muller-Lyer stimuli along each axis, rendered by
+# illustrations/make_illustrations.py (re-run it if the stimulus bounds change).
+# Both series are numbered low value to high, so they run in the direction of
+# their axis: x left to right, y bottom to top, hence the reversal below.
+illustrations_dir <- if (dir.exists("illustrations")) "illustrations" else "analysis/illustrations"
+
+# Every stimulus is drawn at the same size on both axes. The images already
+# share their pixel dimensions (make_illustrations.py crops them with one box),
+# so an explicit height is all it takes -- with the width left out, rasterGrob
+# takes it from the aspect ratio. Letting each raster fill its cell instead
+# would size the y-axis ones by the column width and the x-axis ones by the row
+# height, which come out different once patchwork has taken its margins.
+stim_h <- 1.55  # height of every stimulus, in inches
+stim_aspect <- local({
+  d <- dim(png::readPNG(file.path(illustrations_dir, "mullerlyer_strength1.png")))
+  d[2] / d[1]
+})
+illustration <- function(name, vjust = "centre") {
+  wrap_elements(grid::rasterGrob(
+    png::readPNG(file.path(illustrations_dir, paste0("mullerlyer_", name, ".png"))),
+    # capped at the cell, so a figure too short for the strip shrinks it rather
+    # than clipping it
+    height = grid::unit.pmin(grid::unit(stim_h, "in"), grid::unit(1, "npc")),
+    y = grid::unit(c(top = 1, centre = 0.5, bottom = 0)[[vjust]], "npc"),
+    just = c("centre", vjust),
+    interpolate = TRUE
+  ))
+}
+
+# The outer two mark the ends of the y axis, so they sit flush with the top and
+# the bottom of the panel block rather than floating in the middle of their cell
+y_strip <- wrap_plots(
+  Map(illustration, paste0("difference", 3:1), c("top", "centre", "bottom")),
+  ncol = 1
+)
+x_strip <- wrap_plots(lapply(paste0("strength", 1:3), illustration), nrow = 1)
+
+# The y-axis column starts at the first panel, not at the column headers. The
+# row count is recomputed rather than carried out of plot_parameter_grid(): a
+# stale value here silently collapses the heights to an even split, which puts
+# the strip in the bottom half of the grid.
+grid_rows <- length(parameter_grid_rows(preds_heatmaps)[[1]])
+below_header <- function(p) {
+  wrap_plots(plot_spacer(), p, ncol = 1, heights = c(parameter_grid_header, grid_rows))
+}
+
+# The strip and title rows/columns are sized in inches and the grid takes the
+# rest ("null"). Relative sizes would be read against the panels rather than the
+# cells, which leaves the strips adrift from the grid they annotate.
+wrap_plots(
+  below_header(axis_title("Task Difficulty", rot = 90)), below_header(y_strip), heatmaps,
+  plot_spacer(), plot_spacer(), x_strip,
+  plot_spacer(), plot_spacer(), axis_title("Illusion Strength"),
+  ncol = 3,
+  widths = grid::unit(c(0.3, stim_h * stim_aspect + 0.2, 1), c("in", "in", "null")),
+  heights = grid::unit(c(1, stim_h + 0.2, 0.3), c("null", "in", "in"))
+)
 ```
 
 
