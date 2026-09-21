@@ -43,7 +43,7 @@ at least once.
 | --- | --- | --- |
 | module | `CmdStanR/0.7.1-foss-2023a-R-4.3.2` | only module stack shipping **mgcv + brms + cmdstanr together**. `R/4.4.1-gfbf-2023b` loads but has neither `mgcv` (needed for `t2()`) nor `cmdstanr`. |
 | R | 4.3.2 (GCC 12.3, foss-2023a) | comes with the module |
-| brms | 2.21.0 | from the module |
+| brms | 2.21.0 | **not actually from the module** — see 3.8 |
 | cmdstanr | **0.9.0**, from the project library | the module's 0.7.1 **cannot read CmdStan 2.39 output** |
 | CmdStan | 2.39.0 in `~/.cmdstan` | rebuilt 2026-09-17 for GCC 12.3 |
 | project R library | `/mnt/lustre/users/psych/$USER/cluster_R_libs/x86_64-pc-linux-gnu-library/4.3` | holds `datawizard`, `cogmod`, and the newer `cmdstanr`; precedes the module on `R_LIBS` so it shadows it |
@@ -147,6 +147,46 @@ mid-chain, so a killed task loses its entire chain, not just the overrun part.
 
 **Lesson: for a job whose runtime is a projection rather than a measurement,
 use the partition's actual maximum, not a tighter guess.** 
+
+### 3.8 `install_pkgs.R` does not actually reproduce the working brms — a second account's fits fail to compile
+
+Found 2026-09-21, when a colleague set up a fresh Artemis account, followed
+`README.md`/`install_pkgs.R` exactly, and every model — not just one family —
+failed within ~40 s of `sbatch`: a Stan compile error from the module's
+brms 2.20.4 generating old array syntax (`int[] ...`), which CmdStan removed
+in 2.33; their fresh `install_cmdstan()` grabbed 2.37.0, so they hit it
+immediately. Upgrading brms in their own project library (tried 2.21.0 and
+2.23.0, both matching or bracketing dmm56's version) removed that error but
+hit a *different* one underneath: a C++ template mismatch in the
+`reduce_sum` threading code brms auto-generates — reproducible on every
+model, not RDM-specific, so this is an environment incompatibility, not a
+modelling one.
+
+The cause, found by inspecting dmm56's live account: `~/.Renviron` there sets
+
+```
+R_LIBS_USER=/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/
+```
+
+— a **third-party shared library belonging to a different research group**
+(owned by `cr291`/`cr291_g`, nothing to do with this project), which
+`R_LIBS_USER` puts ahead of the module on the search path. It happens to ship
+brms 2.21.0 (and `rstan`/`StanHeaders`/`rstanarm`, all unused since
+`fit_model.R` uses `backend = "cmdstanr"`). That is genuinely where the
+"module" brms 2.21.0 in the table above comes from — not the
+`CmdStanR/0.7.1` module (which ships 2.20.4), and not anything
+`install_pkgs.R` installs. It is world-readable (`o+rx`), so pointing a second
+account's `R_LIBS_USER` at the same path is a working shortcut, but it is
+borrowed infrastructure this project does not own or control — not a real
+fix.
+
+**A future agent setting up a second account, or debugging a compile error
+that looks environment-wide rather than model-specific, should suspect this
+first**: check `Sys.getenv("R_LIBS_USER")` and `find.package("brms")` on the
+account that works before assuming `install_pkgs.R` is a complete recipe. The
+real fix — pinning `brms == 2.21.0` explicitly in `install_pkgs.R` so a fresh
+account doesn't need this shared library at all — was proposed but not yet
+applied as of 2026-09-21.
 
 ---
 
