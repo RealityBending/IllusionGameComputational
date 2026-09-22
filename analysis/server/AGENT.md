@@ -1,5 +1,14 @@
 # AGENT.md — running this project on Artemis
 
+> **Cluster-level instructions live in the lab HPC hub**:
+> <https://github.com/RealityBending/Lab/tree/main/hpc> (start at `hpc/README.md`;
+> on Dom's machines: `~/Dropbox/RealityBendingLab/Lab/hpc/`).
+> Prefer a local clone of `RealityBending/Lab` if there is one — it also holds
+> your gitignored `hpc/private/` notes. The hub covers access, storage,
+> partitions and quotas, the R/Stan toolchain, job conventions, troubleshooting
+> and housekeeping, and **wins over anything here that contradicts it**; this
+> file should only hold what is specific to this project.
+
 Operational notes for driving the Sussex Artemis HPC from this repo. Written
 2026-09-17 after getting the fits running end to end; restructured 2026-09-18
 into one job per model. `README.md` is the command reference; this file is the
@@ -20,7 +29,7 @@ The warm-start machinery was deleted, per the 2026-09-17 decision to run cold.
 ## 1. Quick start
 
 ```
-bash analysis/server/setup-ssh.sh   # once per machine, then paste the key into OOD
+# once per machine: the lab hub's setup.md (scripts/setup-ssh.sh)
 cd analysis/server
 ./hpc check                         # VPN + SSH
 ./hpc install                       # once: build the project R library
@@ -30,95 +39,40 @@ cd analysis/server
 ./hpc queue ; ./hpc log gam_lnr
 ```
 
-The **GlobalProtect VPN** (portal `bond.sussex.ac.uk`) must be up for any of it.
-
 ---
 
-## 2. The working toolchain
+## 2. The toolchain
 
-These exact pieces work together. Changing any one of them has broken the run
-at least once.
+The cluster stack — module, R, brms, cmdstanr, CmdStan, the project R library
+shared by every project on the account — and why each piece is what it is:
+[hub `toolchain.md`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md). What is specific to this project:
 
-| piece | value | why this one |
-| --- | --- | --- |
-| module | `CmdStanR/0.7.1-foss-2023a-R-4.3.2` | only module stack shipping **mgcv + brms + cmdstanr together**. `R/4.4.1-gfbf-2023b` loads but has neither `mgcv` (needed for `t2()`) nor `cmdstanr`. |
-| R | 4.3.2 (GCC 12.3, foss-2023a) | comes with the module |
-| brms | 2.21.0 | **not actually from the module** — see 3.8 |
-| cmdstanr | **0.9.0**, from the project library | the module's 0.7.1 **cannot read CmdStan 2.39 output** |
-| CmdStan | 2.39.0 in `~/.cmdstan` | rebuilt 2026-09-17 for GCC 12.3 |
-| project R library | `/mnt/lustre/users/psych/$USER/cluster_R_libs/x86_64-pc-linux-gnu-library/4.3` | holds `datawizard`, `cogmod`, and the newer `cmdstanr`; precedes the module on `R_LIBS` so it shadows it |
-| cogmod | **>= 0.3.3** (`dev` branch, commit `e920d44`, installed 2026-09-18) | 0.3.3 fixed the non-finite tail gradient and the init jitter (4.5). `install_pkgs.R` and `fit_model.R` both refuse anything older |
-
-`cogmod` is installed from GitHub and needs an explicit refresh to move:
-`./hpc install cogmod`. `IGC_COGMOD_REF` picks the branch — `dev` until 0.3.3
-is merged into `main`, at which point change the default in `hpc`.
+- The module must be `CmdStanR/0.7.1-foss-2023a-R-4.3.2`: the `t2()` smooths
+  need **mgcv**, which `R/4.4.1-gfbf-2023b` does not ship.
+- **cogmod >= 0.3.3** (`dev` branch, commit `e920d44`, installed 2026-09-18)
+  fixed the non-finite tail gradient and the init jitter (4.5).
+  `install_pkgs.R` and `fit_model.R` both refuse anything older. Refresh with
+  `./hpc install cogmod`; `IGC_COGMOD_REF` picks the branch — `dev` until
+  0.3.3 is merged into `main`, at which point change the default in `hpc`.
+- Keep `precompile.R`'s `cpp_options` identical to `stan_model_args` in
+  `fit_model.R`, or a different precompiled-header variant is keyed and the
+  race comes back ([hub](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#precompiled-header)).
 
 ---
 
 ## 3. Traps
 
-Each of these cost a failed run. They are not obvious and they do not announce
-themselves clearly.
+Only 3.6 is specific to this project. The rest are cluster facts and moved to
+the lab hub on 2026-09-22; the numbers are kept so older references resolve.
 
-### 3.1 Compute nodes cannot see the EasyBuild modules
-
-Login nodes have `/mnt/shared/easybuild/modules/all` on `MODULEPATH`; compute
-nodes only get `/opt/ohpc/pub/modulefiles`. A job that just does `module load`
-dies with *"module(s) exist but cannot be loaded as requested"*, then
-`Rscript: command not found`. The `.slurm` files therefore run
-`module use "${IGC_EB_MODULES}"` first.
-
-### 3.2 `module` is undefined in SLURM batch scripts
-
-SLURM runs the script non-interactively, where `module` is not a shell
-function. The `.slurm` files source `/etc/profile.d/lmod.sh` before any
-`module` call.
-
-### 3.3 The CmdStan precompiled header races on a cold array
-
-`~/.cmdstan/<version>/stan/src/stan/model/model_header.hpp.gch/` is a
-**directory** holding one ~800 MB variant per compiler/flag combination, e.g.
-`model_header_threads_nochecks_12_3.hpp.gch` (GCC 12.3, threading,
-`STAN_NO_RANGE_CHECKS`). If the variant we need is absent when an array starts,
-every task races to build the same file and all but one die with:
-
-```
-error: while reading precompiled header: No such file or directory
-```
-
-Worse, the losers leave a **corrupt** variant behind, after which nothing
-compiles at all. Recovery is `cmdstanr::rebuild_cmdstan(cores = 8)`.
-Prevention is `./hpc precompile`, which builds the variant once on one node.
-
-The variant is keyed on the *flags*, so a `.gch` being present is not the same
-as **ours** being present: on 2026-09-18 the directory held the plain and
-`nochecks` variants built by the init diagnostics, and none of the threaded one
-the fits need. Always look for `model_header_threads_nochecks_12_3.hpp.gch` by
-name.
-
-Two non-fixes, both tried:
-
-- `PRECOMPILED_HEADERS=false` in `make/local` — cmdstanr rewrites `make/local`
-  from its own `cpp_options` on every compile, discarding it.
-- `rm -f .../model/*.gch` — the glob matches the *directory*; `rm -f` refuses
-  it ("Is a directory") and the stale variants survive.
-
-Keep `precompile.R`'s `cpp_options` identical to `stan_model_args` in
-`fit_model.R`, or a different variant is keyed and the race returns.
-
-### 3.4 Failed tasks used to report COMPLETED
-
-The `.slurm` files ended with an unconditional `echo`, so every task exited 0
-regardless of what R did — `sacct` showed `COMPLETED 0:0` for tasks that had
-crashed. They now capture `$?` and exit with it. **Do not add a trailing
-command after `Rscript` without preserving the status.**
-
-### 3.5 sshd rate-limits connection bursts
-
-Several SSH connections in quick succession get refused with
-`kex_exchange_identification: read: Connection reset`. This looks exactly like
-a dropped VPN but is not — DNS still resolves. `./hpc push` sends every file
-through **one** tar pipe for this reason. If you trip it, wait ~2 minutes.
+| § | trap | now in the hub |
+| --- | --- | --- |
+| 3.1, 3.2 | compute nodes cannot see the EasyBuild modules; `module` undefined in batch scripts | [`toolchain.md#modules`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#modules) |
+| 3.3 | the CmdStan precompiled header races on a cold array | [`toolchain.md#precompiled-header`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#precompiled-header) |
+| 3.4 | failed tasks reported COMPLETED | [`jobs.md#the-slurm-script`](https://github.com/RealityBending/Lab/blob/main/hpc/jobs.md#the-slurm-script) |
+| 3.5 | sshd rate-limits connection bursts | [`troubleshooting.md#ssh-connection-reset`](https://github.com/RealityBending/Lab/blob/main/hpc/troubleshooting.md#ssh-connection-reset) |
+| 3.7 | do not set `--time` below the partition's max for a job of uncertain length (this project's 42.7-44 h `gam_lnr` shards against a 2-day `--time`, 2026-09-20, are the example there) | [`jobs.md#wall-time`](https://github.com/RealityBending/Lab/blob/main/hpc/jobs.md#wall-time) |
+| 3.8 | a second account's fits fail to compile: `install_pkgs.R` does not reproduce the working brms, which `dmm56` borrows through `R_LIBS_USER` (found 2026-09-21; pinning brms in `install_pkgs.R` still to do) | [`toolchain.md#the-brms-trap`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#the-brms-trap) |
 
 ### 3.6 `file_refit = "never"` reuses stale fits silently
 
@@ -133,60 +87,6 @@ Probe and test runs **must** use a separate `IGC_MODELS_DIR` so their output can
 never be mistaken for production shards. Since 2026-09-18 `./hpc push` also
 mirrors rather than merges, so a renamed script cannot be left behind on the
 cluster and submitted by accident — the same class of bug one level up.
-
-### 3.7 Do not set `--time` below the partition's max for a job of uncertain length
-
-`fit.slurm` shipped with `--time=2-00:00:00` on `long`, reasoned from the
-4.4.1 projection of 12-20 h per chain. On 2026-09-20 that projection was wrong
-in the expensive direction: three `gam_lnr` shards finished at 42.7-44 h wall
-(REPORT `n_leapfrog` ~510, treedepth ~9, divergent <0.5% — healthy, just
-slower than projected), and the fourth `gam_lnr` shard plus all four
-`gam_lnr6` shards were still short of it when the 2-day wall arrived, at real
-risk of being killed with nothing to show for it — Stan cannot checkpoint
-mid-chain, so a killed task loses its entire chain, not just the overrun part.
-
-**Lesson: for a job whose runtime is a projection rather than a measurement,
-use the partition's actual maximum, not a tighter guess.** 
-
-### 3.8 `install_pkgs.R` does not actually reproduce the working brms — a second account's fits fail to compile
-
-Found 2026-09-21, when a colleague set up a fresh Artemis account, followed
-`README.md`/`install_pkgs.R` exactly, and every model — not just one family —
-failed within ~40 s of `sbatch`: a Stan compile error from the module's
-brms 2.20.4 generating old array syntax (`int[] ...`), which CmdStan removed
-in 2.33; their fresh `install_cmdstan()` grabbed 2.37.0, so they hit it
-immediately. Upgrading brms in their own project library (tried 2.21.0 and
-2.23.0, both matching or bracketing dmm56's version) removed that error but
-hit a *different* one underneath: a C++ template mismatch in the
-`reduce_sum` threading code brms auto-generates — reproducible on every
-model, not RDM-specific, so this is an environment incompatibility, not a
-modelling one.
-
-The cause, found by inspecting dmm56's live account: `~/.Renviron` there sets
-
-```
-R_LIBS_USER=/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/
-```
-
-— a **third-party shared library belonging to a different research group**
-(owned by `cr291`/`cr291_g`, nothing to do with this project), which
-`R_LIBS_USER` puts ahead of the module on the search path. It happens to ship
-brms 2.21.0 (and `rstan`/`StanHeaders`/`rstanarm`, all unused since
-`fit_model.R` uses `backend = "cmdstanr"`). That is genuinely where the
-"module" brms 2.21.0 in the table above comes from — not the
-`CmdStanR/0.7.1` module (which ships 2.20.4), and not anything
-`install_pkgs.R` installs. It is world-readable (`o+rx`), so pointing a second
-account's `R_LIBS_USER` at the same path is a working shortcut, but it is
-borrowed infrastructure this project does not own or control — not a real
-fix.
-
-**A future agent setting up a second account, or debugging a compile error
-that looks environment-wide rather than model-specific, should suspect this
-first**: check `Sys.getenv("R_LIBS_USER")` and `find.package("brms")` on the
-account that works before assuming `install_pkgs.R` is a complete recipe. The
-real fix — pinning `brms == 2.21.0` explicitly in `install_pkgs.R` so a fresh
-account doesn't need this shared library at all — was proposed but not yet
-applied as of 2026-09-21.
 
 ---
 
@@ -205,25 +105,36 @@ applied as of 2026-09-21.
 default to 30, which risked a production submission silently fitting the test
 subset). Override with `IGC_NPARTICIPANTS=30` for a smoke test.
 
-### 4.2 Partition quotas (per user, verified with `sacctmgr`)
+### 4.2 Partition quotas → hub
 
-| partition | max runtime | max CPUs | max RAM |
-| --- | --- | --- | --- |
-| `short` | 2 h | 550 | 3.6 TB |
-| `general` (default) | 8 h | 400 | 2.7 TB |
-| `long` | 8 days | **140** | 900 GB |
-| `verylong` | 30 days | 70 | 900 GB |
-| `gpu` | 3 days | 300 | 2.1 TB |
+Per-partition caps, the account-wide 550-CPU `normal` cap and the
+`sussexneuro` group pool are in [hub `artemis.md#quotas`](https://github.com/RealityBending/Lab/blob/main/hpc/artemis.md#quotas).
+What they mean for this project:
 
-Nodes are 128 CPUs / ~478 GB. Defaults if unspecified: 1 CPU per task, 4 GB
-per CPU, `general` partition.
+**Concurrency on `long` is `floor(140 / cpus-per-task)`** — with
+`--cpus-per-task=16` that is **8 tasks**, whatever `--array` says, shared
+across everything the account has queued there (FakeArt included: same
+user). So the array widths of the jobs running at once should add up to 8.
+Production is two models x `--array=1-4`; one model at `--array=1-12` would
+waste a third of the throughput running a half-empty second wave.
 
-**Concurrency is `floor(140 / cpus-per-task)`** — with `--cpus-per-task=16`
-that is **8 tasks**, whatever `--array` says, and the cap is per *user*, not per
-job: it is shared across everything you have queued. So the array widths of the
-jobs running at once should add up to 8. Production is two models x
-`--array=1-4`; one model at `--array=1-12` would waste a third of the throughput
-running a half-empty second wave.
+#### 4.2.1 `sussexneuro` for this project (2026-09-22)
+
+Access verified by bare submission (job 11404314). With the two production
+arrays holding 128 CPUs at `long`'s ceiling, a 16-CPU `sussexneuro` job
+(11404316) went straight to RUNNING on `artemis-rtx-02`: a further model can be
+fitted alongside the `long` arrays at no cost to them, which is what
+`gam_ddm5` does as of 2026-09-22 (see 6):
+
+```bash
+./hpc fit gam_ddm5 --partition=sussexneuro
+```
+
+Its 60-day wall is 8 usable days for us (Artemis's checkpoint request; Stan
+cannot checkpoint). It does *not* on its own make full-data `gam_ddm7`
+(~a fortnight per chain, 4.7.1) a good idea; the 200-participant subsample is
+still the way to look at that model, and `sussexneuro` is a good home for it
+because 2.7-4.7 days per chain sits inside 8 days with room to spare.
 
 ### 4.3 Memory (1 chain, `save_pars(all = TRUE)` removed)
 
@@ -246,9 +157,6 @@ is a priority factor.
 Most of the footprint is fixed overhead (R, brms, libraries, the compiled
 model), which is why scaling the whole 1.9 GB measured on the toy subset gave a
 wildly wrong answer — only the marginal term scales.
-
-Note `sacct` reports `MaxRSS` as the max over *processes*, not the sum — with
-several chains per task it shows one chain, not the task total.
 
 ### 4.4 Runtime — sublinear; full data is feasible
 
@@ -497,8 +405,10 @@ are unaffected, and so are the other new families. Leave the entry in
 
 Measured 2026-09-18 with a standalone Stan program calling `wiener_lpdf` in
 each of its forms, cost normalised by `n_leapfrog__` so the variants are
-comparable. Full report, including the reproduction script and the proposed
-cogmod fixes, in **`cogmod_ddm_cost_issue.md`**.
+comparable. Full report — the mechanism verified against cogmod source, the
+proposed fix and its design constraints — in **`cogmod_ddm_cost_issue.md`**.
+The harness that produced the table below was never committed and is not
+recoverable; that report's §5 specifies one that would re-derive it, unrun.
 
 `cogmod_ddm_decision_lpdf()` routes on an **exact-zero test**:
 
@@ -707,25 +617,9 @@ revisited; `analysis/warmstart.csv` and the chunk in
 
 ### 5.6 Everything is parameterised by environment variable
 
-No user paths are hard-coded; `./hpc` passes them via `sbatch --export`.
-
-| variable | default | purpose |
-| --- | --- | --- |
-| `IGC_HPC_USER` | `dmm56` | cluster account |
-| `IGC_USERS_DIR` | `/mnt/lustre/users/psych/$USER/IGComputational` | code + models |
-| `IGC_SCRATCH_DIR` | `/mnt/lustre/scratch/psych/$USER/IGComputational` | job logs |
-| `IGC_MODELS_DIR` | `$IGC_USERS_DIR/models` | fitted shards — **give test runs their own** |
-| `IGC_MODEL` | none | which model; set by `./hpc fit` / `./hpc combine` |
-| `IGC_R_MODULE` | `CmdStanR/0.7.1-foss-2023a-R-4.3.2` | module to load |
-| `IGC_R_LIBS` | project library (4.3) | extra packages |
-| `IGC_EB_MODULES` | `/mnt/shared/easybuild/modules/all` | EasyBuild tree |
-| `IGC_COGMOD_REF` | `dev` | branch/tag `./hpc install` tracks |
-| `IGC_FILE_REFIT` | `never` | `always` forces a clean refit |
-| `IGC_KEEP_SHARDS` | unset | set to keep shards after combining |
-| `IGC_NPARTICIPANTS` | `all` | subset size for tests, e.g. `30` |
-| `IGC_WARMUP` | `1000` | warmup iterations |
-| `IGC_SAMPLES` | `500` | post-warmup draws per chain |
-| `IGC_CHAINS` | `2` | chains per array task; threads per chain is `cpus / chains` |
+No user paths are hard-coded; `./hpc` passes them via `sbatch --export`. The
+variables and their defaults are in `README.md` → "Paths" and
+"Run-shaping variables" (one list, so it cannot drift).
 
 Every fit prints one `REPORT <model> | wall | n_leapfrog | treedepth | stepsize |
 divergent | accept | max Rhat | min neff_ratio` line to the `.out` log, so runs
@@ -757,12 +651,26 @@ make silently — the variability terms are merely less regularised than
 intended, but `driftone` in `gam_rdm` / `gam_rdm5` / `gam_lba` is shrunk
 harder than cogmod intends, and those are the models where it matters.
 
-One thing the loop still does **not** touch: `sds`, the smooth wiggliness SD,
-which stays on brms's `student_t(3, 0, 2.5)` for every dpar. On a logit or log
-link that is close to flat in effect — half-t with a median near 1.9 — and
-cogmod does not set it either (`cogmod_ddm_cost_issue.md` §4.2 proposes that it
-should). It is the loosest prior in the model and the one to tighten first if a
-smoothed variability parameter ever needs regularising.
+One thing the loop still does **not** touch: `sds`, the smooth wiggliness SD.
+Left on brms's `student_t(3, 0, 2.5)` it is the loosest prior in the model — on
+a logit or log link a half-t with median ~1.9, enough for the smooth alone to
+walk a `sigmabias` across its whole range or move a `sigmandt` by a factor of
+seven, undoing the tight intercept the family set on purpose.
+
+**cogmod does set it, as of 0.3.3** — this section previously said it did not,
+which was true of 0.3.2 and is not true of what the cluster now runs. The bug
+was subtler than a missing prior: brms fills the *blanket* `sds` row itself and
+leaves the per-term rows empty, so cogmod's filler never saw a candidate and an
+`sds` on a dpar silently kept brms's default while `?cogmod_priors` advertised
+`exponential(1)`. 0.3.3 replaces the blanket row instead
+(`R/cogmod_priors.R:920-933`; `cogmod_ddm_cost_issue.md` §4.2 has the detail).
+
+Verified 2026-09-22: the cluster library is cogmod 0.3.3 at commit `d04c7f8`,
+built 2026-09-20, and that commit contains the fix. So **fits submitted from
+2026-09-20 onwards carry `exponential(1)` on `sds`; anything built before that
+does not** — which makes it a property of the library at submission time rather
+than of anything in this repo. Worth knowing before comparing smooth surfaces
+across models fitted at different times.
 
 ---
 
@@ -788,15 +696,35 @@ defaults *are* this configuration, so the production run is two bare commands:
 | chains | `IGC_CHAINS=2`, 8 threads each | threading scales nearly linearly, so more chains per task buys nothing; one chain per task risks the whole task on one init (4.5) |
 | memory | `--mem=32G` | ~6.5 GB per chain at full data (4.3), so ~13 GB used; the rest is headroom against an OOM killing a 20 h job |
 
-`gam_ddm5` is defined in `models.R` and submittable, but is not part of the
-final run. It carries one more 2-D smooth than DDM-4, so give it its own
-`--time` if it is ever wanted.
+`gam_ddm5` was not part of the original final run — it carries one more 2-D
+smooth than DDM-4, and at 2.8x DDM-4 per gradient (4.7.1) it projects to
+~2.5-5.2 days per shard against `gam_lnr`'s measured 42.7-44 h, which is close
+enough to `long`'s 8-day wall to have wanted its own `--time`. **Submitted
+2026-09-22 on `sussexneuro` instead** (job 11404322, `--array=1-4`, production
+defaults otherwise), where the wall is 60 days and the question does not arise
+— and where it runs in parallel with the two `long` arrays rather than behind
+them (4.2.1). All four shards started immediately; account total 192 CPUs,
+which the 140-CPU `long` cap could not have allowed.
+
+Two things to watch on it, beyond the usual 6.1 checklist: the per-gradient
+cost ratio at full data (4.7.1's 2.8x is a standalone density benchmark; the
+30-participant end-to-end smoke said only ~1.4x, and open question 3 wants the
+real figure), and the fact that its 64 CPUs come out of a **group** pool, so an
+overrun inconveniences colleagues rather than only us. If a future DDM-5-sized
+job needs bounding for that reason, `--time=8-00:00:00` is the exception to 3.7
+worth making — the projection has 1.5-3x headroom inside 8 days.
 
 `gam_ddm7`, `gam_rdm`, `gam_rdm5` and `gam_lba` (added 2026-09-18) are for the
 **second account** — the CPU quota is per user, so a colleague fits those three while
 `dmm56` fits the LNR pair and DDM-4. See README -> "Running from a second
-cluster account". Two things about them that are decisions rather than
-defaults, and that would be expensive to discover from the output:
+cluster account". Since 2026-09-22 one of them can also come back to `dmm56` on
+`sussexneuro`, whose quota is separate from `long`'s (4.2.1):
+`./hpc fit <model> --partition=sussexneuro` runs as a further job alongside the
+production arrays. Agree who takes which model either way — the point of
+splitting was never the accounts, it was the quotas.
+
+Two things about them that are decisions rather than defaults, and that would
+be expensive to discover from the output:
 
 - `gam_lba` uses `cogmod_lba2`. `cogmod_lba1` has one drift and no second
   accumulator, so it cannot model the choice in `dec(Error)`.
@@ -903,6 +831,13 @@ On 2026-09-18 three `short` jobs started immediately while `gam_ddm4` sat in
 2 h or 8 h can run alongside the full-data jobs at no cost to them. The
 constraint is the wall, not the quota.
 
+Since 2026-09-22 there is a **better** version of that, and it has no wall to
+work around: `sussexneuro` carries its own 256-CPU group quota and a 60-day
+limit, so a full-data model can run there in parallel with the `long` arrays
+rather than in the gaps around them (4.2.1). It does not change any of the
+arithmetic above — warmup is still per chain, and many short chains are still
+the wrong trade — it just means a *fourth* long-running job is free.
+
 **The lever that does convert CPUs into a shorter wall** is threads per chain,
 not more chains: 4.4.1 found within-chain threading scales nearly linearly,
 while 4 chains x 4 threads bought no throughput over 2 x 8. That shortens a
@@ -954,14 +889,15 @@ machinery removed (2026-09-18); `verylong` — not worth it.
 | file | role |
 | --- | --- |
 | `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/queue/log/ls/pull/cancel/sh |
-| `setup-ssh.sh` | per-machine key + `~/.ssh/config` entry |
 | `install_pkgs.R` | builds the project R library (`./hpc install`); enforces cogmod >= 0.3.3 |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model, read by everything else |
 | `fit_model.R` | fits the model named by `IGC_MODEL`, one shard per array task |
 | `fit.slurm` | array job for the above; its `#SBATCH` defaults are the production config |
-| `combine_model.R` | merges one model's shards, adds `waic`, deletes them |
+| `combine_model.R` | merges one model's shards, adds `loo`, keeps them |
 | `combine.slurm` | job for the above |
 | `README.md` | command reference, partition quotas, PCH detail |
 | `cogmod_inits_issue.md` | the cold-start init failures, root cause, and the 0.3.3 fix |
-| `server.md` | **gitignored** — account, keys, OOD URLs |
+| `cogmod_ddm_cost_issue.md` | why a freed DDM variability costs 18-55x per gradient, and the cogmod fix it needs |
+| `hpc.local` | **gitignored** — this machine's account settings |
+| `server.md` | **gitignored** — local notes on this project's cluster directories (account, keys and VPN live in the lab hub's `hpc/private/`) |

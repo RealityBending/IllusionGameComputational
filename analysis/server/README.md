@@ -1,5 +1,14 @@
 # Running the models on Artemis (Sussex HPC)
 
+> **Cluster-level instructions live in the lab HPC hub**:
+> <https://github.com/RealityBending/Lab/tree/main/hpc> (start at `hpc/README.md`;
+> on Dom's machines: `~/Dropbox/RealityBendingLab/Lab/hpc/`).
+> Prefer a local clone of `RealityBending/Lab` if there is one — it also holds
+> your gitignored `hpc/private/` notes. The hub covers access, storage,
+> partitions and quotas, the R/Stan toolchain, job conventions, troubleshooting
+> and housekeeping, and **wins over anything here that contradicts it**; this
+> file should only hold what is specific to this project.
+
 Model fitting is too heavy for a laptop, so it runs as SLURM array jobs on
 **Artemis**. The `./hpc` script in this folder wraps the whole loop — push
 code, submit, watch, pull results — over SSH.
@@ -8,41 +17,26 @@ code, submit, watch, pull results — over SSH.
 `./hpc fit <model>` submits an array for it, each array task writing one shard;
 `./hpc combine <model>` merges that model's shards into a single fit.
 
-## The cluster, in a browser
+## The cluster, and one-time setup
 
-Everything below drives Artemis over SSH, but the web interface is useful for
-looking at files, checking a job by hand, and installing your SSH key the first
-time. All of it needs the **GlobalProtect VPN** connected first.
+Access (VPN, Open OnDemand, SSH), storage, partitions and quotas:
+[hub `artemis.md`](https://github.com/RealityBending/Lab/blob/main/hpc/artemis.md). Setting up a machine (SSH key,
+`artemis` alias) or a new account (R library, CmdStan, precompiled header):
+[hub `setup.md`](https://github.com/RealityBending/Lab/blob/main/hpc/setup.md).
 
-| | |
-| --- | --- |
-| Open OnDemand (OOD) | <https://ood.artemis.hrc.sussex.ac.uk/> |
-| a shell on the login node | OOD → Clusters → `>_ artemis Shell Access` |
-| submit a `.slurm` by hand | OOD → Jobs → Jobs Composer |
-| browse your files | `https://ood.artemis.hrc.sussex.ac.uk/pun/sys/dashboard/files/fs//mnt/lustre/users/psych/<user>/IGComputational` |
-| Artemis documentation | <https://artemis-docs.hpc.sussex.ac.uk/artemis/> |
-
-Storage, for orientation:
+This project's directories on the cluster:
 
 | path | use |
 | --- | --- |
-| `/mnt/lustre/users/<group>/<user>/` | long-term — code and fitted models live here |
-| `/mnt/lustre/scratch/<group>/<user>/` | fast scratch — job logs go here |
-| `/mnt/nfs2/<group>/<user>/` | home directory |
+| `/mnt/lustre/users/<group>/<user>/IGComputational/` | code, `models/` (shards), `models/combined/` |
+| `/mnt/lustre/scratch/<group>/<user>/IGComputational/` | job logs (`fit_<model>_<job>_<task>.out`) |
 
-## One-time setup (per machine)
+Once per account, for this project:
 
 ```bash
-bash analysis/server/setup-ssh.sh
+cd analysis/server
+./hpc check && ./hpc setup && ./hpc install && ./hpc precompile
 ```
-
-Generates a machine-local keypair at `~/.ssh/artemis`, adds the `artemis`
-alias to `~/.ssh/config`, and prints the exact command to install the public
-key on the cluster (OOD -> Clusters -> `>_ artemis Shell Access`). Idempotent.
-
-Run it on every machine you work from — each gets its own key, and Artemis
-accepts as many as you append to `~/.ssh/authorized_keys`. Never copy a
-private key between machines.
 
 ## Every session
 
@@ -67,35 +61,20 @@ be submitted by accident. `models/`, `tests/` and the logs are untouched.
 
 ### How to check job status, cheaply
 
-For a future agent asked to "check on the jobs": two commands, not a log dump.
-
-**Whenever a user asks for status or progress, always report:** the state of
-every job (`./hpc queue`), and for each chain the highest iteration number
-seen and a rough ETA — estimated from iterations-so-far vs. elapsed `TIME`,
-extrapolated to that model's warmup + samples total.
+Report status the hub's way ([`jobs.md#status-reports`](https://github.com/RealityBending/Lab/blob/main/hpc/jobs.md#status-reports)):
+running since when, a per-shard table of each chain's iterations, an ETA
+against that model's warmup + samples, and a warning if a shard risks the
+wall. This driver has no `progress` command yet, so:
 
 ```bash
 ./hpc queue                # one line per array task: STATE, TIME, TIME_LEFT, reason if PENDING
 ./hpc sh "grep -h 'Iteration\|REPORT' \$IGC_SCRATCH_DIR/fit_<model>_*.out | tail -40"
 ```
 
-`queue` alone answers "is it running, pending, or dead". The `grep` answers "how
-far has it got" without paying for the R/brms/compiler banner that fills the
-rest of a `.out` — a plain `./hpc log <model>` is for when something looks wrong
-and the full log is actually needed. Grep for two things only:
-
-- `REPORT ...` — printed once, at the end of a shard: wall time, `n_leapfrog`,
-  treedepth, step size, divergences, max Rhat, min ESS ratio. This is the line
-  that says whether the fit is healthy (see `AGENT.md` §6.1 for what to expect).
-- `Chain N Iteration: ...` — printed periodically during warmup/sampling; the
-  highest number seen is the only progress signal before a `REPORT` line exists.
-
-Seeing only `Iteration: 1 / 1500` for hours is **not** by itself evidence of a
-hang: cmdstanr's console refresh is spaced through the run, and at full data
-warmup 1000 alone costs 12-17 h (`AGENT.md` §4.4.1, §7 Q1), so the next printed
-iteration count can be a long time coming even on a healthy job. Trust `TIME` in
-`./hpc queue` (climbing, task not requeued) over the absence of a fresh
-`Iteration` line.
+The `REPORT ...` line is printed once at the end of a shard (see `AGENT.md`
+§6.1 for what to expect in it). Seeing only `Iteration: 1 / 1500` for hours is
+normal here: at full data warmup 1000 alone costs 12-17 h (`AGENT.md` §4.4.1,
+§7 Q1). Trust `TIME` in `./hpc queue` over the absence of a fresh line.
 
 Extra arguments to `fit` and `combine` are passed to `sbatch`, so a smoke test
 is:
@@ -288,10 +267,16 @@ their own Artemis account and a clone of this repo can fit a different subset
 of the models at the same time, roughly doubling throughput. The registry
 travels in git; only the account is local.
 
+A second account is no longer the *only* way to get a second allowance:
+`dmm56` can also use the `sussexneuro` partition, whose quota is independent of
+`long`'s (`AGENT.md` §4.2.1; rules in the hub's `artemis.md#sussexneuro`). The
+two stack, so the fastest arrangement is a colleague on `long` plus a
+`--partition=sussexneuro` job here.
+
 Their setup, once:
 
 ```bash
-IGC_HPC_USER=oc236 bash analysis/server/setup-ssh.sh   # their key, their ssh alias
+bash <Lab>/hpc/scripts/setup-ssh.sh oc236             # their key, their ssh alias (lab hub)
 echo 'IGC_HPC_USER=oc236' > analysis/server/hpc.local   # gitignored; no tracked file changes
 cd analysis/server
 ./hpc check
@@ -320,8 +305,9 @@ thing to agree on is who runs what:
 Three jobs x 4 tasks x 16 CPUs is 192 against the 140-CPU cap, so the third
 waits for the first to finish. That is fine and costs
 nothing (`--time` is per task), but if the wall matters, submit two and hold the
-third, or drop to `--array=1-2` and take 2,000 draws per model instead of
-4,000.
+third, drop to `--array=1-2` and take 2,000 draws per model instead of 4,000,
+or send the third to `--partition=sussexneuro`, which does not draw on that cap
+at all.
 
 Both of those three smoke-tested clean at 30 participants (`AGENT.md` §4.7):
 `gam_rdm` is the best-behaved model in the registry, and `gam_lba`'s 6%
@@ -334,44 +320,19 @@ point: the definition is reviewed and version-controlled, the account is not.
 
 ### Collecting the results
 
-You cannot read another account's fits on the cluster. Every user directory
-under `/mnt/lustre/users/psych/` is **`drwx------`**, including yours (checked
-2026-09-20). The project directory inside is `drwxr-xr-x` and the fits
-themselves `-rw-r--r--`, which is what makes this look like it should work, but
-a 700 parent cannot be traversed, so the path fails with `Permission denied`
-before it reaches them. Shared group membership does not bridge it either:
-each user directory is owned by that user's own personal group (`dmm56_g`),
-not by any group you have in common. Scratch is `drwx------` too.
-
-**So the files are handed over.** Whoever fitted the model runs:
+No account can read another's directories, so the files are handed over
+([hub `jobs.md#sharing-results-between-accounts`](https://github.com/RealityBending/Lab/blob/main/hpc/jobs.md#sharing-results-between-accounts)).
+Whoever fitted the model runs:
 
 ```bash
 ./hpc combine <model>   # adds loo; the shards stay put
 ./hpc pull              # combined/*.rds -> their own analysis/models/
 ```
 
-and then sends the file. Pull `combined/*.rds`, not raw shards — since
-2026-09-20 `combine` keeps the shards, so their `models/` holds both and each
-shard is ~214 MB.
-
-A combined fit is large: the 3-shard `gam_lnr` was 428 MB, so a 4-shard one
-with `loo` attached is ~600 MB. That is a file-transfer service rather than
-email, and `.rds` is already gzipped by `saveRDS()`, so zipping it again buys
-nothing. We use **MyAirBridge** (20 GB free). Another option is **Sussex OneDrive**, 
-if both ends are Sussex accounts — no link expiry
-and no size ceiling that matters.
-
-If you would rather read their directory than be sent files, they can open a
-traversal path on their account with
-
-```bash
-chmod o+x /mnt/lustre/users/psych/<them>     # execute-only: still not listable
-```
-
-after which `IGC_MODELS_DIR=/mnt/lustre/users/psych/<them>/IGComputational/models
-./hpc pull` works, reading over SSH as your account. Reversible with
-`chmod o-x`. It is a permission change on someone else's account, so it is
-theirs to make, not yours to assume.
+and then sends the file. Pull `combined/*.rds`, not raw shards — `combine`
+keeps the shards, so `models/` holds both and each shard is ~214 MB. A
+combined fit is large: the 3-shard `gam_lnr` was 428 MB, so a 4-shard one with
+`loo` attached is ~600 MB.
 
 ## Run-shaping variables
 
@@ -396,140 +357,48 @@ runs can be compared without pulling the `.rds`.
 
 ## Precompile the CmdStan header before a cold array
 
-Run this once after any change to the toolchain, the cmdstan version, or the
-`stan_model_args` in `fit_model.R`:
-
-```bash
-./hpc precompile     # then
-./hpc fit gam_lnr
-```
-
-CmdStan precompiles a Stan header into
-`~/.cmdstan/<version>/stan/src/stan/model/model_header.hpp.gch/`. Note that
-this is a **directory**, not a file: it holds one ~800 MB variant per
-compiler/flag combination, e.g.
-
-```
-model_header_12_3.hpp.gch                    # GCC 12.3, plain
-model_header_nochecks_12_3.hpp.gch           # GCC 12.3, no range checks
-model_header_threads_nochecks_12_3.hpp.gch   # GCC 12.3, threaded, no range checks
-```
-
-Our jobs need the last of those (foss-2023a = GCC 12.3, `threading()`,
-`STAN_NO_RANGE_CHECKS`) — and note that a run *without* threading builds a
-different variant, so having *a* `.gch` there is not the same as having ours.
-If the variant we need is missing when an array starts, **every task races to
-build the same file**, and all but one die with:
-
-```
-stan/src/stan/model/model_header.hpp:2:39:
-    error: while reading precompiled header: No such file or directory
-Error: An error occured during compilation!
-```
-
-This killed 10 of 12 tasks in job 11366858 on 2026-09-17, in ~3.5 minutes
-each. Worse, the loser tasks leave a **corrupt** variant behind, after which
-nothing compiles at all — not even a trivial model — until CmdStan is
-rebuilt:
-
-```bash
-./hpc sh "... Rscript -e 'cmdstanr::rebuild_cmdstan(cores = 8)'"
-```
-
-Two things that do *not* work as a shortcut:
-
-- Adding `PRECOMPILED_HEADERS=false` to `~/.cmdstan/<version>/make/local` —
-  cmdstanr rewrites `make/local` from its own `cpp_options` on every compile,
-  so the setting is discarded.
-- Deleting `stan/src/stan/model/*.gch` — that glob matches the *directory*,
-  and `rm -f` refuses it ("Is a directory"). The stale variants survive.
-
-So: keep `precompile.R`'s `cpp_options` identical to `stan_model_args` in
-`fit_model.R`, and run `./hpc precompile` before a cold array.
+Run `./hpc precompile` once after any change to the toolchain, the CmdStan
+version, or the `stan_model_args` in `fit_model.R`, and keep `precompile.R`'s
+`cpp_options` identical to them. Our fits need the
+`model_header_threads_nochecks_12_3.hpp.gch` variant (GCC 12.3,
+`threading()`, `STAN_NO_RANGE_CHECKS`). Why, and how to recover from the race
+(it killed 10 of 12 tasks in job 11366858 on 2026-09-17):
+[hub `toolchain.md#precompiled-header`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#precompiled-header).
 
 ## Partitions and resource limits
 
-Per-user quotas, confirmed live with
-`sacctmgr show qos format=Name,MaxTRESPU,MaxWall`:
+Quotas and partition rules are in [hub `artemis.md`](https://github.com/RealityBending/Lab/blob/main/hpc/artemis.md). For
+this project:
 
-| partition | max runtime | max CPUs | max RAM |
-| --- | --- | --- | --- |
-| `short` | 2 hours | 550 | 3.6 TB |
-| `general` (default) | 8 hours | 400 | 2.7 TB |
-| `long` | 8 days | **140** | 900 GB |
-| `verylong` | 30 days | 70 | 900 GB |
-| `gpu` | 3 days | 300 | 2.1 TB |
-
-There is **no 24-hour tier**, and the 3-day `gpu` partition is GPU-only by
-policy. A shorter-runtime *partition* buys a bigger CPU allowance. Defaults if
-you ask for nothing are 1 CPU per task, 4 GB RAM per CPU, and the `general`
-partition.
-
-Every partition has `DefaultTime=NONE` (`scontrol show partition long`), so the
-max runtime above is also what a job that passes **no** `--time` receives.
-Choosing the partition is therefore the whole wall-clock decision — see
-"Getting jobs dispatched sooner" below.
-
-**This directly caps concurrency**, at `floor(140 / cpus-per-task)` on `long`.
-With `--cpus-per-task=16` that is 8 tasks at once across *all* your jobs —
-which is why production is 4 tasks per model for two models rather than 8 for
-one. Anything beyond it sits in `PENDING (QOSMaxCpuPerUserLimit)`.
-
-Memory is not the binding constraint: 8 x 32 GB = 256 GB against `long`'s
-900 GB ceiling.
-
-### Getting jobs dispatched sooner
-
-Slurm priority is dominated by **Partition** and **Association** (both "high"),
-then Age and TRES. JobSize is inversely proportional to the request, so
-slimmer jobs start sooner. Practical consequences:
-
-- **Do not set `--time` at all** — pick the partition and let the job take that
-  partition's maximum. What queues these jobs is `long`'s 140-CPU association,
-  not the wall clock (see above), so trimming the request buys no dispatch
-  speed, while a task killed at the wall loses its entire chain: Stan cannot
-  checkpoint mid-run (3.6), so the overrun costs the whole fit, not the
-  overrun. `fit.slurm` shipped with `--time=2-00:00:00`, reasoned from a
-  12-20 h/chain estimate; on 2026-09-20 real shards measured 42.7-44 h and the
-  rest were still running when the 2-day wall arrived. It no longer sets
-  `--time` (AGENT.md §3.7).
-- Request only the CPUs/RAM actually used — over-requesting blocks resources
-  and enlarges your apparent job size.
-- Many small tasks beat one huge one.
-- Avoid sustained bursts of high-volume processing; FairShare penalises it
-  (idle interactive sessions hurt most).
-
-Check where you stand with `sprio -u dmm56`, or:
-
-```bash
-./hpc sh "squeue --Format=JobID,State,Reason,PriorityLong,Partition -u dmm56"
-```
-
-A job that outruns its partition's limit is killed with a message in the log —
-with no `--time` set, that limit is the one in the table above, and the remedy
-is a longer partition (`verylong`), never a larger `--time`. Stan
-sampling cannot checkpoint mid-chain — our equivalent is the array itself: each
-task writes its own `.rds`, so a lost task costs one shard rather than the
-whole run, and resubmitting skips the shards that finished.
+- **Concurrency on `long` is `floor(140 / 16) = 8` tasks** across *all* the
+  account's jobs there — which is why production is 4 tasks per model for two
+  models rather than 8 for one. Anything beyond sits in
+  `PENDING (QOSMaxCpuPerUserLimit)`.
+- Memory is not the binding constraint: 8 x 32 GB = 256 GB against `long`'s
+  900 GB.
+- **`fit.slurm` sets no `--time`**, so each task gets `long`'s 8 days; it
+  shipped with `--time=2-00:00:00` and real shards then measured 42.7-44 h
+  (`AGENT.md` §3.7).
+- **`sussexneuro`** runs a further model alongside the `long` arrays on a
+  separate quota (`AGENT.md` §4.2.1), e.g. `./hpc fit gam_rdm
+  --partition=sussexneuro`. Its 256 CPUs are a group pool — look before
+  sizing (hub `artemis.md#sussexneuro`).
+- Check where you stand: `./hpc sh "squeue --Format=JobID,State,Reason,PriorityLong,Partition -u dmm56"`.
 
 ## R environment on the cluster
 
-The jobs load **one module** that already provides most of the stack:
-
-```
-CmdStanR/0.7.1-foss-2023a-R-4.3.2   # R 4.3.2 + mgcv + brms 2.21.0 + cmdstanr 0.7.1 + dplyr
-```
-
-This is the only module combination on Artemis that ships `mgcv`, `brms` and
-`cmdstanr` together. `R/4.4.1-gfbf-2023b` loads, but has no `mgcv` and no
-`cmdstanr`, so the `t2()` smooths and the cmdstanr backend both fail there.
-
-What the module does *not* ship (`datawizard`, `cogmod`, and a newer `cmdstanr`)
-lives in a project library, built by `install_pkgs.R` via `./hpc install`:
+The jobs load **one module**, `CmdStanR/0.7.1-foss-2023a-R-4.3.2` — the only
+Artemis stack shipping `mgcv` (for `t2()`), `brms` and `cmdstanr` together —
+plus the account's project library for what it lacks (`datawizard`, `cogmod`,
+a newer `cmdstanr`), built by `install_pkgs.R` via `./hpc install`:
 
 ```
 /mnt/lustre/users/psych/$IGC_HPC_USER/cluster_R_libs/x86_64-pc-linux-gnu-library/4.3
 ```
+
+The library is shared with every other project on the account (FakeArt
+included). Stack, versions, module quirks and the brms trap on fresh accounts:
+[hub `toolchain.md`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md).
 
 ### Refreshing cogmod
 
@@ -568,16 +437,6 @@ Both the module name and the library path are overridable:
 `./hpc fit` / `./hpc combine` pass both to the job via `--export`; the `.slurm`
 scripts fall back to these same defaults when submitted by hand.
 
-Two Artemis quirks the `.slurm` files work around:
-
-1. SLURM runs batch scripts in a *non-interactive* shell, where `module` is
-   not defined — so they source `/etc/profile.d/lmod.sh` first.
-2. Compute nodes get only `/opt/ohpc/pub/modulefiles` on `MODULEPATH`; the
-   EasyBuild tree holding R and CmdStanR is on the login node's path only.
-   The scripts therefore `module use /mnt/shared/easybuild/modules/all`
-   (overridable with `IGC_EB_MODULES`) before `module load`. Without this a
-   job dies with "module(s) exist but cannot be loaded as requested".
-
 Data is read straight from the GitHub raw URLs in `fit_model.R` — the compute
 nodes do have outbound internet, so nothing needs pushing but code.
 
@@ -585,29 +444,20 @@ nodes do have outbound internet, so nothing needs pushing but code.
 cluster (which fails with `bad interpreter`). `./hpc push` strips CR as well,
 belt and braces.
 
-## If SSH starts refusing connections
-
-`kex_exchange_identification: read: Connection reset` means sshd is
-rate-limiting, not that the VPN dropped (DNS will still resolve). It is
-triggered by bursts of connections. `./hpc push` sends everything through a
-single tar pipe for exactly this reason; if you do trip it, wait a couple of
-minutes and retry.
-
 ## Files
 
 | file | role |
 | --- | --- |
 | `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/queue/log/ls/pull/cancel/sh |
-| `setup-ssh.sh` | per-machine key + `~/.ssh/config` entry |
 | `install_pkgs.R` | builds the project R library (`./hpc install`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model |
 | `fit_model.R` | fits the model named by `IGC_MODEL`, one shard per array task |
 | `fit.slurm` | array job for the above |
-| `combine_model.R` | merges one model's shards, adds `waic`, deletes them |
+| `combine_model.R` | merges one model's shards, adds `loo`, keeps them |
 | `combine.slurm` | job for the above |
 | `AGENT.md` | the measurements and the traps — read before changing settings |
 | `cogmod_inits_issue.md` | the cold-start init failures and their root cause |
 | `cogmod_ddm_cost_issue.md` | why `gam_ddm7` is 55x dearer per gradient, and the cogmod fix for it |
 | `hpc.local` | **gitignored** — this machine's account settings, e.g. `IGC_HPC_USER=oc236` |
-| `server.md` | **gitignored** — account, keys, OOD URLs |
+| `server.md` | **gitignored** — local notes on this project's cluster dirs |

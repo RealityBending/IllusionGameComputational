@@ -9,7 +9,11 @@ illusion task, fitted with brms + cmdstanr and the
 Fits take 12-20 hours per chain on 324k rows and are run on **Artemis**, the
 University of Sussex HPC. Do not try to fit them locally.
 
-Everything for that lives in `analysis/server/`:
+Cluster-level instructions (access, storage, partitions and quotas, the R/Stan
+toolchain, job conventions, troubleshooting, housekeeping) live in the **lab
+HPC hub**: <https://github.com/RealityBending/Lab/tree/main/hpc> — start at
+`hpc/README.md`, and follow its rules for agents. Everything specific to this
+project lives in `analysis/server/`:
 
 - **`analysis/server/README.md`** — the command reference. Read it before
   running anything against the cluster.
@@ -50,15 +54,23 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   `file_refit = "never"`, so a leftover 30-participant test shard in the
   production directory is silently adopted by a production run.
 - **The GlobalProtect VPN must be connected** for anything touching the
-  cluster. `kex_exchange_identification: Connection reset` means sshd is
-  rate-limiting a burst of connections, not that the VPN dropped — wait a
-  couple of minutes rather than retrying in a loop.
+  cluster; the other cluster-wide rules (few SSH connections, nothing deleted
+  without approval, ...) are in the hub's `README.md`.
 - `analysis/models/` is gitignored; fitted `.rds` files are not committed.
 
-## Working from a second cluster account
+## Two ways to fit more than one model at a time
 
-The per-user CPU quota is the binding constraint, and it is per account, so two
-people can fit different models concurrently. Setup is one file and one line —
-see README → "Running from a second cluster account". The model registry is
-shared through git; only the account is local. A model one person fits must
-still be defined and committed in `models.R`.
+**`sussexneuro`.** `dmm56` belongs to the `artemis_sussexneuro` group
+(verified 2026-09-22), and that departmental partition carries its own
+256-CPU group quota, separate from `long`'s per-user 140. A job there runs
+*in parallel* with the production arrays at no cost to them —
+`./hpc fit <model> --partition=sussexneuro`. Read the hub's
+`artemis.md#sussexneuro` first (a shared group pool, over-quota jobs rejected
+rather than queued, 60 days is not 60 usable days), and `AGENT.md` §4.2.1 for
+how this project uses it.
+
+**A second account.** The per-user CPU quota is the binding constraint, and it
+is per account, so two people can fit different models concurrently. Setup is
+one file and one line — see README → "Running from a second cluster account".
+The model registry is shared through git; only the account is local. A model
+one person fits must still be defined and committed in `models.R`.
