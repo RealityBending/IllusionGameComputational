@@ -238,7 +238,9 @@ What this says:
 - **Node placement is a 2-3x factor on wall time.** Per-gradient cost was
   2.4 ms on an idle zen5 node and 10 ms on a 104/128-loaded zen3 node for the
   same fit (120 participants). Compare runs by CmdStan's warmup/sampling split
-  and leapfrog counts, never by `sacct` elapsed alone.
+  and leapfrog counts, never by `sacct` elapsed alone. At full data the gap
+  is ~2-4x, and every slow production shard so far was on a non-zen5 node:
+  see `node_history.md` for the per-shard log, and add to it.
 - **480 participants, adapted: 4.5-14 s per iteration (8 threads)**, 24-27 ms
   per gradient. Leapfrog per iteration varies 255-511 between chains
   (adaptation noise), which puts a 2x band on any single-chain estimate.

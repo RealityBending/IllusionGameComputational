@@ -80,9 +80,21 @@ normalize_units <- function(x, type = "MullerLyer", what = "Strength") {
 
 # path <- "C:/Users/olive/Documents/"
 path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
-gam_lnr_muller <- readRDS(paste0(path, "gam_lnr_MullerLyer.rds"))
-gam_lnr6_muller <- readRDS(paste0(path, "gam_lnr6_MullerLyer.rds"))
-gam_ddm4_muller <- readRDS(paste0(path, "gam_ddm4_MullerLyer.rds"))
+
+# A fit does not know which illusion it was fitted to: its data only has the
+# Z-scored predictors, and combine_model.R drops $file. The file name is the one
+# place it is recorded (<model>_<illusion>[_suffix].rds), so it is attached to
+# the fit here, for model_illusion() below.
+load_fit <- function(file) {
+  illusion <- regmatches(file, regexpr("MullerLyer|Ebbinghaus|VerticalHorizontal", file))
+  if (length(illusion) == 0) stop("No illusion in the file name: ", file)
+  m <- readRDS(paste0(path, file))
+  attr(m, "illusion") <- illusion
+  m
+}
+gam_lnr_muller <- load_fit("gam_lnr_MullerLyer.rds")
+gam_lnr6_muller <- load_fit("gam_lnr6_MullerLyer.rds")
+gam_ddm4_muller <- load_fit("gam_ddm4_MullerLyer.rds")
 
 # The models to compare, in the order they should appear in the plots below.
 # Everything downstream loops over this list, so adding a model here is the only
@@ -441,22 +453,43 @@ predict_parameters <- function(gam, datagrid) {
   })
 }
 
-# Parameters against illusion strength, one curve per illusion difficulty
-data_curves <- function(gam, illusion = "MullerLyer") {
-  # Grid in raw units, converted to the Z scale the models were fitted on
-  # TODO: custom ranges for the other illusions
-  if (illusion == "MullerLyer") {
-    strength_range <- normalize_units(seq(-30, 30, length.out = 31), type = illusion, what = "Strength")
-    difference_range <- normalize_units(seq(0.05, 0.45, length.out = 5), type = illusion, what = "Difference")
-  } else {
-    warning("Only Muller-Lyer is implemented for curves, see data_heatmaps() for the other illusions.")
-    strength_range <- seq(-1, 1, length.out = 31)
-    difference_range <- seq(-1, 1, length.out = 5)
-  }
+# The illusion a fit was made on, as attached by load_fit()
+model_illusion <- function(gam) {
+  illusion <- attr(gam, "illusion")
+  if (is.null(illusion)) stop("The model has no illusion recorded: load it with load_fit().")
+  illusion
+}
 
-  datagrid <- insight::get_datagrid(gam,
-                                    by = list(Illusion_DifferenceZ = difference_range, 
-                                              Illusion_StrengthZ = strength_range))
+# The range of the space the curves and heatmaps are drawn over, per illusion
+# and in raw units: strength signed, difference absolute (see normalize_units).
+# An illusion not listed here is drawn over its full fitted range.
+# TODO: custom ranges for the other illusions
+plot_ranges <- list(
+  MullerLyer = list(strength = c(-30, 30), difference = c(0.05, 0.45))
+)
+
+# Prediction grid of n_strength x n_difference points over that range,
+# converted to the Z scale the models were fitted on
+make_datagrid <- function(gam, n_strength = 31, n_difference = 5) {
+  illusion <- model_illusion(gam)
+  range <- plot_ranges[[illusion]]
+  if (is.null(range)) {
+    warning("No plot range set for ", illusion, ", using its full fitted range.")
+    strength <- seq(-1, 1, length.out = n_strength)
+    difference <- seq(-1, 1, length.out = n_difference)
+  } else {
+    strength <- normalize_units(seq(range$strength[1], range$strength[2], length.out = n_strength),
+                                type = illusion, what = "Strength")
+    difference <- normalize_units(seq(range$difference[1], range$difference[2], length.out = n_difference),
+                                  type = illusion, what = "Difference")
+  }
+  insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = difference,
+                                       Illusion_StrengthZ = strength))
+}
+
+# Parameters against illusion strength, one curve per illusion difficulty
+data_curves <- function(gam) {
+  datagrid <- make_datagrid(gam, n_strength = 31, n_difference = 5)
   pred <- estimate_prediction(gam, data = datagrid, centrality = "mean",
                               # TODO: increase iterations
                               iterations = 500, keep_iterations = TRUE) |>
@@ -478,12 +511,12 @@ data_curves <- function(gam, illusion = "MullerLyer") {
   pred |>
     format_parameters(gam) |>
     # Restore the original scale of the illusion strength and difference
-    restore_units(illusion = illusion)
+    restore_units(illusion = model_illusion(gam))
 }
 
 # Stack the models. Adding one to `models` in the loading chunk is all it takes
 # for it to get its own column in every plot below.
-preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m, illusion = "MullerLyer"), Model = name)) |>
+preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m), Model = name)) |>
   mutate(Model = factor(Model, levels = names(models)))
 ```
 
@@ -542,18 +575,21 @@ parameter_grid_rows <- function(data, anchor_bottom = c("NDT", "NDT Variability"
 }
 
 # One column per model, one row per parameter, with panel(model, parameter)
-# drawing each cell
+# drawing each cell. The cells go into a single grid, filled column by column,
+# rather than one sub-layout per model put side by side: patchwork only aligns
+# panels within a layout, so separate columns let each one's rows drift with
+# its own titles and legends.
 plot_parameter_grid <- function(data, panel,
                                 anchor_bottom = c("NDT", "NDT Variability"),
                                 header_height = parameter_grid_header) {
   rows_by_model <- parameter_grid_rows(data, anchor_bottom)
-  columns <- Map(function(model, rows) {
-    panels <- lapply(rows, function(p) if (is.na(p)) plot_spacer() else panel(model, p))
-    wrap_plots(c(list(make_header(model)), panels), ncol = 1,
-               heights = c(header_height, rep(1, length(rows))))
-  }, names(rows_by_model), rows_by_model)
+  cells <- unlist(Map(function(model, rows) {
+    c(list(make_header(model)),
+      lapply(rows, function(p) if (is.na(p)) plot_spacer() else panel(model, p)))
+  }, names(rows_by_model), rows_by_model), recursive = FALSE)
 
-  wrap_plots(columns, nrow = 1)
+  wrap_plots(cells, ncol = length(rows_by_model), byrow = FALSE,
+             heights = c(header_height, rep(1, length(rows_by_model[[1]]))))
 }
 
 # Prepare data
@@ -602,11 +638,10 @@ plot_parameter_grid(curves, make_curve) +
 # The same parameters as the curves, but over the full 2-D grid of illusion
 # strength x illusion difference rather than five difficulty levels
 data_heatmaps <- function(gam, n = 40) {
-  datagrid <- insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = seq(-1, 1, length.out = n),
-                                                   Illusion_StrengthZ = seq(-1, 1, length.out = n)))
+  datagrid <- make_datagrid(gam, n_strength = n, n_difference = n)
   predict_parameters(gam, datagrid) |>
     format_parameters(gam) |>
-    restore_units(illusion = "MullerLyer")
+    restore_units(illusion = model_illusion(gam))
 }
 
 preds_heatmaps <- purrr::imap_dfr(models, \(m, name) mutate(data_heatmaps(m), Model = name)) |>
@@ -619,14 +654,38 @@ preds_heatmaps <- purrr::imap_dfr(models, \(m, name) mutate(data_heatmaps(m), Mo
 #| fig-width: 9
 #| fig-height: 16.5
 
+# Two ways of reading the values off the map: a colour bar per panel, or, as on
+# an elevation map, the value written on a handful of the contour lines (which
+# makes the colour bars redundant, so they are dropped)
+heatmap_labels <- TRUE
+
 # Function for individual panels
 make_heatmap <- function(model, parameter) {
-  ggplot(
-    filter(preds_heatmaps, Model == model, Parameter == parameter),
-    aes(x = Illusion_Strength, y = Illusion_Difference)
-  ) +
+  d <- filter(preds_heatmaps, Model == model, Parameter == parameter)
+  contours <- if (heatmap_labels) {
+    list(
+      # Few enough lines that the labels have room: 20 would overlap in panels
+      # this short. Breaks strictly inside the range, as pretty() can overshoot.
+      geomtextpath::geom_textcontour(
+        # The label is given explicitly: the default rounds it, which writes
+        # 0.4 on every NDT contour from 0.37 to 0.41. The sign is a true minus
+        # (U+2212): geomtextpath 0.2.0 silently drops an ASCII hyphen, which
+        # labels -3 as 3 and makes the colour scale look reversed.
+        aes(z = Predicted,
+            label = after_stat(sub("^-", "−", format(level, trim = TRUE, drop0trailing = TRUE)))),
+        breaks = (\(b) b[b > min(d$Predicted) & b < max(d$Predicted)])(pretty(d$Predicted, n = 10)),
+        size = 2.5, linecolour = "white", textcolour = "white", linewidth = 0.4, alpha = 0.5,
+        padding = grid::unit(0.5, "mm"), straight = TRUE
+      ),
+      guides(fill = "none")
+    )
+  } else {
+    geom_contour(aes(z = Predicted), color = "white", alpha = 0.3, linewidth = 0.5, bins = 20)
+  }
+
+  ggplot(d, aes(x = Illusion_Strength, y = Illusion_Difference)) +
     geom_tile(aes(fill = Predicted)) +
-    geom_contour(aes(z = Predicted), color = "white", alpha = 0.3, linewidth = 0.5, bins = 20) +
+    contours +
     geom_vline(xintercept = 0, color = "white", linewidth = 0.3, linetype = "dashed") +
     # The region of the space that might be psychometrically optimal
     annotate("rect", xmin = -30, xmax = 30, ymin = 0.1, ymax = 0.4,
@@ -640,6 +699,9 @@ make_heatmap <- function(model, parameter) {
       plot.title = element_text(hjust = 0.5, size = 11, margin = margin(b = 4)),
       axis.title = element_blank(),
       legend.key.width = grid::unit(0.25, "cm"),
+      # A null height stretches the colour bar to the height of its panel, so
+      # it can neither overflow into the panel below nor sit off-centre
+      legend.key.height = grid::unit(1, "null"),
       legend.ticks = element_blank(),
       legend.text = element_text(size = 7)
     )
