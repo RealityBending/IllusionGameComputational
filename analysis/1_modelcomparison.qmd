@@ -50,6 +50,27 @@ restore_units <- function(df, illusion = NULL) {
       )
   )
 }
+
+# Inverse of restore_units(): raw units -> the Z scale the models were fitted
+# on, e.g. to build a prediction grid over a custom range. The bounds must match
+# those of restore_units(). A lookup by name rather than case_when(), which no
+# longer accepts a single `type` against a vector `x` (deprecated in dplyr
+# 1.2.0); this way `type` can be one illusion or one per value of `x`, and an
+# unknown illusion gives NA.
+normalize_units <- function(x, type = "MullerLyer", what = "Strength") {
+  what <- match.arg(what, c("Strength", "Difference"))
+  if (what == "Strength") {
+    scale <- c(MullerLyer = 49, Ebbinghaus = 2.03, VerticalHorizontal = 66.50)[type]
+    unname(x / scale)
+  } else {
+    # The models only see the size of the difference, not its side
+    # (fit_model.R takes abs() before normalising), so neither does this
+    x <- abs(x)
+    lo <- c(MullerLyer = 0.04, Ebbinghaus = 0.05, VerticalHorizontal = 0.03)[type]
+    hi <- c(MullerLyer = 0.46, Ebbinghaus = 0.70, VerticalHorizontal = 0.30)[type]
+    unname((x - lo) / (hi - lo) * 2 - 1)
+  }
+}
 ```
 
 
@@ -60,13 +81,15 @@ restore_units <- function(df, illusion = NULL) {
 # path <- "C:/Users/olive/Documents/"
 path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
 gam_lnr_muller <- readRDS(paste0(path, "gam_lnr_MullerLyer.rds"))
-gam_ddm4_muller <- readRDS(paste0(path, "gam_ddm4_MullerLyer_1.rds"))
+gam_lnr6_muller <- readRDS(paste0(path, "gam_lnr6_MullerLyer.rds"))
+gam_ddm4_muller <- readRDS(paste0(path, "gam_ddm4_MullerLyer.rds"))
 
 # The models to compare, in the order they should appear in the plots below.
 # Everything downstream loops over this list, so adding a model here is the only
 # change needed to get it into the predictive check, the curves and the heatmaps.
 models <- list(
   "LNR" = gam_lnr_muller,
+  "LNR-6" = gam_lnr6_muller,
   "DDM-4" = gam_ddm4_muller
 )
 ```
@@ -92,14 +115,14 @@ models <- list(
 #| fig-width: 8
 #| fig-height: 5
 
-# Sampling efficiency: bulk effective sample size per second of sampling wall
+# Sampling efficiency: bulk effective sample size per hour of sampling wall
 # clock, computed chain by chain so that the spread across chains is visible.
 # Only the population-level parameters are counted (the smooth coefficients,
 # their SDs and the group-level SDs): the thousands of participant offsets would
 # otherwise dominate the average and say more about the data than the sampler.
 data_efficiency <- function(m, pars = "^b_|^bs_|^sd_|^sds_") {
   draws <- posterior::as_draws_array(m, variable = pars, regex = TRUE)
-  # Time per chain. Efficiency is per second of *sampling*, the usual
+  # Time per chain. Efficiency is per hour of *sampling*, the usual
   # convention, but what one actually waits for is warmup + sampling, so both
   # are kept. This is wall clock, so it is only comparable between fits of the
   # same data with the same number of threads per chain - hence those are
@@ -120,7 +143,8 @@ data_efficiency <- function(m, pars = "^b_|^bs_|^sd_|^sds_") {
       Time_warmup = time[[chain, "warmup"]],
       Time_sample = time[[chain, "sample"]],
       Time_total = time[[chain, "warmup"]] + time[[chain, "sample"]],
-      ESS_per_sec = mean(ess, na.rm = TRUE) / time[[chain, "sample"]],
+      # get_elapsed_time() is in seconds
+      ESS_per_hour = mean(ess, na.rm = TRUE) / (time[[chain, "sample"]] / 3600),
       Threads = if (length(threads) == 1) threads else NA_real_,
       N = stats::nobs(m)
     )
@@ -133,7 +157,7 @@ efficiency <- purrr::imap_dfr(models, \(m, name) mutate(data_efficiency(m), Mode
 # Model-level summary: the chains of a model average to one point
 efficiency_means <- efficiency |>
   summarise(.by = Model,
-            ESS_per_sec = mean(ESS_per_sec),
+            ESS_per_hour = mean(ESS_per_hour),
             Time_total = mean(Time_total))
 
 # What each fit was: two models are only comparable here if these match
@@ -146,7 +170,7 @@ caption <- efficiency |>
   paste(collapse = "\n")
 
 efficiency |>
-  ggplot(aes(x = ESS_per_sec, y = Time_total / 3600, colour = Model)) +
+  ggplot(aes(x = ESS_per_hour, y = Time_total / 3600, colour = Model)) +
   # One point per chain, and the model's mean on top of them
   geom_point(size = 2.5, alpha = 0.35) +
   geom_point(data = efficiency_means, size = 5, shape = 18) +
@@ -156,7 +180,7 @@ efficiency |>
   scale_x_log10() +
   scale_y_log10() +
   labs(
-    x = "Effective sample size per second of sampling (bulk ESS / s, log)",
+    x = "Effective sample size per hour of sampling (bulk ESS / h, log)",
     y = "Wall clock per chain, warmup included (hours, log)",
     title = "Computational cost",
     subtitle = "One point per chain, diamond is the model's mean. Bottom right is cheap and efficient.",
@@ -165,6 +189,62 @@ efficiency |>
   theme_minimal() +
   theme(plot.caption = element_text(hjust = 0, colour = "grey40"))
 ```
+
+```{r}
+# Total compute, three ways, for a rough headline number:
+# - Wall clock: the shards of a model run at the same time on the cluster, so
+#   what one waited for is the longest chain (queueing, compilation and the
+#   combine/loo step are not included).
+# - Chains one after the other: the sum of the chain times, i.e. the same run
+#   with no parallel chains but still multithreaded within each chain.
+# - Single core: that sum times the threads per chain. This assumes within-
+#   chain threading scales linearly, which is close to what was measured
+#   (4 -> 8 threads halved the time per chain, server/AGENT.md 4.4.1), so read
+#   it as an order of magnitude, not a measurement.
+compute_time <- efficiency |>
+  summarise(.by = Model,
+            Chains = n(),
+            Threads = first(Threads),
+            Cores = n() * first(Threads),
+            Wall = max(Time_total) / 3600,
+            Serial = sum(Time_total) / 3600,
+            SingleCore = sum(Time_total * Threads) / 3600) |>
+  mutate(SingleCore_days = SingleCore / 24,
+         SingleCore_years = SingleCore / (24 * 365.25))
+
+compute_time |>
+  gt::gt(rowname_col = "Model") |>
+  gt::cols_label(
+    Chains = "Chains",
+    Threads = "Threads / chain",
+    Cores = "Cores used",
+    Wall = "Wall clock (h)",
+    Serial = "Chains in sequence (h)",
+    SingleCore = "Single core (h)",
+    SingleCore_days = "Single core (days)",
+    SingleCore_years = "Single core (years)"
+  ) |>
+  gt::fmt_number(columns = c(Wall, Serial, SingleCore, SingleCore_days), decimals = 0) |>
+  gt::fmt_number(columns = SingleCore_years, decimals = 2) |>
+  gt::tab_spanner(label = "Without parallelisation (estimated)",
+                  columns = c(Serial, SingleCore, SingleCore_days, SingleCore_years)) |>
+  gt::tab_source_note("Warmup + sampling only. Single core assumes linear scaling of within-chain threading.")
+```
+
+
+## Performance
+
+```{r}
+# loo was added at combine time and lives in $criteria$loo. A plain list
+# dispatches to loo::loo_compare.default(), which wants 'loo' objects, not
+# brmsfits, so pass those (the list names become the model labels).
+rez_loo <- loo_compare(lapply(models, \(m) m$criteria$loo))
+
+parameters(rez_loo)
+report(rez_loo)
+```
+
+
 
 ## Posterior Predictive Check
 
@@ -283,9 +363,6 @@ plot_ppc(
 ### Compute Predictions
 
 ```{r}
-#| fig-width: 9
-#| fig-height: 7
-
 # Display names for the parameters, in the order they are plotted. Names are
 # the family's own ("mu", "ndt", ...), values are what goes in the panel
 # titles. Several parameters mean different things from one family to the next
@@ -311,9 +388,12 @@ param_labels <- function(gam) {
     "cogmod_ddm" = {
       lvls["mu"] <- "Drift"
     },
+    # sigmabias is only estimated in LNR-6, where it is the start-point range
+    # of the race, as in the other racing families
     "cogmod_lnr" = {
-      lvls[c("mu", "sigmazero", "sigmaone")] <-
-        c("Nu (Correct)", "Nu Variability (Correct)", "Nu Variability (Errors)")
+      lvls[c("mu", "sigmazero", "sigmaone", "sigmabias")] <-
+        c("Nu (Correct)", "Nu Variability (Correct)", "Nu Variability (Errors)",
+          "Start Point Range")
     },
     # Both racing families: mu is the drift of the accumulator for correct
     # responses and driftone that of the other one, and sigmabias is the
@@ -362,8 +442,21 @@ predict_parameters <- function(gam, datagrid) {
 }
 
 # Parameters against illusion strength, one curve per illusion difficulty
-data_curves <- function(gam) {
-  datagrid <- insight::get_datagrid(gam, length = c(Illusion_DifferenceZ = 5, Illusion_StrengthZ = 30))
+data_curves <- function(gam, illusion = "MullerLyer") {
+  # Grid in raw units, converted to the Z scale the models were fitted on
+  # TODO: custom ranges for the other illusions
+  if (illusion == "MullerLyer") {
+    strength_range <- normalize_units(seq(-30, 30, length.out = 31), type = illusion, what = "Strength")
+    difference_range <- normalize_units(seq(0.05, 0.45, length.out = 5), type = illusion, what = "Difference")
+  } else {
+    warning("Only Muller-Lyer is implemented for curves, see data_heatmaps() for the other illusions.")
+    strength_range <- seq(-1, 1, length.out = 31)
+    difference_range <- seq(-1, 1, length.out = 5)
+  }
+
+  datagrid <- insight::get_datagrid(gam,
+                                    by = list(Illusion_DifferenceZ = difference_range, 
+                                              Illusion_StrengthZ = strength_range))
   pred <- estimate_prediction(gam, data = datagrid, centrality = "mean",
                               # TODO: increase iterations
                               iterations = 500, keep_iterations = TRUE) |>
@@ -385,12 +478,12 @@ data_curves <- function(gam) {
   pred |>
     format_parameters(gam) |>
     # Restore the original scale of the illusion strength and difference
-    restore_units(illusion = "MullerLyer")
+    restore_units(illusion = illusion)
 }
 
 # Stack the models. Adding one to `models` in the loading chunk is all it takes
 # for it to get its own column in every plot below.
-preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m), Model = name)) |>
+preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m, illusion = "MullerLyer"), Model = name)) |>
   mutate(Model = factor(Model, levels = names(models)))
 ```
 
@@ -399,6 +492,9 @@ preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m), Model 
 ### Visualize
 
 ```{r}
+#| fig-width: 9
+#| fig-height: 10
+
 # Column header
 make_header <- function(label) {
   ggplot() +
@@ -478,7 +574,7 @@ make_curve <- function(model, parameter) {
   ) +
     geom_line(linewidth = 1.3) +
     scale_colour_manual(values = curve_cols) +
-    labs(title = parameter) +
+    labs(title = parameter, color = "Task Difficulty") +
     theme_minimal() +
     theme(
       plot.title = element_text(
@@ -521,7 +617,7 @@ preds_heatmaps <- purrr::imap_dfr(models, \(m, name) mutate(data_heatmaps(m), Mo
 
 ```{r}
 #| fig-width: 9
-#| fig-height: 14
+#| fig-height: 16.5
 
 # Function for individual panels
 make_heatmap <- function(model, parameter) {

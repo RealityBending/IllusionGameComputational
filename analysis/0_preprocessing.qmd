@@ -223,9 +223,24 @@ illu |>
             .by= "Dataset") |> 
   gt::gt(rowname_col = "Dataset") |> 
   gt::grand_summary_rows(fns =  list(label = "Total", fn = "sum"),
-                         columns = -Dataset) 
+                         columns = -Dataset)
 ```
 
+
+```{r}
+(illu |> 
+  ggplot() +
+  geom_histogram(aes(x = Illusion_Strength), bins = 101) +
+  facet_grid(~Illusion_Type, scales = "free") +
+  scale_x_continuous(n.breaks = 10) +
+  theme_minimal()) / 
+  (illu |> 
+  ggplot() +
+  geom_histogram(aes(x = Illusion_Difference), bins = 101) +
+  facet_grid(~Illusion_Type, scales = "free") +
+  scale_x_continuous(n.breaks = 10) +
+  theme_minimal())
+```
 
 
 ## Cleaning
