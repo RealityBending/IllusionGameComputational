@@ -100,6 +100,8 @@ cluster and submitted by accident — the same class of bug one level up.
 | total participants | 2,221 |
 | MullerLyer rows (what is actually fitted) | 323,981 |
 | MullerLyer participants | 2,215 |
+| VerticalHorizontal rows / participants (`*_verticalhorizontal` models) | 319,760 / 2,200 |
+| Ebbinghaus rows / participants | 320,144 / 2,204 |
 
 `fit_model.R` defaults to **all** participants since 2026-09-18 (it used to
 default to 30, which risked a production submission silently fitting the test

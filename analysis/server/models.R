@@ -240,6 +240,30 @@ igc_models <- list(
         family = cogmod::cogmod_lba2()
       )
     }
+  ),
+
+  # Other illusions ---------------------------------------------------------
+  # Everything above is fitted to MullerLyer. The same model on another
+  # illusion is its own entry, named <model>_<illusion in lower case>, which
+  # borrows the MullerLyer model's formula rather than copying it, so the two
+  # cannot drift apart. That works because the body only runs when the job
+  # calls spec$formula(), by which point igc_models exists.
+  #
+  # Write each entry out in full rather than generating them in a loop: ./hpc
+  # finds models by reading their declaration lines out of this file.
+  #
+  # The name has to differ from the MullerLyer model's, since ./hpc and
+  # IGC_MODEL look models up by name alone, so shard names repeat the illusion:
+  # gam_lnr_verticalhorizontal_VerticalHorizontal_<n>.rds.
+  #
+  # The three illusions are the same size (MullerLyer 323,981 rows and 2,215
+  # participants, VerticalHorizontal 319,760 and 2,200, Ebbinghaus 320,144 and
+  # 2,204), so each model's production settings and timings carry over as
+  # they are.
+
+  gam_lnr_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_lnr$formula()
   )
 )
 

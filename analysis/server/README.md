@@ -167,6 +167,8 @@ function returning the brms formula. It is the only place a model is defined —
 same one, and `./hpc` reads the *names* straight out of the file (which is why
 the declaration lines must stay in the form `  <name> = list(`).
 
+Every model is fitted to **MullerLyer** unless its row says otherwise.
+
 | model | family | distributional parameters with a 2-D smooth | fixed | |
 | --- | --- | --- | --- | --- |
 | `gam_lnr` | `cogmod_lnr()` | drift, `nuone`, `sigmazero`, `sigmaone`, `ndt` | `sigmabias = 0` |
@@ -177,6 +179,7 @@ the declaration lines must stay in the form `  <name> = list(`).
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
 | `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — |
 | `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` |
+| `gam_lnr_verticalhorizontal` | `cogmod_lnr()` | as `gam_lnr` | `sigmabias = 0` | fitted to **VerticalHorizontal**; see [Running models on other illusions](#running-models-on-other-illusions) |
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =
 c("cr", "cr")) + (1 | Participant)`; `poutlier` is `1 + (1 | Participant)`.
@@ -234,6 +237,83 @@ fix in `AGENT.md` §4.7.1 and `cogmod_ddm_cost_issue.md`.
 Adding a model is one entry in `models.R` and nothing else. Which account is
 fitting what is deliberately not recorded here — it changes, and `./hpc queue`
 answers it live.
+
+## Running models on other illusions
+
+Every model above is fitted to MullerLyer. Running the same model on
+VerticalHorizontal or Ebbinghaus takes one more entry in `models.R`, named
+`<model>_<illusion in lower case>`. The entry borrows the MullerLyer model's
+formula instead of copying it, so the two cannot drift apart:
+
+```r
+  gam_lnr_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_lnr$formula()
+  ),
+```
+
+That is the only one so far (added 2026-09-24). To add another, copy it, change
+the model in both the name and `igc_models$<model>`, set `illusion`, and commit
+it before anyone submits it. Write each entry out in full: generating them in a
+loop would hide them from `./hpc`, which reads model names straight out of the
+file.
+
+Nothing else changes, because the three illusions are the same size:
+
+| illusion | rows | participants | `restore_units()` bounds (difference, strength) |
+| --- | --- | --- | --- |
+| MullerLyer | 323,981 | 2,215 | 0.04-0.46, ±49 |
+| VerticalHorizontal | 319,760 | 2,200 | 0.03-0.30, ±66.5 |
+| Ebbinghaus | 320,144 | 2,204 | 0.05-0.70, ±2.03 |
+
+- **Settings and timings carry over.** Each model's production defaults apply
+  as they are, and so does what it was measured to cost on MullerLyer (e.g.
+  42.7-44 h per `gam_lnr` shard).
+- **So do the warnings.** The cost is per observation, so `gam_ddm7` is no
+  more viable at full data on another illusion than on MullerLyer.
+- **The notebooks already handle all three.** The bounds above are the ones
+  `restore_units()` in the `.qmd` files uses, and they match the data.
+- **Files cannot collide.** The name has to differ from the MullerLyer model's,
+  so shards repeat the illusion,
+  `gam_lnr_verticalhorizontal_VerticalHorizontal_<n>.rds`. They cannot be
+  confused with `gam_lnr_MullerLyer_<n>.rds`, even in the same directory.
+
+### Fitting one
+
+Set `MODEL` to the entry you are fitting. The steps are the same for any of
+them.
+
+**On a second account, first make sure it can compile a model at all.** The
+fresh second account set up on 2026-09-21 failed on every model within ~40 s
+([hub `toolchain.md#the-brms-trap`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#the-brms-trap),
+still open). The smoke test in step 1 is the check. It runs on `short`, and a
+compile failure shows up in `./hpc log` within the first minute. A cogmod
+older than 0.3.3 stops the job in its first second, and `./hpc install cogmod`
+fixes that.
+
+```bash
+MODEL=gam_lnr_verticalhorizontal
+git pull
+cd analysis/server
+./hpc check && ./hpc push
+./hpc models                       # must list $MODEL
+
+# 1. smoke test, in its own directory (never the production one: section 3.6 of AGENT.md)
+IGC_MODELS_DIR=/mnt/lustre/users/<group>/<user>/IGComputational/smoke_$MODEL \
+IGC_NPARTICIPANTS=30 IGC_WARMUP=300 IGC_SAMPLES=100 \
+  ./hpc fit $MODEL --array=1 --partition=short --cpus-per-task=8 --mem=16G
+./hpc log $MODEL                   # want "SUCCESSFUL" and a REPORT line; gam_lnr took 6-11 min
+
+# 2. production: 4 shards x 2 chains on long, 64 CPUs of the 140-CPU cap
+./hpc fit $MODEL
+
+# 3. once all four shards are done (~2 days for the LNR, if they start at once)
+./hpc combine $MODEL
+./hpc pull                         # -> analysis/models/<MODEL>_<Illusion>.rds, ~600 MB for the LNR
+```
+
+If it was fitted on another account, send that file over (see
+[Collecting the results](#collecting-the-results)).
 
 ## Paths
 
