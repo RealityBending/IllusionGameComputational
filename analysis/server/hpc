@@ -10,11 +10,17 @@
 #   ./hpc precompile            pre-build the CmdStan precompiled header
 #   ./hpc models                list the models defined in models.R
 #   ./hpc fit <model|all> [..]  one array job per model (extra args -> sbatch)
-#   ./hpc combine <model|all>   merge a model's shards, add waic, delete them
+#   ./hpc combine <model|all>   merge a model's shards, add loo
+#   ./hpc predict <model|all>   posterior predictions of a combined model, for
+#                               1_modelcomparison.qmd (extra args -> sbatch)
 #   ./hpc queue                 squeue for this user
 #   ./hpc log [jobid|model]     tail the newest .out/.err in scratch
 #   ./hpc ls                    list fitted models on the cluster
 #   ./hpc pull [pattern]        copy fitted .rds back into analysis/models/
+#   ./hpc pull predictions      copy the prediction files into
+#                               analysis/models/predictions/ (so does any
+#                               pattern under predictions/, e.g.
+#                               'predictions/gam_lnr_*.rds')
 #   ./hpc cancel <jobid|all>    scancel
 #   ./hpc sh '<cmd>'            run an arbitrary command on the login node
 #
@@ -93,16 +99,22 @@ list_models() {
 
 # Expand 'all' to every model; validate anything else against models.R so a
 # typo fails here and not eight hours into a job.
+# Several at once as a comma-separated list, gam_a,gam_b, so that a batch is
+# one SSH connection rather than one per model (the login node starts refusing
+# connections after a burst -- 2026-09-28). Every name is checked before
+# anything is submitted.
 resolve_models() {
-  local want="${1:-}" known m found
+  local want="${1:-}" known m w found
   known="$(list_models)"
   [ -n "$known" ] || die "no models found in models.R"
-  [ -n "$want" ] || die "which model? one of: $(echo $known) (or 'all')"
+  [ -n "$want" ] || die "which model? one of: $(echo $known) (or 'all', or a comma-separated list)"
   if [ "$want" = all ]; then echo "$known"; return; fi
-  found=0
-  for m in $known; do [ "$m" = "$want" ] && found=1; done
-  [ "$found" = 1 ] || die "unknown model '${want}'. Known: $(echo $known)"
-  echo "$want"
+  for w in ${want//,/ }; do
+    found=0
+    for m in $known; do [ "$m" = "$w" ] && found=1; done
+    [ "$found" = 1 ] || die "unknown model '${w}'. Known: $(echo $known)"
+  done
+  echo "${want//,/ }"
 }
 
 # --- commands --------------------------------------------------------------
@@ -121,7 +133,7 @@ cmd_check() {
 cmd_setup() {
   require_link
   info "creating project directories"
-  remote "mkdir -p '${USERS_DIR}' '${MODELS_DIR}' '${MODELS_DIR}/combined' '${SCRATCH_DIR}' && ls -la '${USERS_DIR}'"
+  remote "mkdir -p '${USERS_DIR}' '${MODELS_DIR}' '${MODELS_DIR}/combined' '${MODELS_DIR}/predictions' '${SCRATCH_DIR}' && ls -la '${USERS_DIR}'"
 }
 
 cmd_push() {
@@ -217,7 +229,6 @@ submit_per_model() {
   local models model
   models="$(resolve_models "$want")"
   require_link
-  remote "mkdir -p '${SCRATCH_DIR}' '${MODELS_DIR}'"
   # Forward run-shaping vars when the caller sets them, e.g.
   #   IGC_NPARTICIPANTS=30 IGC_WARMUP=300 ./hpc fit gam_lnr
   #   IGC_CRITERION=waic IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_lnr
@@ -227,17 +238,27 @@ submit_per_model() {
     eval "val=\${$v:-}"
     [ -n "$val" ] && extra="${extra},${v}='${val}'"
   done
+  # ... and every prediction setting, e.g. IGC_PRED_PPC_NDRAWS=1000
+  for v in $(compgen -v IGC_PRED_ || true); do
+    eval "val=\${$v:-}"
+    [ -n "$val" ] && extra="${extra},${v}='${val}'"
+  done
+  # One remote shell for the whole batch. A failed sbatch (e.g. sussexneuro
+  # rejecting a request over its group quota) is reported and the rest still go.
+  local cmds="mkdir -p '${SCRATCH_DIR}' '${MODELS_DIR}' && cd '${USERS_DIR}' || exit 1"
   for model in $models; do
-    info "submitting ${script} for ${model}"
-    remote "cd '${USERS_DIR}' && sbatch \
+    cmds="${cmds}
+printf '\033[36m==>\033[0m submitting %s for %s\n' '${script}' '${model}'
+sbatch \
       --chdir='${USERS_DIR}' \
       --job-name='igc_${tag}_${model}' \
       --output='${SCRATCH_DIR}/${tag}_${model}_%A_%a.out' \
       --error='${SCRATCH_DIR}/${tag}_${model}_%A_%a.err' \
       --mail-user='${MAIL_USER}' \
       --export=ALL,IGC_MODEL='${model}',IGC_USERS_DIR='${USERS_DIR}',IGC_SCRATCH_DIR='${SCRATCH_DIR}',IGC_MODELS_DIR='${MODELS_DIR}',IGC_R_MODULE='${R_MODULE}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_EB_MODULES='${EB_MODULES}',IGC_FILE_REFIT='${FILE_REFIT}'${extra} \
-      $* '${script}'"
+      $* '${script}' || echo '  !! sbatch failed for ${model}'"
   done
+  remote "$cmds"
 }
 
 cmd_fit() {
@@ -248,6 +269,11 @@ cmd_fit() {
 cmd_combine() {
   local want="${1:-}"; shift || true
   submit_per_model combine.slurm combine "$want" "$@"
+}
+
+cmd_predict() {
+  local want="${1:-}"; shift || true
+  submit_per_model predict.slurm predict "$want" "$@"
 }
 
 cmd_queue() {
@@ -270,16 +296,26 @@ cmd_log() {
 
 cmd_ls() {
   require_link
-  remote "ls -lh '${MODELS_DIR}'/*.rds '${MODELS_DIR}'/combined/*.rds 2>/dev/null || echo '  (no .rds yet)'"
+  remote "ls -lh '${MODELS_DIR}'/*.rds '${MODELS_DIR}'/combined/*.rds '${MODELS_DIR}'/predictions/*.rds 2>/dev/null || echo '  (no .rds yet)'"
 }
 
 cmd_pull() {
   require_link
-  local pattern="${1:-combined/*.rds}"
-  mkdir -p "$LOCAL_MODELS"
-  info "pulling '${pattern}' into analysis/models/"
-  "$SCP" -p "${HPC_ALIAS}:${MODELS_DIR}/${pattern}" "$LOCAL_MODELS/" || die "nothing matched '${pattern}'"
-  ls -lh "$LOCAL_MODELS"
+  local pattern="${1:-combined/*.rds}" dest="$LOCAL_MODELS"
+  # The prediction files keep their own directory locally too: they have the
+  # same names as the fits they were made from, so one landing in models/
+  # would overwrite its fit. So anything under predictions/ goes there, asked
+  # for as 'predictions' or as a path such as 'predictions/gam_lnr_*.rds'
+  # (until 2026-09-28 only the bare word did).
+  case "$pattern" in
+    predictions)   pattern="predictions/*.rds"; dest="$LOCAL_MODELS/predictions" ;;
+    predictions/*) dest="$LOCAL_MODELS/predictions" ;;
+  esac
+  mkdir -p "$dest"
+  info "pulling '${pattern}' into ${dest#"$HERE/../"}/"
+  # -p keeps the modification times, which the qmd compares against
+  "$SCP" -p "${HPC_ALIAS}:${MODELS_DIR}/${pattern}" "$dest/" || die "nothing matched '${pattern}'"
+  ls -lh "$dest"
 }
 
 cmd_cancel() {
@@ -308,11 +344,12 @@ case "${1:-}" in
   models)     shift; cmd_models "$@" ;;
   fit)        shift; cmd_fit "$@" ;;
   combine)    shift; cmd_combine "$@" ;;
+  predict)    shift; cmd_predict "$@" ;;
   queue)      shift; cmd_queue "$@" ;;
   log)        shift; cmd_log "$@" ;;
   ls)         shift; cmd_ls "$@" ;;
   pull)       shift; cmd_pull "$@" ;;
   cancel)     shift; cmd_cancel "$@" ;;
   sh)         shift; cmd_sh "$@" ;;
-  *) sed -n '2,24p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
 esac

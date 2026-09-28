@@ -1,0 +1,168 @@
+---
+title: "TODO"
+shorttitle: "TODO"
+author:
+  - name: Dominique Makowski
+    orcid: 0000-0001-5375-9967
+    email: D.Makowski@sussex.ac.uk
+    url: https://realitybending.github.io/
+    corresponding: true
+    affiliations:
+      - id: "id1"
+        name: "University of Sussex"
+        department: "School of Psychology"
+        city: "Brighton"
+        country: "UK"
+        postal-code: "BN1 9RH"
+      - id: "id2"
+        name: "University of Sussex"
+        department: "Sussex Centre for Consciousness Science"
+  - name: Oliver Collins
+    orcid: ""
+    affiliations:
+      - ref: id1
+  - name: Ana Neves
+    orcid: 0009-0006-0020-7599
+    email: A.Neves@sussex.ac.uk
+    affiliations:
+      - ref: id1
+author-note:
+  disclosures:
+    gratitude: null
+    study-registration: null
+    data-sharing: null
+    related-report: null
+    conflict-of-interest: null
+    financial-support: null
+    authorship-agreements: null
+abstract: |
+  TODO
+keywords:
+  - TODO
+supplemental-materials:
+  - "https://github.com/RealityBending/IllusionGameComputational"
+date: today
+titlepage:
+  type: Research Article
+  # server: PsyArXiv
+  # doi: 10.31234/osf.io/xxxxx
+  # version: 1
+  status: Not peer reviewed
+  license: CC BY 4.0
+  # badges:
+  #   open-data: "https://github.com/RealityBending/IllusionGameComputational/tree/main/data"
+  #   open-code: "https://github.com/RealityBending/IllusionGameComputational/tree/main/analysis"
+floatsintext: true
+numbered-lines: true
+bibliography: bibliography.bib
+mask: false
+lang: en
+format:
+  # Journal-style preprint by default; documentmode: man gives a plain APA manuscript
+  apaquasi-pdf: default
+editor_options:
+  chunk_output_type: console
+---
+
+<!--
+SCOPE AND FRAMING (notes to keep in mind for the write-up; not rendered)
+
+What this is. A follow-up to the Illusion Game work. The data pool six earlier
+Illusion Game studies (see analysis/0_preprocessing.qmd): about 2,200
+participants and 320k trials per illusion, for three illusions (Müller-Lyer,
+Vertical-Horizontal, Ebbinghaus). The question is how best to model the
+paradigm: we compare evidence accumulation models, and the later goal is the
+reliability of individual-level parameters, and perhaps their correlates.
+
+The paper has two sides, and the framing has to hold both and articulate them as clearly and appealingly for both types of audiences.
+
+1. About illusions
+   - How illusion sensitivity works: which model parameters does illusion
+     strength act on?
+   - Is the effect of illusion strength dissociated from that of task
+     difficulty (the size of the real perceptual difference)? Ideally they act
+     on different parameters. If they don't, is their interaction additive, so
+     that the two can still be separated and quantified statistically?
+   - Do individual-level indices of sensitivity to the three illusions
+     correlate, and for which parameters? This ties in with the general factor
+     of illusion sensitivity from the earlier Illusion Game papers
+     (Makowski et al., 2023).
+   - To our knowledge, this level of analysis has never been applied to
+     illusions, let alone with this statistical power.
+
+2. Methodological, beyond illusions
+   - Illusions as a perceptual interference task, perhaps akin to conflict
+     tasks: an incongruent illusion works against the real difference the way
+     an incongruent flanker or Stroop word does. Worth connecting to the
+     conflict-task modelling literature (e.g., the Diffusion Model for Conflict
+     tasks, Ulrich et al., 2015; the shrinking spotlight model, White et al.,
+     2011).
+   - Fitting these models is a feat in itself: some would take about half a
+     year on a single core. Report the compute (CPU hours per model, from
+     analysis/server/node_history.md) and what made it tractable (within-chain
+     parallelism on a cluster, the cogmod package).
+   - To our knowledge, LNR, LNR-6, LBA, DDM-4, DDM-5 and RDM have never been
+     compared directly on the same data. (The registry also has RDM-5, and
+     DDM-7, which is only viable on a subsample.)
+   - The analysis itself is new. Every parameter of every model gets the same
+     flexible effect of difficulty x illusion strength (a GAM tensor smooth,
+     t2()), instead of each manipulation being assigned to one parameter in
+     advance. Showing where each model puts the effects, and how this differs
+     between models, tells us about the differences and trade-offs of these
+     models (parameter trade-offs and mimicry, selective influence). That
+     matters to anyone choosing a model, whatever the task.
+
+Joining the two sides. One way to bridge them: the answer to "which parameters
+does an illusion act on?" depends on the model you fit, and that dependence is
+the methodological finding. The illusion question gives the model comparison
+its reason to exist, and the comparison qualifies the answer to the illusion
+question. Which side leads also depends on the journal: illusions first for a
+perception or individual-differences journal, the model comparison first (with
+illusions as the test case) for a methods journal.
+
+Status (2026-09-26): models still being fitted
+   - No individual sensitivity models yet. The current models only have a
+     participant intercept on each parameter, (1 | Participant). The
+     cross-illusion correlations (side 1, third point) will need models with
+     participant-level slopes on illusion strength.
+   - Only Müller-Lyer so far (analysis/server/models.R). Vertical-Horizontal
+     and Ebbinghaus come later, and claims about illusions in general wait
+     for them.
+-->
+
+# Introduction
+
+## The Illusion Game Paradigm
+
+<!-- TODO: figure with example stimuli for the three illusions, crossing task difficulty and illusion strength (see the mosaics in RealityBending/IllusionGame, v3/examples/). -->
+
+Visual illusions have mostly been studied through participants' reports of their own perception: observers are asked to adjust one target until it appears to match another, to estimate a target's physical properties, or to say whether two identical targets look different [@grzeczkowski2018perception; @cretenoud2020individual]. These procedures measure how much an illusion distorts appearance, but they rely on metacognitive judgements that depend on each observer's decision criterion and on the exact wording of the task [@skottun2014subjective]. Moreover, most studies use a single illusion, or a handful, presented over a narrow range of stimulus values [@cretenoud2019factors], which limits both the reliability of individual measures and the generality of the findings [@makowski2023novel].
+
+The Illusion Game paradigm [@makowski2023novel] takes the opposite approach: instead of asking participants how strong an illusion looks, it measures what the illusion does to their performance in an objective perceptual task. It relies on a parametric framework for generating illusions, implemented in the open-source software *Pyllusion* [@makowski2021parametric], and built on the observation that many classic illusions consist of *targets* whose perception is biased by some feature of the display, typically their context. In the Müller-Lyer illusion, for instance, two horizontal lines (the targets) appear longer or shorter depending on the orientation of the fins at their ends (the context). Each illusion can thus be described by two parameters. The *task difficulty* is the objective difference between the targets (e.g., how much longer one line really is than the other): the smaller the difference, the harder the discrimination. The *illusion strength* is the magnitude of the biasing feature (e.g., the angle of the fins). Because they are specified separately, the two parameters can be varied continuously and independently of each other, so that any combination of an objective difference and an illusion strength can be generated.
+
+The sign of the illusion strength sets the direction of the bias relative to the correct answer. When it is positive, the illusion is *incongruent*: it makes the objectively smaller target look bigger, working against the real difference and making the task harder. When it is negative, the illusion is *congruent*: it exaggerates the real difference and makes the task easier. A strength of zero corresponds to a neutral context. Illusion strength is thus a signed and graded variable, whereas task difficulty only sets how large the real difference is.
+
+On each trial, after a fixation cross shown for a variable interval, participants see one stimulus and indicate which of the two targets is bigger or longer by pressing one of two arrow keys (e.g., the upper or the lower line for the Müller-Lyer illusion). They are instructed to respond "as fast as possible without making errors", a double constraint meant to limit individual differences in speed-accuracy trade-off [@makowski2023novel]. For each illusion, the stimuli combine a range of task difficulty levels with a range of illusion strengths spanning both congruent and incongruent effects, and are presented in random order within an illusion-specific block. Each trial therefore yields a choice (correct or error) and a response time (RT), and the effect of an illusion is measured by how much it impairs (when incongruent) or helps (when congruent) performance, beyond the objective difficulty of the discrimination.
+
+The present work focuses on three illusions, common to all the datasets analysed here. In the *Müller-Lyer* illusion, participants indicate which of two horizontal red lines, one above the other, is longer; the illusion strength is the angle of the black fins at the ends of the lines, which make a line look longer or shorter. In the *Ebbinghaus* illusion, participants indicate which of two red circles, side by side, is bigger; each is surrounded by black circles, and a target surrounded by large circles looks smaller than one surrounded by small circles, so that the illusion strength is the relative size of the surrounding circles. In the *Vertical-Horizontal* illusion, participants indicate which of two red lines, side by side, is longer regardless of their orientation; one of the lines is rotated towards the vertical, and since vertical lines look longer than horizontal lines of the same length, the angle of rotation sets the illusion strength. These three illusions were among those most strongly related to the general factor of illusion sensitivity reported by @makowski2023novel.
+
+In its first study, which covered ten illusions, the paradigm showed that illusion strength, task difficulty and their interaction affected performance for every illusion [@makowski2023novel]. Stronger illusions increased the error rate, as well as the mean and spread of RTs, but only up to a point, beyond which participants became faster again, as if a strong enough illusion made it easier to give the wrong answer. Participant-level sensitivities to the different illusions shared a substantial part of their variance, providing evidence for a general factor of illusion sensitivity (Factor *i*), which was related to personality traits. The paradigm has since been used in several further studies, whose data are pooled here. However, errors and RTs were modelled separately, and the participant-level scores were derived from error rates alone, which can be biased by each participant's speed-accuracy criterion. Analysing the two jointly, for instance with drift diffusion models, was identified as a necessary next step [@makowski2023novel].
+
+Seen from decision-making research, the Illusion Game is a speeded two-alternative forced-choice task with two crossed manipulations. Task difficulty is a manipulation of stimulus discriminability, which evidence accumulation models usually expect to affect the rate at which evidence accumulates [@ratcliff2008diffusion]. Illusion strength adds a graded contextual influence that either supports or opposes the correct response. This resembles the congruency manipulation of conflict tasks such as the Stroop or flanker tasks, except that it varies continuously rather than taking two values. That the two manipulations are orthogonal by design does not imply that they affect separate cognitive processes: whether their effects can be told apart, and which components of the decision process each of them acts on, is an empirical question, and one that the present study addresses.
+
+# Methods
+
+## Participants
+
+## Materials and procedure
+
+## Data analysis
+
+# Results
+
+# Discussion
+
+# References
+
+::: {#refs}
+:::

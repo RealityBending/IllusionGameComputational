@@ -1,0 +1,332 @@
+title: Quasi-APA Preprint
+# apaquasi is apaquarto 6.0.0 (W. Joel Schneider) with a first page set the way
+# a high-impact journal sets one. Everything past the first page is apaquarto's.
+author: Dominique Makowski
+version: 0.1.0
+quarto-required: ">=1.9.0"
+contributes:
+  formats:
+    common:
+      execute:
+        echo: false
+      citeproc: false
+      link-citations: true
+      fig-cap-location: top
+      tbl-cap-location: top
+      cap-location: top
+      csl: apa.csl
+      toc: false
+      fig-width: 6.5
+      fig-height: 6.5
+      number-depth: 3
+      floatsintext: true
+      crossref:
+        subref-labels: alpha A
+      suppress-title-page: false
+      suppress-title-page-number: false
+      suppress-title: false
+      suppress-short-title: false
+      suppress-author: false
+      suppress-affiliation: false
+      suppress-author-note: false
+      suppress-orcid: false
+      suppress-status-change-paragraph: false
+      suppress-disclosures-paragraph: false
+      suppress-credit-statement: false
+      suppress-corresponding-paragraph: false
+      suppress-corresponding-group: false
+      suppress-corresponding-department: false
+      suppress-corresponding-affiliation-name: false
+      suppress-corresponding-address: false
+      suppress-corresponding-city: false
+      suppress-corresponding-region: false
+      suppress-corresponding-postal-code: false
+      suppress-corresponding-country: false
+      suppress-corresponding-email: false
+      suppress-abstract: false
+      suppress-impact-statement: false
+      suppress-keywords: false
+      suppress-supplemental-materials: false
+      suppress-title-introduction: false
+      # apaquasi: APA leaves the introduction without a heading, and
+      # apaquarto takes an "# Introduction" heading out. Kept here: a paper
+      # reads more plainly with it, and without it the outline an editor
+      # shows (RStudio, Positron) starts one level off. false restores APA.
+      keep-introduction-heading: true
+      no-ampersand-parenthetical: false
+      language: 
+        citation-last-author-separator: "and"
+        citation-masked-author: "Masked Author"
+        citation-masked-title: "Masked Title"
+        citation-masked-date: "n.d."
+        email: "Email"
+        figure-table-note: "Note"
+        figure-panel: "Panel"
+        journal-volume: "Vol."
+        journal-issue: "No."
+        title-block-author-note: "Author Note"
+        title-block-correspondence-note: "Correspondence concerning this article should be addressed to"
+        title-block-role-introduction: "Author roles were classified using the Contributor Role Taxonomy (CRediT; https://credit.niso.org/) as follows:"
+        title-impact-statement: "Impact Statement"
+        title-supplemental-materials: "Supplemental materials"
+        title-word-count: "Word Count"
+        references-meta-analysis: "References marked with an asterisk indicate studies included in the meta-analysis."
+      filters:
+        # apaquasi: a masked document is set as a plain manuscript. Before
+        # documentmode.lua, and so before anything reads the mode
+        - at: pre-ast
+          path: quasimask.lua
+        # Resolve documentmode aliases (journal, manuscript, document, student)
+        # before anything reads the field
+        - at: pre-ast
+          path: documentmode.lua
+        # Sets language defaults other than English
+        - at: pre-ast
+          path: apalanguage.lua
+        # An abstract or impact statement written as a section of the
+        # document rather than as a yaml field. Runs after apalanguage.lua,
+        # whose defaults say what such a section is called.
+        - at: pre-ast
+          path: abstractsection.lua
+        # APA does not label the introduction, so a heading that does is taken
+        # out. Runs after abstractsection.lua, which may have left the
+        # Introduction heading first in the body.
+        - at: pre-ast
+          path: introductionheading.lua
+        # Recover the apa-note of a plain markdown table before quarto
+        # flattens it
+        - at: pre-ast
+          path: apatablenote.lua
+        # Prepare plain markdown tables to be used by crossrefprefix.lua
+        - at: pre-ast
+          path: markdowntable.lua
+        # Give figures and tables appendix prefixes
+        - at: pre-ast
+          path: crossrefprefix.lua
+        # Move figures and tables to end of document
+        - at: pre-ast
+          path: apafloatstoend.lua
+        # Mark apa-twocolumn floats (and capture table notes) AFTER float
+        # placement but before Quarto realizes markdown tables, so the marker
+        # stays adjacent to a float that floatsintext: false has moved to the end.
+        - at: pre-ast
+          path: apatwocolumntypstcollect.lua
+ 
+        # Put papersize in the form the latex document class wants
+        - at: pre-ast
+          path: apapapersize.lua
+        # Make appendices citable with apx prefix
+        - at: pre-ast
+          path: apaciteappendix.lua
+        # Add a refs div if it was omitted.
+        - at: pre-ast
+          path: apaomitrefsdiv.lua
+        # Finds citations to be masked and converts them to masked citations
+        - at: post-ast
+          path: apamasked.lua
+        # Formats headers properly
+        - at: pre-quarto
+          path: apaheader.lua
+        # Formats title and authors
+        - at: pre-quarto
+          path: apastriptitle.lua
+        # Word count
+        - at: pre-quarto
+          path: wordcount.lua
+        # Formats title page, abstract (all except latex)
+        - at: pre-quarto
+          path: frontmatter.lua
+        # Formats multi-paragraph quotes
+        - at: pre-quarto
+          path: apaquote.lua
+        # Inserts appendix prefixes to tables and figures
+        - at: pre-quarto
+          path: apafigtblappendix.lua
+        - at: post-quarto
+          path: floatwithsubfigure.lua
+        # Set figures and tables the APA way in latex
+        - at: post-quarto
+          path: floatlatex.lua
+        # Tell latex if there is one author and/or one affiliation
+        - at: post-quarto
+          path: apaoneauthoraffiliation.lua
+        # Removes surrounding table environment for docx figures and tables
+        - at: post-render
+          path: apaextractfigure.lua
+        # Recovers the apa-note of a figure or table brought in by an embed
+        - at: post-render
+          path: embednote.lua
+        # Formats notes below figures and tables (docx, html, typst)
+        - at: post-render
+          path: apanote.lua
+        # Adds styles to figures and tables 
+        - at: post-render
+          path: apafloat.lua
+        # A panel's note is set apart from the note of the whole figure
+        - at: post-render
+          path: subpanelnote.lua
+        # Formats captions for figures and tables 
+        - at: post-render
+          path: apacaption.lua
+        # Puts proper spacing for paragraphs after figures and tables
+        - at: post-render
+          path: apaafternote.lua
+        # Set a multipanel figure the APA way in .docx
+        - at: post-render
+          path: docxlayout.lua
+        # Span apa-twocolumn figures across both columns in typst journal mode
+        - at: post-render
+          path: apatwocolumntypst.lua
+        # Process citations, adds asterisks for meta-analysis citations
+        - at: post-render
+          path: citeprocr.lua
+        # Process APA in-text citations (ampersand to and, possessive citation)
+        - at: post-render
+          path: apaandcite.lua
+        # Turn the blocks the filters above produced into latex. Last, so
+        # that everything it writes out has been built by then.
+        - at: post-render
+          path: formatlatex.lua
+        # Warn when a pdf standard cannot work with the document's tables
+        - at: post-render
+          path: apapdfstandard.lua
+    native: default
+    html:
+      filters:
+        # Place tinytable tables with tbl-align, left by default
+        - at: post-quarto
+          path: apatinytablehtml.lua
+      toc: true
+      toc-location: left
+      anchor-sections: false
+      fig-cap-location: top
+      html-math-method: katex
+      # An {{< embed other.qmd#fig-x >}} makes quarto render the source
+      # document a second time, from a copy it writes to .quarto/embed, to
+      # build a standalone preview page for the "Source:" link. That render
+      # resolves the theme against .quarto/embed rather than the project, so
+      # it cannot find _extensions/apaquarto/apa.scss ("Theme file not found")
+      # and falls back to stock bootstrap -- a preview page with none of this
+      # format's styling. The embedded output itself is unaffected: it is
+      # inlined into the article, which has the theme. Turning the preview off
+      # drops the warning and the unstyled page; set notebook-view: true to
+      # get the "Source:" link back.
+      notebook-view: false
+      mainfont: Times, Times New Roman, serif
+      monofont: Consolas, Lucida Console, Courier New, monospace
+      grid: 
+        body-width: "7in"
+      css: apa.css
+      theme: 
+        - apa.scss
+      template-partials:
+        - title-block.html
+      knitr: 
+        opts_chunk: 
+          dev: svglite
+    pdf:
+      # Plain latex. There is no apa7 class here: the title page, the
+      # headings, the running head and the notes below floats arrive as
+      # ordinary blocks from the same filters that build the .html, the .docx
+      # and the typst, and latex is asked only to set them. apalatex.tex is
+      # the page of definitions that says how, and quarto's own pdf template
+      # is used unmodified.
+      #
+      # This was a second format, apaquarto-latex-pdf, while it was being
+      # written. It is the pdf format now and that one is gone.
+
+      # APA asks for a serif face of ordinary weight and names Times New
+      # Roman first. TeX Gyre Termes is metrically the same face and ships
+      # with every TeX distribution, so a document sets the same lines on a
+      # machine that has no Times New Roman -- a linux box, or CI.
+      #
+      # The engine is lualatex, so quarto's template loads fontspec and
+      # unicode-math and the face is asked for by name.
+      #
+      # Text only. newtxtext and newtxmath, the usual way of getting Times
+      # into a latex document, are written for pdflatex: newtxmath sets up
+      # math the traditional way and clashes with the unicode-math the
+      # template loads, and nothing here can unload it. Math is left to
+      # unicode-math's own default, Latin Modern Math, which every
+      # distribution has. Setting mathfont to "TeX Gyre Termes Math" beside
+      # this would match the math to the text, at the cost of a font package
+      # (tex-gyre-math) that is not installed by default.
+      mainfont: "TeX Gyre Termes"
+      # The first page's title, byline, sidebar and labels are set in a
+      # grotesque, the way the journals set theirs. TeX Gyre Heros is
+      # Helvetica's metrics and ships in the same package as Termes.
+      sansfont: "TeX Gyre Heros"
+      # 26 September 2026, the way the journals print a date.
+      date-format: "D MMMM YYYY"
+
+      documentclass: article
+      classoption:
+        - 12pt
+      pdf-engine: lualatex
+      papersize: a4
+      geometry:
+        - margin=1in
+      indent: true
+      colorlinks: true
+      linkcolor: blue
+      citecolor: blue
+      urlcolor: blue
+      number-sections: false
+      # A preprint is a published-looking article: two columns, the
+      # journal-style first page. documentmode: man still gives a manuscript.
+      documentmode: jou
+      # Line numbers in the margin of the article, as a preprint under review
+      # carries them. numbered-lines: false turns them off.
+      numbered-lines: true
+      include-in-header:
+        - apalatex.tex
+        - apaquasi.tex
+      knitr:
+        opts_chunk:
+          dev: ragg_png
+    docx: 
+      reference-doc: apaquarto.docx
+      filters: 
+        # Add custom styles to docx
+        - at: post-quarto
+          path: docxstyler.lua
+        # Set code listings flush left in docx rather than centered
+        - at: post-quarto
+          path: docxlisting.lua
+        # Format Latex symbol
+        - at: post-render
+          path: docxformatlatexsymbol.lua
+        # Set the docx fonts and page size from the mainfont, monofont
+        # and papersize options
+        - at: post-render
+          path: docxreferencedoc.lua
+      knitr: 
+        opts_chunk: 
+          dev: ragg_png
+    typst:
+      # Draw R figures with svglite, as the .html format does.
+      #
+      # Quarto leaves typst on R's own svg device, which draws through cairo,
+      # and cairo on macos is part of XQuartz. A machine without XQuartz has no
+      # working svg device, and a render stops in the first chunk that draws
+      # anything with "dev.control() called without an open graphics device"
+      # under a wall of dlopen failures for libSM and libXrender. svglite
+      # writes the same svg without cairo, so the figures no longer depend on
+      # what the machine has under /opt/X11. The picture is the same and its
+      # text stays text in the .pdf rather than being flattened to outlines.
+      knitr:
+        opts_chunk:
+          dev: svglite
+      # One column, two columns, or auto to let the length of the note
+      # decide. Journal mode only; the other modes do not float the
+      # author note.
+      author-note-columns: auto
+      filters: 
+        # Process typst-specific styles
+        - at: post-quarto
+          path: typst/formattypst.lua
+      template-partials:
+        - typst/typst-template.typ
+        - typst/typst-show.typ
+      format-resources:
+        - apa.csl

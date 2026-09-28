@@ -264,6 +264,73 @@ igc_models <- list(
   gam_lnr_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
     formula = function() igc_models$gam_lnr$formula()
+  ),
+
+  gam_ddm4_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_ddm4$formula()
+  ),
+
+  gam_lnr6_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_lnr6$formula()
+  ),
+
+  gam_ddm5_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_ddm5$formula()
+  ),
+
+  gam_rdm_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_rdm$formula()
+  ),
+
+  gam_rdm5_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_rdm5$formula()
+  ),
+
+  gam_lba_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = function() igc_models$gam_lba$formula()
+  ),
+
+  # Ebbinghaus: nothing fitted to it yet (2026-09-28), so smoke-test one of
+  # these before submitting the lot (submit_remaining.sh does).
+  gam_lnr_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = function() igc_models$gam_lnr$formula()
+  ),
+
+  gam_lnr6_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = function() igc_models$gam_lnr6$formula()
+  ),
+
+  gam_ddm4_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = function() igc_models$gam_ddm4$formula()
+  ),
+
+  gam_ddm5_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = function() igc_models$gam_ddm5$formula()
+  ),
+
+  gam_rdm_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = function() igc_models$gam_rdm$formula()
+  ),
+
+  gam_rdm5_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = function() igc_models$gam_rdm5$formula()
+  ),
+
+  gam_lba_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = function() igc_models$gam_lba$formula()
   )
 )
 

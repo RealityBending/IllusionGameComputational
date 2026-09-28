@@ -5,7 +5,7 @@
 #   ./hpc install all      force-reinstall everything
 #
 # The CmdStanR module already ships mgcv / brms / cmdstanr / dplyr; this only
-# adds what it doesn't (datawizard, cogmod) plus their dependencies, and a
+# adds what it doesn't (datawizard, modelbased, cogmod) plus their dependencies, and a
 # newer cmdstanr.
 
 lib <- Sys.getenv("IGC_R_LIBS", unset = file.path(
@@ -76,7 +76,10 @@ if (requireNamespace("cmdstanr", quietly = TRUE)) {
 ")
 }
 
-for (p in c("remotes", "insight", "datawizard", "bayestestR")) {
+# modelbased (and parameters, which it imports) is for predict_model.R, which
+# computes the parameter curves and heatmaps with estimate_relation() /
+# estimate_prediction(); the fits themselves do not need it.
+for (p in c("remotes", "insight", "datawizard", "bayestestR", "parameters", "modelbased")) {
   if (need(p) || forced(p)) {
     cat("installing", p, "\n")
     install.packages(p, lib = lib, repos = repos)
@@ -99,7 +102,7 @@ if (need("cogmod") || forced("cogmod") ||
 }
 
 cat("=== FINAL CHECK ===\n")
-for (p in c("mgcv", "brms", "cmdstanr", "dplyr", "datawizard", "cogmod")) {
+for (p in c("mgcv", "brms", "cmdstanr", "dplyr", "datawizard", "modelbased", "cogmod")) {
   cat(sprintf(
     "%-11s %s", p,
     tryCatch(paste("OK", packageVersion(p)), error = function(e) "MISSING")

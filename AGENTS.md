@@ -57,6 +57,12 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   cluster; the other cluster-wide rules (few SSH connections, nothing deleted
   without approval, ...) are in the hub's `README.md`.
 - `analysis/models/` is gitignored; fitted `.rds` files are not committed.
+- **`1_modelcomparison.qmd` does not load fits.** It plots the prediction files
+  that `./hpc predict <model>` writes (README → "Predictions for the model
+  comparison"). Anything it computes from a fit belongs in
+  `analysis/server/predictions.R`, which the qmd and the cluster job share;
+  the qmd itself only relabels and plots. Bump `igc_predictions_version` when
+  the structure of what that file returns changes.
 
 ## Two ways to fit more than one model at a time
 

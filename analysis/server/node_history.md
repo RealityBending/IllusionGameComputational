@@ -41,22 +41,36 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_ddm4 | 11403693 | 2 | rtx-00 | zen5 | done | 25.3 h |
 | gam_ddm4 | 11403693 | 3 | rtx-00 | zen5 | done | 38.6 h |
 | gam_ddm4 | 11403693 | 4 | rtx-00 | zen5 | done | 32.2 h |
-| gam_ddm4 | 11403693 | 1 | general-02 | virtual | still running at 1300/1500 | 72.7 h |
+| gam_ddm4 | 11403693 | 1 | general-02 | virtual | done | 82.6 h |
 | gam_ddm5 | 11404322 | 1 | rtx-02 | zen5 | done | 33.5 h |
-| gam_ddm5 | 11404322 | 2-4 | a40-11 | zen3 | still running at 700-1200/1500 | 59.3 h |
+| gam_ddm5 | 11404322 | 3 | a40-11 | zen3 | done | 76.6 h |
+| gam_ddm5 | 11404322 | 2 | a40-11 | zen3 | done | 116.5 h |
+| gam_ddm5 | 11404322 | 4 | a40-11 | zen3 | done | 137.1 h |
 | gam_lnr6 | 11406608 | 5 | a40-02 | zen3 | **cancelled at 200/1500** | 38.6 h |
-| gam_lnr6 | 11410717 | 6 | rtx-01 | zen5 (`--constraint`) | running, started 2026-09-24 | |
+| gam_lnr6 | 11410717 | 6 | rtx-01 | zen5 (`--constraint`) | running, 1400-1500/1500 after 82 h (2026-09-28) | |
+| gam_lnr_verticalhorizontal | 11411625 | 1 | rtx-00 | zen5 (`--constraint`) | done | 17.5 h |
+| gam_lnr_verticalhorizontal | 11411625 | 2 | rtx-00 | zen5 (`--constraint`) | done | 20.6 h |
+| gam_lnr_verticalhorizontal | 11411625 | 3 | rtx-00 | zen5 (`--constraint`) | done | 20.7 h |
+| gam_lnr_verticalhorizontal | 11411625 | 4 | rtx-02 | zen5 (`--constraint`) | done | 14.5 h |
+| gam_ddm4_verticalhorizontal | 11414141 | 1 | rtx-00 | zen5 (`--constraint`) | done | 26.7 h |
+| gam_ddm4_verticalhorizontal | 11414141 | 2 | rtx-01 | zen5 (`--constraint`) | done | 17.8 h |
+| gam_ddm4_verticalhorizontal | 11414141 | 3 | rtx-01 | zen5 (`--constraint`) | done | 21.4 h |
+| gam_ddm4_verticalhorizontal | 11414141 | 4 | rtx-01 | zen5 (`--constraint`) | done | 20.1 h |
 
-## What it says so far (2026-09-24)
+## What it says so far (updated 2026-09-26)
 
 - **Every zen5 (`rtx`) shard finished, and every slow shard was on something
   else.** The cleanest evidence compares shards *within the same array*, which
   share the code, data and submission time and differ only in the node:
   - gam_lnr6 11399603: 71-86 h on rtx-01; the a40-11 shard had done a third
     of its iterations after 108 h, so it was roughly 4x slower.
-  - gam_ddm5 11404322: 33.5 h on rtx-02; after 59 h the a40-11 shards are
-    still 47-80% of the way through.
-  - gam_ddm4 11403693: 25-39 h on rtx-00; general-02 took about 2x as long.
+  - gam_ddm5 11404322: 33.5 h on rtx-02 against 76.6 h for the first a40-11
+    shard to finish (2.3x); the other two a40-11 shards were
+    two-thirds of the way through after 80 h.
+  - gam_ddm4 11403693: 25-39 h on rtx-00 against 82.6 h on general-02 (2-3x).
+  - gam_lnr6 shard 6 (rtx-01, zen5) reached iteration 300 in 21 h and 600
+    in 34 h. Shard 4 (a40-11, zen3) took about 56 h to reach 300, and shard 5
+    (a40-02) 17 h for its first 100.
 - The backup gam_lnr6 shard on a40-02 (zen3, lightly loaded) was as slow as
   the one on a40-11, so the slowdown looks like the CPU generation rather than
   one overloaded node.

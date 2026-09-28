@@ -15,7 +15,9 @@ code, submit, watch, pull results — over SSH.
 
 **One job fits one model.** `models.R` is the registry of what a model *is*;
 `./hpc fit <model>` submits an array for it, each array task writing one shard;
-`./hpc combine <model>` merges that model's shards into a single fit.
+`./hpc combine <model>` merges that model's shards into a single fit;
+`./hpc predict <model>` turns that fit into the few MB of results that
+`1_modelcomparison.qmd` plots.
 
 ## The cluster, and one-time setup
 
@@ -28,7 +30,7 @@ This project's directories on the cluster:
 
 | path | use |
 | --- | --- |
-| `/mnt/lustre/users/<group>/<user>/IGComputational/` | code, `models/` (shards), `models/combined/` |
+| `/mnt/lustre/users/<group>/<user>/IGComputational/` | code, `models/` (shards), `models/combined/`, `models/predictions/` |
 | `/mnt/lustre/scratch/<group>/<user>/IGComputational/` | job logs (`fit_<model>_<job>_<task>.out`) |
 
 Once per account, for this project:
@@ -53,6 +55,8 @@ cd analysis/server
 ./hpc ls                   # fitted .rds on the cluster
 ./hpc combine gam_lnr      # merge its shards and add loo (shards are kept)
 ./hpc pull                 # bring combined fits into analysis/models/
+./hpc predict gam_lnr      # posterior predictions of the combined fit
+./hpc pull predictions     # -> analysis/models/predictions/
 ```
 
 `push` **mirrors** rather than merges: a top-level `*.R` / `*.slurm` on the
@@ -159,6 +163,88 @@ says — which silently saved the *combined* fit over shard 1, after which the
 mini merged that with shard 2 and came out larger than the full fit. Found on
 2026-09-18 by running `combine` against real shards for the first time.
 
+## Predictions for the model comparison
+
+Everything in `1_modelcomparison.qmd` that needs a fitted model — sampling
+efficiency, `loo`, the posterior predictive check, the parameter curves and
+the heatmaps — is computed by `predictions.R`, which the qmd and the cluster
+share. On the cluster:
+
+```bash
+./hpc push                                  # predictions.R is shared with the qmd: push after editing it
+./hpc predict gam_lnr                       # one job per model, reads combined/<model>_<illusion>.rds
+./hpc predict gam_lnr --dependency=afterok:<combine job id>   # or queue it behind its combine
+./hpc pull predictions                      # predictions/*.rds -> analysis/models/predictions/
+./hpc pull 'predictions/gam_rdm_*.rds'      # just some: still lands in predictions/, never next to the fit
+```
+
+Each writes `models/predictions/<model>_<illusion>.rds`, ~20 MB (almost all of
+it `loo`'s pointwise matrix, which `loo_compare()` needs), and the qmd
+reads only those: it never loads a fit, so it no longer slows down or runs out
+of memory as models and illusions are added. A model with no prediction file
+but a fit in `analysis/models/` has its predictions computed locally, as a
+fallback, **only if the local brms is the one that fitted it** (2.21.0 for
+every fit so far) — otherwise `run_predictions()` stops, because a newer brms
+predicts these fits wrongly (see below).
+
+The job is `general`, 8 CPUs, 64G: no pointwise log-likelihood as in
+`combine`, just the fit plus predictions over 10k trials and small grids, with
+the components and the parameters forked over the cores. It takes **about
+30 seconds** per model (`gam_rdm`, 2026-09-28).
+
+### Three traps, found 2026-09-28
+
+Until then no prediction job had ever finished on the cluster; the first two
+(`gam_rdm`, `gam_rdm5`) ran over an hour at 100% CPU before being cancelled,
+and every prediction file up to then had been made on a laptop. The test
+scripts are in `tests/predict_speed/` on the cluster.
+
+- **BLAS threads deadlock forked workers.** The module's OpenBLAS runs `%*%`
+  on an OpenMP thread pool that a `fork()`ed child does not inherit. The curves
+  component does a large matrix product (`estimate_prediction()`) and then
+  forks one worker per parameter; each worker's first `%*%` then spins in
+  `sched_yield()` for ever (seen in `gdb`). Heatmaps fork before any BLAS
+  call, which is why they finished. `predict.slurm` now sets
+  `OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1`: the parallelism is the forking,
+  so nothing is lost. Any new `.slurm` that forks R after linear algebra needs
+  the same.
+- **`insight` 1.5.4 invents a `sigma`.** `insight::find_auxiliary()` from CRAN
+  adds `"sigma"` to every cogmod family, which has none, and
+  `estimate_relation()` then fails on it (fixed in insight's development
+  version, 1.5.4.1). `predict_parameters()` now takes the parameters from brms
+  (`brmsterms()$dpars`) instead, so it no longer depends on insight for this.
+- **brms 2.23.1 mispredicts fits made with 2.21.0.** Same draws, same smooth
+  design matrices, and still a different `mu` on the training rows
+  (correlation 0.67 with 2.21.0's, on `gam_rdm`); its error-rate curves come
+  out roughly inverted along illusion difference — correlation 0.26–0.30 with
+  the observed error rates, against 0.98 for the cluster's. The same fit under
+  brms 2.21.0 on the same laptop matches the cluster to 1e-15, so it is brms,
+  not R, mgcv or the BLAS. Nothing errors, so `run_predictions()` now refuses a
+  brms other than `m$version$brms`, records it in `$meta$fit_brms`, and
+  `igc_predictions_version` went to 2, which retires every file made before
+  (all of them laptop-made with 2.23.1, and wrong). **Predict on the cluster.**
+
+**Re-run `predict` whenever its input changes** — a model re-combined, or
+anything in `predictions.R` that changes the output (`plot_ranges`, the grid
+sizes, the settings). The qmd warns when a prediction file was made from a fit
+of another size than the one it has locally, or over another `plot_ranges`,
+and refuses a file whose format version (`igc_predictions_version`) is not its
+own. To recompute one, re-run `./hpc predict` and `./hpc pull predictions`.
+
+The settings (draws, trials, grid sizes, seed) are `igc_prediction_settings()`
+in `predictions.R`, and are stored in each file's `$meta`. Override one per run
+by its name in capitals:
+
+```bash
+IGC_PRED_CURVES_ITERATIONS=2000 IGC_PRED_PPC_NDRAWS=1000 ./hpc predict gam_lnr
+```
+
+The job needs `modelbased`, which `install_pkgs.R` has installed only since
+predictions moved to the cluster (2026-09-25): run `./hpc install` once. If
+`modelbased` refuses to load because an older `insight` / `datawizard` /
+`bayestestR` is already in the library, force those too:
+`./hpc install insight datawizard bayestestR parameters modelbased`.
+
 ## Models
 
 `models.R` holds one entry per model: the illusion it is fitted to and a
@@ -180,6 +266,7 @@ Every model is fitted to **MullerLyer** unless its row says otherwise.
 | `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — |
 | `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` |
 | `gam_lnr_verticalhorizontal` | `cogmod_lnr()` | as `gam_lnr` | `sigmabias = 0` | fitted to **VerticalHorizontal**; see [Running models on other illusions](#running-models-on-other-illusions) |
+| `gam_ddm4_verticalhorizontal` | `cogmod_ddm()` | as `gam_ddm4` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 | fitted to **VerticalHorizontal** |
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =
 c("cr", "cr")) + (1 | Participant)`; `poutlier` is `1 + (1 | Participant)`.
@@ -252,7 +339,8 @@ formula instead of copying it, so the two cannot drift apart:
   ),
 ```
 
-That is the only one so far (added 2026-09-24). To add another, copy it, change
+There are two so far: `gam_lnr_verticalhorizontal` (added 2026-09-24) and
+`gam_ddm4_verticalhorizontal` (added 2026-09-27). To add another, copy it, change
 the model in both the name and `igc_models$<model>`, set `illusion`, and commit
 it before anyone submits it. Write each entry out in full: generating them in a
 loop would hide them from `./hpc`, which reads model names straight out of the
@@ -528,7 +616,7 @@ belt and braces.
 
 | file | role |
 | --- | --- |
-| `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/queue/log/ls/pull/cancel/sh |
+| `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/predict/queue/log/ls/pull/cancel/sh |
 | `install_pkgs.R` | builds the project R library (`./hpc install`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model |
@@ -536,6 +624,9 @@ belt and braces.
 | `fit.slurm` | array job for the above |
 | `combine_model.R` | merges one model's shards, adds `loo`, keeps them |
 | `combine.slurm` | job for the above |
+| `predictions.R` | everything the model comparison computes from a fit — **shared with `1_modelcomparison.qmd`** |
+| `predict_model.R` | runs `predictions.R` on one combined model (`./hpc predict`) |
+| `predict.slurm` | job for the above |
 | `AGENT.md` | the measurements and the traps — read before changing settings |
 | `cogmod_inits_issue.md` | the cold-start init failures and their root cause |
 | `cogmod_ddm_cost_issue.md` | why `gam_ddm7` is 55x dearer per gradient, and the cogmod fix for it |

@@ -26,51 +26,12 @@ library(patchwork)
 library(ggside)
 library(ggdist)
 
-restore_units <- function(df, illusion = NULL) {
-  if(!is.null(illusion)) df$Illusion_Type <- illusion
-  df <- df |> 
-    mutate(
-      # Inverse of fit_model.R's normalisation. Difference is on [-1, 1] with 0
-      # at the per-illusion mid-point difficulty (2026-09-20); a fit made before
-      # that is on [0, 1] and cannot be read with this function. The bounds are
-      # the observed per-illusion min/max of abs(Illusion_Difference) -- the
-      # Ebbinghaus min (0.05, not 0.07) and the VerticalHorizontal max (0.30,
-      # not 0.24) were wrong until 2026-09-20.
-      Illusion_Difference = case_when(
-        Illusion_Type == "MullerLyer" ~ (Illusion_DifferenceZ + 1) / 2 * (0.46 - 0.04) + 0.04,
-        Illusion_Type == "Ebbinghaus" ~ (Illusion_DifferenceZ + 1) / 2 * (0.70 - 0.05) + 0.05,
-        Illusion_Type == "VerticalHorizontal" ~ (Illusion_DifferenceZ + 1) / 2 * (0.30 - 0.03) + 0.03,
-        .default = NA
-      ),
-      Illusion_Strength = case_when(
-        Illusion_Type == "MullerLyer" ~ Illusion_StrengthZ * 49,
-        Illusion_Type == "Ebbinghaus" ~ Illusion_StrengthZ * 2.03,
-        Illusion_Type == "VerticalHorizontal" ~ Illusion_StrengthZ * 66.50,
-        .default = NA
-      )
-  )
-}
-
-# Inverse of restore_units(): raw units -> the Z scale the models were fitted
-# on, e.g. to build a prediction grid over a custom range. The bounds must match
-# those of restore_units(). A lookup by name rather than case_when(), which no
-# longer accepts a single `type` against a vector `x` (deprecated in dplyr
-# 1.2.0); this way `type` can be one illusion or one per value of `x`, and an
-# unknown illusion gives NA.
-normalize_units <- function(x, type = "MullerLyer", what = "Strength") {
-  what <- match.arg(what, c("Strength", "Difference"))
-  if (what == "Strength") {
-    scale <- c(MullerLyer = 49, Ebbinghaus = 2.03, VerticalHorizontal = 66.50)[type]
-    unname(x / scale)
-  } else {
-    # The models only see the size of the difference, not its side
-    # (fit_model.R takes abs() before normalising), so neither does this
-    x <- abs(x)
-    lo <- c(MullerLyer = 0.04, Ebbinghaus = 0.05, VerticalHorizontal = 0.03)[type]
-    hi <- c(MullerLyer = 0.46, Ebbinghaus = 0.70, VerticalHorizontal = 0.30)[type]
-    unname((x - lo) / (hi - lo) * 2 - 1)
-  }
-}
+# Everything that needs a fitted model -- the units, the prediction grid, and
+# the predictions themselves -- is in server/predictions.R, shared with the
+# cluster job that runs it (`./hpc predict <model>`, then `./hpc pull
+# predictions`). This script only reads its results, relabels them and plots,
+# so it never has to hold the fits in memory.
+source(if (dir.exists("server")) "server/predictions.R" else "analysis/server/predictions.R")
 ```
 
 
@@ -81,10 +42,13 @@ normalize_units <- function(x, type = "MullerLyer", what = "Strength") {
 # path <- "C:/Users/olive/Documents/"
 path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
 
+pred_path <- paste0(path, "predictions/")
+
 # A fit does not know which illusion it was fitted to: its data only has the
 # Z-scored predictors, and combine_model.R drops $file. The file name is the one
 # place it is recorded (<model>_<illusion>[_suffix].rds), so it is attached to
-# the fit here, for model_illusion() below.
+# the fit here, for model_illusion(). Only needed to compute predictions
+# locally (see load_predictions() below).
 load_fit <- function(file) {
   illusion <- regmatches(file, regexpr("MullerLyer|Ebbinghaus|VerticalHorizontal", file))
   if (length(illusion) == 0) stop("No illusion in the file name: ", file)
@@ -92,18 +56,81 @@ load_fit <- function(file) {
   attr(m, "illusion") <- illusion
   m
 }
-gam_lnr_muller <- load_fit("gam_lnr_MullerLyer.rds")
-gam_lnr6_muller <- load_fit("gam_lnr6_MullerLyer.rds")
-gam_ddm4_muller <- load_fit("gam_ddm4_MullerLyer.rds")
 
-# The models to compare, in the order they should appear in the plots below.
-# Everything downstream loops over this list, so adding a model here is the only
-# change needed to get it into the predictive check, the curves and the heatmaps.
+# The results of server/predictions.R for one model, from
+# models/predictions/<name>.rds as written by `./hpc predict` and fetched by
+# `./hpc pull predictions`. A model with no such file but a fit in models/ has
+# them computed here instead, once, and saved to the same place -- slow, and it
+# loads the fit, but it means a fit pulled without its predictions still works.
+# Delete a prediction file to have it recomputed.
+load_predictions <- function(name) {
+  file <- paste0(pred_path, name, ".rds")
+  fit_file <- paste0(path, name, ".rds")
+  if (!file.exists(file)) {
+    if (!file.exists(fit_file)) {
+      stop("No predictions and no fit for ", name, ": run `./hpc predict ",
+           sub("_[^_]+$", "", name), "` and `./hpc pull predictions`.")
+    }
+    message("No predictions for ", name, ": computing them from the local fit (slow).")
+    fit <- load_fit(basename(fit_file))
+    rez <- run_predictions(fit, name, fit_file = fit_file)
+    rm(fit)
+    gc()
+    dir.create(pred_path, showWarnings = FALSE)
+    saveRDS(rez, file)
+  }
+  rez <- readRDS(file)
+
+  if (!identical(rez$meta$version, igc_predictions_version)) {
+    stop(name, ": the predictions are format ", rez$meta$version, " and this script reads ",
+         igc_predictions_version, ". Re-run `./hpc predict`, or delete ", file,
+         " to recompute locally.")
+  }
+  # A fit re-combined or re-fitted since. The size is compared rather than the
+  # time, which a copy does not always keep.
+  if (file.exists(fit_file) && !identical(file.size(fit_file), rez$meta$fit_size)) {
+    warning(name, ": the predictions were made from another fit than models/", basename(fit_file),
+            ". Re-run `./hpc predict`, or delete ", file, " to recompute locally.")
+  }
+  if (!identical(plot_ranges[[rez$meta$illusion]], rez$meta$plot_range)) {
+    warning(name, ": plot_ranges has changed since the predictions were made.")
+  }
+  rez
+}
+
+# The models to compare, per illusion, by file name, in the order they should
+# appear in the plots below. Every section has one tab per illusion, and
+# everything in a tab loops over that illusion's list, so adding a model here is
+# the only change needed to get it into the predictive check, the curves and the
+# heatmaps. Adding an illusion takes an entry here and a tab in each section.
 models <- list(
-  "LNR" = gam_lnr_muller,
-  "LNR-6" = gam_lnr6_muller,
-  "DDM-4" = gam_ddm4_muller
+  MullerLyer = c(
+    "LNR" = "gam_lnr_MullerLyer",
+    "LNR-6" = "gam_lnr6_MullerLyer",
+    "DDM-4" = "gam_ddm4_MullerLyer",
+    "DDM-5" = "gam_ddm5_MullerLyer",
+    "RDM" = "gam_rdm_MullerLyer",
+    "RDM-5" = "gam_rdm5_MullerLyer"
+  ),
+  VerticalHorizontal = c(
+    "LNR" = "gam_lnr_verticalhorizontal_VerticalHorizontal",
+    "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal"
+  )
 )
+
+# A model with neither predictions nor a fit yet (still running on the
+# cluster, say) is left out of its tab rather than stopping the whole render
+models <- lapply(models, function(m) {
+  here <- file.exists(paste0(pred_path, m, ".rds")) | file.exists(paste0(path, m, ".rds"))
+  if (any(!here)) message("Not available yet, skipped: ", paste(m[!here], collapse = ", "))
+  m[here]
+})
+preds <- lapply(models, \(m) lapply(m, load_predictions))
+
+# One colour per model, whatever the illusion, so a model looks the same in
+# every tab
+model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#212121", "DDM-4" = "#FB8C00", "DDM-5" = "#6D4C41",
+                  "RDM" = "#43A047", "RDM-5" = "#1B5E20")
 ```
 
 ```{r}
@@ -124,85 +151,53 @@ models <- list(
 ## Computational Cost
 
 ```{r}
-#| fig-width: 8
-#| fig-height: 5
-
-# Sampling efficiency: bulk effective sample size per hour of sampling wall
-# clock, computed chain by chain so that the spread across chains is visible.
-# Only the population-level parameters are counted (the smooth coefficients,
-# their SDs and the group-level SDs): the thousands of participant offsets would
-# otherwise dominate the average and say more about the data than the sampler.
-data_efficiency <- function(m, pars = "^b_|^bs_|^sd_|^sds_") {
-  draws <- posterior::as_draws_array(m, variable = pars, regex = TRUE)
-  # Time per chain. Efficiency is per hour of *sampling*, the usual
-  # convention, but what one actually waits for is warmup + sampling, so both
-  # are kept. This is wall clock, so it is only comparable between fits of the
-  # same data with the same number of threads per chain - hence those are
-  # carried along too and printed under the plot.
-  time <- rstan::get_elapsed_time(m$fit)
-  threads <- as.numeric(m$fit@stan_args[[1]]$num_threads)
-
-  purrr::map_dfr(seq_len(posterior::nchains(draws)), function(chain) {
-    # Parameters that were fixed rather than estimated (sigmadrift = 0 and the
-    # like) have no effective sample size, hence the na.rm
-    ess <- posterior::summarise_draws(
-      posterior::subset_draws(draws, chain = chain),
-      ess_bulk = posterior::ess_bulk
-    )$ess_bulk
-    data.frame(
-      Chain = chain,
-      ESS = mean(ess, na.rm = TRUE),
-      Time_warmup = time[[chain, "warmup"]],
-      Time_sample = time[[chain, "sample"]],
-      Time_total = time[[chain, "warmup"]] + time[[chain, "sample"]],
-      # get_elapsed_time() is in seconds
-      ESS_per_hour = mean(ess, na.rm = TRUE) / (time[[chain, "sample"]] / 3600),
-      Threads = if (length(threads) == 1) threads else NA_real_,
-      N = stats::nobs(m)
-    )
-  })
+# Sampling efficiency: bulk ESS per hour of sampling, chain by chain (see
+# compute_efficiency() in server/predictions.R for what is counted)
+tidy_efficiency <- function(preds) {
+  purrr::imap_dfr(preds, \(p, name) mutate(p$efficiency, Model = name)) |>
+    mutate(Model = factor(Model, levels = names(preds)))
 }
 
-efficiency <- purrr::imap_dfr(models, \(m, name) mutate(data_efficiency(m), Model = name)) |>
-  mutate(Model = factor(Model, levels = names(models)))
+plot_efficiency <- function(preds) {
+  efficiency <- tidy_efficiency(preds)
 
-# Model-level summary: the chains of a model average to one point
-efficiency_means <- efficiency |>
-  summarise(.by = Model,
-            ESS_per_hour = mean(ESS_per_hour),
-            Time_total = mean(Time_total))
+  # Model-level summary: the chains of a model average to one point
+  efficiency_means <- efficiency |>
+    summarise(.by = Model,
+              ESS_per_hour = mean(ESS_per_hour),
+              Time_total = mean(Time_total))
 
-# What each fit was: two models are only comparable here if these match
-caption <- efficiency |>
-  summarise(.by = Model,
-            label = sprintf("%s: %d chains, %g threads/chain, n = %s",
-                            first(Model), n(), first(Threads),
-                            format(first(N), big.mark = ","))) |>
-  pull(label) |>
-  paste(collapse = "\n")
+  # What each fit was: two models are only comparable here if these match
+  caption <- efficiency |>
+    summarise(.by = Model,
+              label = sprintf("%s: %d chains, %g threads/chain, n = %s",
+                              first(Model), n(), first(Threads),
+                              format(first(N), big.mark = ","))) |>
+    pull(label) |>
+    paste(collapse = "\n")
 
-efficiency |>
-  ggplot(aes(x = ESS_per_hour, y = Time_total / 3600, colour = Model)) +
-  # One point per chain, and the model's mean on top of them
-  geom_point(size = 2.5, alpha = 0.35) +
-  geom_point(data = efficiency_means, size = 5, shape = 18) +
-  # Both axes log: families differ in cost per gradient by orders of magnitude
-  # (the DDM's numerical quadrature is 55x, see cogmod_ddm_cost_issue.md), and
-  # on a linear axis the cheap ones collapse onto the origin
-  scale_x_log10() +
-  scale_y_log10() +
-  labs(
-    x = "Effective sample size per hour of sampling (bulk ESS / h, log)",
-    y = "Wall clock per chain, warmup included (hours, log)",
-    title = "Computational cost",
-    subtitle = "One point per chain, diamond is the model's mean. Bottom right is cheap and efficient.",
-    caption = caption
-  ) +
-  theme_minimal() +
-  theme(plot.caption = element_text(hjust = 0, colour = "grey40"))
-```
+  efficiency |>
+    ggplot(aes(x = ESS_per_hour, y = Time_total / 3600, colour = Model)) +
+    # One point per chain, and the model's mean on top of them
+    geom_point(size = 2.5, alpha = 0.35) +
+    geom_point(data = efficiency_means, size = 5, shape = 18) +
+    # Both axes log: families differ in cost per gradient by orders of magnitude
+    # (the DDM's numerical quadrature is 55x, see cogmod_ddm_cost_issue.md), and
+    # on a linear axis the cheap ones collapse onto the origin
+    scale_x_log10() +
+    scale_y_log10() +
+    scale_colour_manual(values = model_colors) +
+    labs(
+      x = "Effective sample size per hour of sampling (bulk ESS / h, log)",
+      y = "Wall clock per chain, warmup included (hours, log)",
+      title = "Computational cost",
+      subtitle = "One point per chain, diamond is the model's mean. Bottom right is cheap and efficient.",
+      caption = caption
+    ) +
+    theme_minimal() +
+    theme(plot.caption = element_text(hjust = 0, colour = "grey40"))
+}
 
-```{r}
 # Total compute, three ways, for a rough headline number:
 # - Wall clock: the shards of a model run at the same time on the cluster, so
 #   what one waited for is the longest chain (queueing, compilation and the
@@ -213,48 +208,100 @@ efficiency |>
 #   chain threading scales linearly, which is close to what was measured
 #   (4 -> 8 threads halved the time per chain, server/AGENT.md 4.4.1), so read
 #   it as an order of magnitude, not a measurement.
-compute_time <- efficiency |>
-  summarise(.by = Model,
-            Chains = n(),
-            Threads = first(Threads),
-            Cores = n() * first(Threads),
-            Wall = max(Time_total) / 3600,
-            Serial = sum(Time_total) / 3600,
-            SingleCore = sum(Time_total * Threads) / 3600) |>
-  mutate(SingleCore_days = SingleCore / 24,
-         SingleCore_years = SingleCore / (24 * 365.25))
-
-compute_time |>
-  gt::gt(rowname_col = "Model") |>
-  gt::cols_label(
-    Chains = "Chains",
-    Threads = "Threads / chain",
-    Cores = "Cores used",
-    Wall = "Wall clock (h)",
-    Serial = "Chains in sequence (h)",
-    SingleCore = "Single core (h)",
-    SingleCore_days = "Single core (days)",
-    SingleCore_years = "Single core (years)"
-  ) |>
-  gt::fmt_number(columns = c(Wall, Serial, SingleCore, SingleCore_days), decimals = 0) |>
-  gt::fmt_number(columns = SingleCore_years, decimals = 2) |>
-  gt::tab_spanner(label = "Without parallelisation (estimated)",
-                  columns = c(Serial, SingleCore, SingleCore_days, SingleCore_years)) |>
-  gt::tab_source_note("Warmup + sampling only. Single core assumes linear scaling of within-chain threading.")
+table_compute_time <- function(preds) {
+  tidy_efficiency(preds) |>
+    summarise(.by = Model,
+              Chains = n(),
+              Threads = first(Threads),
+              Cores = n() * first(Threads),
+              Wall = max(Time_total) / 3600,
+              Serial = sum(Time_total) / 3600,
+              SingleCore = sum(Time_total * Threads) / 3600) |>
+    mutate(SingleCore_days = SingleCore / 24,
+           SingleCore_years = SingleCore / (24 * 365.25)) |>
+    gt::gt(rowname_col = "Model") |>
+    gt::cols_label(
+      Chains = "Chains",
+      Threads = "Threads / chain",
+      Cores = "Cores used",
+      Wall = "Wall clock (h)",
+      Serial = "Chains in sequence (h)",
+      SingleCore = "Single core (h)",
+      SingleCore_days = "Single core (days)",
+      SingleCore_years = "Single core (years)"
+    ) |>
+    gt::fmt_number(columns = c(Wall, Serial, SingleCore, SingleCore_days), decimals = 0) |>
+    gt::fmt_number(columns = SingleCore_years, decimals = 2) |>
+    gt::tab_spanner(label = "Without parallelisation (estimated)",
+                    columns = c(Serial, SingleCore, SingleCore_days, SingleCore_years)) |>
+    gt::tab_source_note("Warmup + sampling only. Single core assumes linear scaling of within-chain threading.")
+}
 ```
+
+::: {.panel-tabset}
+
+### Muller-Lyer
+
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+plot_efficiency(preds$MullerLyer)
+```
+
+```{r}
+table_compute_time(preds$MullerLyer)
+```
+
+### Vertical-Horizontal
+
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+plot_efficiency(preds$VerticalHorizontal)
+```
+
+```{r}
+table_compute_time(preds$VerticalHorizontal)
+```
+
+:::
 
 
 ## Performance
 
 ```{r}
-# loo was added at combine time and lives in $criteria$loo. A plain list
-# dispatches to loo::loo_compare.default(), which wants 'loo' objects, not
-# brmsfits, so pass those (the list names become the model labels).
-rez_loo <- loo_compare(lapply(models, \(m) m$criteria$loo))
-
-parameters(rez_loo)
-report(rez_loo)
+# loo was added at combine time and lives in the fit's $criteria$loo, which the
+# prediction files carry over. The list names become the model labels.
+# loo_compare() needs two models at least, which an illusion only just started
+# on does not have yet.
+show_loo <- function(preds) {
+  if (length(preds) < 2) {
+    cat("Only one model so far (", names(preds), "): nothing to compare.\n", sep = "")
+    return(invisible(NULL))
+  }
+  rez_loo <- loo_compare(lapply(preds, \(p) p$loo))
+  print(parameters(rez_loo))
+  print(report(rez_loo))
+}
 ```
+
+::: {.panel-tabset}
+
+### Muller-Lyer
+
+```{r}
+show_loo(preds$MullerLyer)
+```
+
+### Vertical-Horizontal
+
+```{r}
+show_loo(preds$VerticalHorizontal)
+```
+
+:::
 
 
 
@@ -262,81 +309,51 @@ report(rez_loo)
 
 
 ```{r}
-#| fig-width: 10
-#| fig-height: 6
+# All models are checked against the same trials: the observed data is taken
+# from the first model's file, so the models must share an illusion. What is
+# predicted, and how, is compute_ppc() in server/predictions.R.
+plot_ppc <- function(preds, rt_range = c(0, 2.5), binwidth = 0.02, n_points = 512) {
 
-plot_ppc <- function(models, observed = NULL, ndraws = 500, n_trials = 10000,
-                     rt_range = c(0, 2.5), binwidth = 0.02, n_points = 512,
-                     model_colors = c("#1E88E5", "#212121", "#FB8C00", "#6D4C41")) {
-
-  if (is.null(names(models))) names(models) <- paste("Model", seq_along(models))
-
-  # All models are checked against the same trials, passed in explicitly
-  if (is.null(observed)) observed <- insight::get_data(models[[1]])
-
-  # The predicted curve is the predictive RT distribution marginal over trials,
-  # estimated by simulation. A random subset of trials estimates the same
-  # distribution as all of them - each trial contributes ndraws simulated RTs
-  # either way - so there is no reason to predict 320,000 trials x 50 draws
-  # (16 million RTs per model, minutes per model) to draw a density curve that
-  # 250,000 RTs already pin down. The histogram still uses every observed trial.
-  pred_obs <- if (nrow(observed) > n_trials) {
-    observed[sample.int(nrow(observed), n_trials), , drop = FALSE]
-  } else {
-    observed
+  if (is.null(names(preds))) names(preds) <- paste("Model", seq_along(preds))
+  if (length(unique(vapply(preds, \(p) p$meta$illusion, character(1)))) > 1) {
+    stop("plot_ppc() compares models fitted to the same illusion.")
   }
 
-  # Defective densities: each response's curve is scaled by its own rate, so the
-  # two areas sum to 1 and correct/error are directly comparable across models
-  defective_density <- function(rt, response) {
-    keep <- is.finite(rt) & is.finite(response)
-    rt <- rt[keep]
-    response <- response[keep]
-    purrr::map_dfr(c(0, 1), function(r) {
-      x <- rt[response == r]
-      if (length(x) < 2) return(NULL)
-      d <- density(x, from = rt_range[1], to = rt_range[2], n = n_points)
-      data.frame(
-        Response = factor(r, levels = c(0, 1)),
-        x = d$x,
-        y = d$y * (length(x) / length(rt)) * if (r == 0) 1 else -1
-      )
-    })
-  }
-
-  # Observed: histogram, put on the same defective-density scale
+  # Observed: histogram of every trial, put on the same defective-density
+  # scale. Stored as the count of each distinct (RT, Error), so this is exact.
+  observed <- preds[[1]]$ppc$observed
   obs_data <- observed |>
     mutate(bin = floor(RT / binwidth)) |>
-    count(Error, bin, name = "n") |>
+    count(Error, bin, wt = n, name = "n") |>
     mutate(
       x = (bin + 0.5) * binwidth,
-      y = n / (nrow(observed) * binwidth) * if_else(Error == 0, 1, -1),
+      y = n / (sum(observed$n) * binwidth) * if_else(Error == 0, 1, -1),
       Response = factor(Error, levels = c(0, 1))
     ) |>
     filter(x <= max(rt_range))
 
-  # Predicted. brms::posterior_predict() calls the family's sampler once per
-  # trial (thousands of calls of a few dozen draws each), and most of that is
-  # fixed cost. cogmod's posterior_predict_<family>() methods take a vector of
-  # observations, so the same draws come out of ~50 vectorised calls instead,
-  # about 3x faster for the DDM - see ?posterior_predict_cogmod_ddm.
-  predict_chunked <- function(m, newdata, ndraws, chunk = 50) {
-    prep <- brms::prepare_predictions(m, newdata = newdata, ndraws = ndraws,
-                                      allow_new_levels = TRUE)
-    for (dp in names(prep$dpars)) prep$dpars[[dp]] <- brms::get_dpar(prep, dp)
-    method <- get(paste0("posterior_predict_", m$family$name),
-                  envir = asNamespace("cogmod"))
-    chunks <- split(seq_len(prep$nobs), ceiling(seq_len(prep$nobs) / chunk))
-    do.call(rbind, lapply(chunks, method, prep = prep))   # (draws * N) x 2
+  # Predicted: defective densities, each response's curve scaled by its own
+  # rate, so the two areas sum to 1 and correct/error are directly comparable
+  # across models. The predicted RTs come binned (1 ms) with the bandwidth
+  # density() picked on the raw values, so this is the curve the raw RTs give,
+  # to within a bin: density() itself bins its input far more coarsely.
+  defective_density <- function(pp) {
+    total <- sum(pp$n)
+    purrr::map_dfr(c(0, 1), function(r) {
+      r_chr <- as.character(r)
+      if (pp$n[[r_chr]] < 2) return(NULL)
+      d <- pp$counts[pp$counts$Response == r, ]
+      dens <- density((d$Bin + 0.5) * pp$bin, weights = d$n / sum(d$n), bw = pp$bw[[r_chr]],
+                      from = rt_range[1], to = rt_range[2], n = n_points)
+      data.frame(
+        Response = factor(r, levels = c(0, 1)),
+        x = dens$x,
+        y = dens$y * (pp$n[[r_chr]] / total) * if (r == 0) 1 else -1
+      )
+    })
   }
-  pred_data <- purrr::imap_dfr(models, function(m, nm) {
-    pp <- predict_chunked(m, pred_obs, ndraws)
-    rt   <- pp[, 1]
-    resp <- pp[, 2]
-    stopifnot(all(resp %in% c(0, 1)))
-    defective_density(rt, resp) |> mutate(Model = nm)
-  })
-  pred_data$Model <- factor(pred_data$Model, levels = names(models))
+  pred_data <- purrr::imap_dfr(preds, \(p, nm) mutate(defective_density(p$ppc$predicted), Model = nm))
+  pred_data$Model <- factor(pred_data$Model, levels = names(preds))
 
   ggplot(mapping = aes(x = x, y = y)) +
     geom_col(
@@ -354,7 +371,7 @@ plot_ppc <- function(models, observed = NULL, ndraws = 500, n_trials = 10000,
       values = c("0" = "#43A047", "1" = "#F44336"),
       labels = c("0" = "Correct", "1" = "Error")
     ) +
-    scale_color_manual(values = setNames(model_colors[seq_along(models)], names(models))) +
+    scale_color_manual(values = model_colors) +
     scale_y_continuous(labels = abs) +
     coord_cartesian(xlim = rt_range) +
     labs(x = "RT", y = "Density", fill = "Observed", color = "Predicted") +
@@ -362,17 +379,33 @@ plot_ppc <- function(models, observed = NULL, ndraws = 500, n_trials = 10000,
     theme_minimal() +
     theme(legend.position = "bottom")
 }
-
-plot_ppc(
-  models,
-  observed = insight::get_data(models[[1]]),
-  ndraws = 500
-)
 ```
+
+::: {.panel-tabset}
+
+### Muller-Lyer
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+plot_ppc(preds$MullerLyer)
+```
+
+### Vertical-Horizontal
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+plot_ppc(preds$VerticalHorizontal)
+```
+
+:::
 
 ## Parameter Curves
 
-### Compute Predictions
+### Process Predictions
 
 ```{r}
 # Display names for the parameters, in the order they are plotted. Names are
@@ -380,8 +413,9 @@ plot_ppc(
 # titles. Several parameters mean different things from one family to the next
 # - "mu" is a drift rate in the DDM and the log-mean of the correct response in
 # the LNR, and "sigmabias" is the variability of the starting point in the DDM
-# but its maximum (A) in the racing models - so the map is built per model.
-param_labels <- function(gam) {
+# but its maximum (A) in the racing models - so the map is built per family
+# (the brms family name, e.g. "cogmod_ddm", as stored in the prediction files).
+param_labels <- function(family) {
   lvls <- c("Error Rate" = "Error Rate",
             "Mean RT" = "Mean RT",
             "mu" = "mu",
@@ -396,7 +430,7 @@ param_labels <- function(gam) {
             "ndt" = "NDT",
             "sigmandt" = "NDT Variability")
   switch(
-    insight::get_family(gam)$name,
+    family,
     "cogmod_ddm" = {
       lvls["mu"] <- "Drift"
     },
@@ -425,99 +459,41 @@ param_labels <- function(gam) {
 # Rename the parameters and put them in canonical order. Parameter_Order keeps
 # that order recoverable once the models are stacked together, where the factor
 # levels of families that do not share their parameters get merged in whatever
-# order the models happen to come in.
-format_parameters <- function(pred, gam) {
-  lvls <- param_labels(gam)
+# order the models happen to come in. It is the position in the full map rather
+# than among the parameters this model has, so that it is comparable between
+# models of a family that do not estimate the same ones.
+format_parameters <- function(pred, family) {
+  lvls <- param_labels(family)
   found <- unique(as.character(pred$Parameter))
   # A parameter the map does not know about (a family added later) keeps its
   # own name and goes last, rather than silently becoming an NA panel
   unknown <- setdiff(found, names(lvls))
   if (length(unknown) > 0) lvls <- c(lvls, setNames(unknown, unknown))
+  pred$Parameter_Order <- match(as.character(pred$Parameter), names(lvls))
   lvls <- lvls[names(lvls) %in% found]
 
-  pred$Parameter_Order <- match(as.character(pred$Parameter), names(lvls))
   pred$Parameter <- factor(unname(lvls[as.character(pred$Parameter)]),
                            levels = unname(lvls))
   pred
 }
 
-# Predictions for each of the model's own parameters (mu and the auxiliaries,
-# minus the outlier weight) over whatever grid is passed. The curves and the
-# heatmaps below differ only in that grid, so they share this.
-predict_parameters <- function(gam, datagrid) {
-  params <- insight::find_auxiliary(gam)
-  params <- c("mu", params[!params %in% c("poutlier")])
-  purrr::map_dfr(params, function(p) {
-    estimate_relation(gam, data = datagrid, predict = p) |>
-      mutate(Parameter = p)
-  })
-}
-
-# The illusion a fit was made on, as attached by load_fit()
-model_illusion <- function(gam) {
-  illusion <- attr(gam, "illusion")
-  if (is.null(illusion)) stop("The model has no illusion recorded: load it with load_fit().")
-  illusion
-}
-
-# The range of the space the curves and heatmaps are drawn over, per illusion
-# and in raw units: strength signed, difference absolute (see normalize_units).
-# An illusion not listed here is drawn over its full fitted range.
-# TODO: custom ranges for the other illusions
-plot_ranges <- list(
-  MullerLyer = list(strength = c(-30, 30), difference = c(0.05, 0.45))
-)
-
-# Prediction grid of n_strength x n_difference points over that range,
-# converted to the Z scale the models were fitted on
-make_datagrid <- function(gam, n_strength = 31, n_difference = 5) {
-  illusion <- model_illusion(gam)
-  range <- plot_ranges[[illusion]]
-  if (is.null(range)) {
-    warning("No plot range set for ", illusion, ", using its full fitted range.")
-    strength <- seq(-1, 1, length.out = n_strength)
-    difference <- seq(-1, 1, length.out = n_difference)
-  } else {
-    strength <- normalize_units(seq(range$strength[1], range$strength[2], length.out = n_strength),
-                                type = illusion, what = "Strength")
-    difference <- normalize_units(seq(range$difference[1], range$difference[2], length.out = n_difference),
-                                  type = illusion, what = "Difference")
-  }
-  insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = difference,
-                                       Illusion_StrengthZ = strength))
+# The predictions of each of an illusion's models, relabelled, back in raw
+# units, and stacked. Adding a model to `models` in the loading chunk is all it
+# takes for it to get its own column in every plot below.
+tidy_predictions <- function(preds, what) {
+  purrr::imap_dfr(preds, \(p, name) {
+    p[[what]] |>
+      format_parameters(p$meta$family) |>
+      # Restore the original scale of the illusion strength and difference
+      restore_units(illusion = p$meta$illusion) |>
+      mutate(Model = name, Family = p$meta$family)
+  }) |>
+    mutate(Model = factor(Model, levels = names(preds)))
 }
 
 # Parameters against illusion strength, one curve per illusion difficulty
-data_curves <- function(gam) {
-  datagrid <- make_datagrid(gam, n_strength = 31, n_difference = 5)
-  pred <- estimate_prediction(gam, data = datagrid, centrality = "mean",
-                              # TODO: increase iterations
-                              iterations = 500, keep_iterations = TRUE) |>
-    mutate(Parameter = Component, Type = "GAM") |>
-    select(-Component, -Row) |>
-    mutate(Parameter = ifelse(Parameter == "response", "Error Rate", "Mean RT"))
-
-  # Only keep iterations of correct responses to compute mean
-  iters_rt <- data.frame(select(pred[pred$Parameter == "Mean RT", ], starts_with("iter_")))
-  iters_rt[data.frame(select(pred[pred$Parameter == "Error Rate", ], starts_with("iter_"))) == 1] <- NA
-  pred[pred$Parameter == "Mean RT", "Predicted"] <- rowMeans(iters_rt, na.rm = TRUE)
-  # Remove mean RTs when only a few correct trials as it's noisy
-  pred[pred$Parameter == "Mean RT", "Predicted"][pred[pred$Parameter == "Error Rate", "Predicted"] > 0.9] <- NA
-  pred <- select(pred, -starts_with("iter_"))
-
-  # Add the predictions for the parameters of the model itself
-  pred <- rbind(pred, mutate(predict_parameters(gam, datagrid), Type = "GAM"))
-
-  pred |>
-    format_parameters(gam) |>
-    # Restore the original scale of the illusion strength and difference
-    restore_units(illusion = model_illusion(gam))
-}
-
-# Stack the models. Adding one to `models` in the loading chunk is all it takes
-# for it to get its own column in every plot below.
-preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m), Model = name)) |>
-  mutate(Model = factor(Model, levels = names(models)))
+# (compute_curves() in server/predictions.R), one data frame per illusion
+preds_curves <- lapply(preds, tidy_predictions, what = "curves")
 ```
 
 
@@ -525,9 +501,6 @@ preds_curves <- purrr::imap_dfr(models, \(m, name) mutate(data_curves(m), Model 
 ### Visualize
 
 ```{r}
-#| fig-width: 9
-#| fig-height: 10
-
 # Column header
 make_header <- function(label) {
   ggplot() +
@@ -548,21 +521,28 @@ make_header <- function(label) {
 # function below.
 parameter_grid_header <- 0.35
 
-# Which parameter goes in which row of which column. The models do not share
-# their parameters, so rows cannot be matched by name: each model's parameters
-# are packed from the top in canonical order (which lines up the drift rates and
-# the nus, both "mu"), and the non-decision time - the one parameter every
-# family has - is anchored to the bottom row. Models with fewer parameters get
-# NA in between, drawn as spacers, so the columns stay aligned however many
+# Which parameter goes in which row of which column. Models of one family share
+# their parameters, so within a family rows are matched by name: the family's
+# rows are every parameter any of its models has, in canonical order, and a
+# model that does not estimate one (DDM-4's drift variability, say) gets a gap
+# there. Families do not share them, so across families rows cannot be matched
+# by name: each family's rows are packed from the top (which lines up the drift
+# rates and the nus, both "mu"), and the non-decision time - the one parameter
+# every family has - is anchored to the bottom row. Shorter columns get NA in
+# between, drawn as spacers, so the columns stay aligned however many
 # parameters they have.
 parameter_grid_rows <- function(data, anchor_bottom = c("NDT", "NDT Variability")) {
   data$Model <- droplevels(factor(data$Model))
+  # Data without a family (made by hand, say) treats each model as its own
+  if (is.null(data$Family)) data$Family <- as.character(data$Model)
 
+  in_order <- function(d) unique(as.character(d$Parameter[order(d$Parameter_Order)]))
   slots <- lapply(levels(data$Model), function(model) {
-    d <- data[data$Model == model, ]
-    params <- unique(as.character(d$Parameter[order(d$Parameter_Order)]))
-    list(top = params[!params %in% anchor_bottom],
-         bottom = params[params %in% anchor_bottom])
+    family_rows <- in_order(data[data$Family == data$Family[data$Model == model][1], ])
+    own <- in_order(data[data$Model == model, ])
+    rows <- ifelse(family_rows %in% own, family_rows, NA_character_)
+    list(top = rows[!family_rows %in% anchor_bottom],
+         bottom = rows[family_rows %in% anchor_bottom])
   })
   names(slots) <- levels(data$Model)
   n_top <- max(lengths(lapply(slots, `[[`, "top")))
@@ -592,76 +572,101 @@ plot_parameter_grid <- function(data, panel,
              heights = c(header_height, rep(1, length(rows_by_model[[1]]))))
 }
 
-# Prepare data
-curves <- preds_curves |>
-  filter(!Parameter %in% c("Error Rate", "Mean RT")) |>
-  mutate(Illusion_Difference = factor(Illusion_Difference))
+# The curves of one illusion's models, from one element of preds_curves
+plot_curves <- function(preds_curves) {
+  # Prepare data
+  curves <- preds_curves |>
+    filter(!Parameter %in% c("Error Rate", "Mean RT")) |>
+    # Rounded, or the levels print their floating-point error (0.0500000000001)
+    mutate(Illusion_Difference = factor(round(Illusion_Difference, 5)))
 
-# Colour scale
-curve_cols <- colorRampPalette(
-  c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")
-)(nlevels(curves$Illusion_Difference))
+  # Colour scale
+  curve_cols <- colorRampPalette(
+    c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")
+  )(nlevels(curves$Illusion_Difference))
 
-# Function for individual panels
-make_curve <- function(model, parameter) {
-  ggplot(
-    filter(curves, Model == model, Parameter == parameter),
-    aes(Illusion_Strength, Predicted, colour = Illusion_Difference)
-  ) +
-    geom_line(linewidth = 1.3) +
-    scale_colour_manual(values = curve_cols) +
-    labs(title = parameter, color = "Task Difficulty") +
-    theme_minimal() +
+  # Function for individual panels
+  make_curve <- function(model, parameter) {
+    ggplot(
+      filter(curves, Model == model, Parameter == parameter),
+      aes(Illusion_Strength, Predicted, colour = Illusion_Difference)
+    ) +
+      geom_line(linewidth = 1.3) +
+      scale_colour_manual(values = curve_cols) +
+      labs(title = parameter, color = "Task Difficulty") +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(
+          hjust = 0.5,
+          size = 11,
+          margin = margin(b = 4)
+        ),
+        axis.title = element_blank()
+      )
+  }
+
+  plot_parameter_grid(curves, make_curve) +
+    plot_layout(guides = "collect") &
     theme(
-      plot.title = element_text(
-        hjust = 0.5,
-        size = 11,
-        margin = margin(b = 4)
-      ),
-      axis.title = element_blank()
+      legend.position = "right",
+      plot.margin = margin(4, 4, 4, 4)
     )
 }
-
-plot_parameter_grid(curves, make_curve) +
-  plot_layout(guides = "collect") &
-  theme(
-    legend.position = "right",
-    plot.margin = margin(4, 4, 4, 4)
-  )
 ```
+
+::: {.panel-tabset}
+
+#### Muller-Lyer
+
+```{r}
+#| fig-width: 9
+#| fig-height: 10
+
+plot_curves(preds_curves$MullerLyer)
+```
+
+#### Vertical-Horizontal
+
+```{r}
+#| fig-width: 9
+#| fig-height: 10
+
+plot_curves(preds_curves$VerticalHorizontal)
+```
+
+:::
 
 ## Parameter Heatmaps
 
-### Compute Predictions
+### Process Predictions
 
 ```{r}
 # The same parameters as the curves, but over the full 2-D grid of illusion
 # strength x illusion difference rather than five difficulty levels
-data_heatmaps <- function(gam, n = 40) {
-  datagrid <- make_datagrid(gam, n_strength = n, n_difference = n)
-  predict_parameters(gam, datagrid) |>
-    format_parameters(gam) |>
-    restore_units(illusion = model_illusion(gam))
-}
-
-preds_heatmaps <- purrr::imap_dfr(models, \(m, name) mutate(data_heatmaps(m), Model = name)) |>
-  mutate(Model = factor(Model, levels = names(models)))
+# (compute_heatmaps() in server/predictions.R), one data frame per illusion
+preds_heatmaps <- lapply(preds, tidy_predictions, what = "heatmaps")
 ```
 
 ### Visualize
 
 ```{r}
-#| fig-width: 9
-#| fig-height: 16.5
-
 # Two ways of reading the values off the map: a colour bar per panel, or, as on
 # an elevation map, the value written on a handful of the contour lines (which
 # makes the colour bars redundant, so they are dropped)
 heatmap_labels <- TRUE
 
-# Function for individual panels
-make_heatmap <- function(model, parameter) {
+# The region of the space that might be psychometrically optimal, outlined on
+# every panel, in raw units. Only worked out for the Muller-Lyer so far: an
+# illusion without one gets no outline.
+optimal_regions <- list(
+  MullerLyer = list(strength = c(-30, 30), difference = c(0.1, 0.4))
+)
+
+# Function for individual panels. The illusion is passed along for the
+# outline, which is in its raw units.
+make_heatmap <- function(preds_heatmaps, model, parameter, illusion) {
   d <- filter(preds_heatmaps, Model == model, Parameter == parameter)
+  region <- optimal_regions[[illusion]]
   contours <- if (heatmap_labels) {
     list(
       # Few enough lines that the labels have room: 20 would overlap in panels
@@ -687,9 +692,11 @@ make_heatmap <- function(model, parameter) {
     geom_tile(aes(fill = Predicted)) +
     contours +
     geom_vline(xintercept = 0, color = "white", linewidth = 0.3, linetype = "dashed") +
-    # The region of the space that might be psychometrically optimal
-    annotate("rect", xmin = -30, xmax = 30, ymin = 0.1, ymax = 0.4,
-             fill = NA, color = "red", linewidth = 0.5, linetype = "dotted") +
+    (if (!is.null(region)) {
+      annotate("rect", xmin = region$strength[1], xmax = region$strength[2],
+               ymin = region$difference[1], ymax = region$difference[2],
+               fill = NA, color = "red", linewidth = 0.5, linetype = "dotted")
+    }) +
     scale_fill_viridis_c(option = "turbo") +
     scale_x_continuous(expand = c(0, 0)) +
     scale_y_continuous(expand = c(0, 0)) +
@@ -707,11 +714,6 @@ make_heatmap <- function(model, parameter) {
     )
 }
 
-# Each parameter is on its own scale, so unlike the curves the fill guides
-# cannot be collected: every panel keeps its own colour bar
-heatmaps <- plot_parameter_grid(preds_heatmaps, make_heatmap) &
-  theme(plot.margin = margin(4, 4, 4, 4))
-
 # Every panel shares the same axes, so the titles are dropped from the panels
 # (see make_heatmap) and written once around the whole grid, next to a strip of
 # stimuli showing what each axis means. patchwork has no shared axis title: the
@@ -722,11 +724,16 @@ axis_title <- function(label, rot = 0) {
   wrap_elements(grid::textGrob(label, rot = rot, gp = grid::gpar(fontsize = 13)))
 }
 
-# Muller-Lyer stimuli along each axis, rendered by
-# illustrations/make_illustrations.py (re-run it if the stimulus bounds change).
+# Stimuli along each axis, rendered by illustrations/make_illustrations.py
+# (re-run it if the stimulus bounds change) as <illusion in lower case>_*.png.
 # Both series are numbered low value to high, so they run in the direction of
-# their axis: x left to right, y bottom to top, hence the reversal below.
+# their axis: x left to right, y bottom to top, hence the reversal below. Only
+# the Muller-Lyer has them so far; an illusion without them gets the grid and
+# the axis titles alone.
 illustrations_dir <- if (dir.exists("illustrations")) "illustrations" else "analysis/illustrations"
+illustration_file <- function(illusion, name) {
+  file.path(illustrations_dir, paste0(tolower(illusion), "_", name, ".png"))
+}
 
 # Every stimulus is drawn at the same size on both axes. The images already
 # share their pixel dimensions (make_illustrations.py crops them with one box),
@@ -735,13 +742,9 @@ illustrations_dir <- if (dir.exists("illustrations")) "illustrations" else "anal
 # would size the y-axis ones by the column width and the x-axis ones by the row
 # height, which come out different once patchwork has taken its margins.
 stim_h <- 1.55  # height of every stimulus, in inches
-stim_aspect <- local({
-  d <- dim(png::readPNG(file.path(illustrations_dir, "mullerlyer_strength1.png")))
-  d[2] / d[1]
-})
-illustration <- function(name, vjust = "centre") {
+illustration <- function(illusion, name, vjust = "centre") {
   wrap_elements(grid::rasterGrob(
-    png::readPNG(file.path(illustrations_dir, paste0("mullerlyer_", name, ".png"))),
+    png::readPNG(illustration_file(illusion, name)),
     # capped at the cell, so a figure too short for the strip shrinks it rather
     # than clipping it
     height = grid::unit.pmin(grid::unit(stim_h, "in"), grid::unit(1, "npc")),
@@ -751,35 +754,84 @@ illustration <- function(name, vjust = "centre") {
   ))
 }
 
-# The outer two mark the ends of the y axis, so they sit flush with the top and
-# the bottom of the panel block rather than floating in the middle of their cell
-y_strip <- wrap_plots(
-  Map(illustration, paste0("difference", 3:1), c("top", "centre", "bottom")),
-  ncol = 1
-)
-x_strip <- wrap_plots(lapply(paste0("strength", 1:3), illustration), nrow = 1)
+# The heatmaps of one illusion's models, from one element of preds_heatmaps
+plot_heatmaps <- function(preds_heatmaps, illusion) {
+  # Each parameter is on its own scale, so unlike the curves the fill guides
+  # cannot be collected: every panel keeps its own colour bar
+  heatmaps <- plot_parameter_grid(
+    preds_heatmaps,
+    \(model, parameter) make_heatmap(preds_heatmaps, model, parameter, illusion)
+  ) &
+    theme(plot.margin = margin(4, 4, 4, 4))
 
-# The y-axis column starts at the first panel, not at the column headers. The
-# row count is recomputed rather than carried out of plot_parameter_grid(): a
-# stale value here silently collapses the heights to an even split, which puts
-# the strip in the bottom half of the grid.
-grid_rows <- length(parameter_grid_rows(preds_heatmaps)[[1]])
-below_header <- function(p) {
-  wrap_plots(plot_spacer(), p, ncol = 1, heights = c(parameter_grid_header, grid_rows))
+  # The y-axis column starts at the first panel, not at the column headers. The
+  # row count is recomputed rather than carried out of plot_parameter_grid(): a
+  # stale value here silently collapses the heights to an even split, which puts
+  # the strip in the bottom half of the grid.
+  grid_rows <- length(parameter_grid_rows(preds_heatmaps)[[1]])
+  below_header <- function(p) {
+    wrap_plots(plot_spacer(), p, ncol = 1, heights = c(parameter_grid_header, grid_rows))
+  }
+
+  # The strip and title rows/columns are sized in inches and the grid takes the
+  # rest ("null"). Relative sizes would be read against the panels rather than
+  # the cells, which leaves the strips adrift from the grid they annotate.
+  if (!file.exists(illustration_file(illusion, "strength1"))) {
+    return(wrap_plots(
+      below_header(axis_title("Task Difficulty", rot = 90)), heatmaps,
+      plot_spacer(), axis_title("Illusion Strength"),
+      ncol = 2,
+      widths = grid::unit(c(0.3, 1), c("in", "null")),
+      heights = grid::unit(c(1, 0.3), c("null", "in"))
+    ))
+  }
+
+  stim_aspect <- local({
+    d <- dim(png::readPNG(illustration_file(illusion, "strength1")))
+    d[2] / d[1]
+  })
+  # The outer two mark the ends of the y axis, so they sit flush with the top
+  # and the bottom of the panel block rather than floating in the middle of
+  # their cell
+  y_strip <- wrap_plots(
+    Map(\(name, vjust) illustration(illusion, name, vjust),
+        paste0("difference", 3:1), c("top", "centre", "bottom")),
+    ncol = 1
+  )
+  x_strip <- wrap_plots(lapply(paste0("strength", 1:3), \(name) illustration(illusion, name)), nrow = 1)
+
+  wrap_plots(
+    below_header(axis_title("Task Difficulty", rot = 90)), below_header(y_strip), heatmaps,
+    plot_spacer(), plot_spacer(), x_strip,
+    plot_spacer(), plot_spacer(), axis_title("Illusion Strength"),
+    ncol = 3,
+    widths = grid::unit(c(0.3, stim_h * stim_aspect + 0.2, 1), c("in", "in", "null")),
+    heights = grid::unit(c(1, stim_h + 0.2, 0.3), c("null", "in", "in"))
+  )
 }
-
-# The strip and title rows/columns are sized in inches and the grid takes the
-# rest ("null"). Relative sizes would be read against the panels rather than the
-# cells, which leaves the strips adrift from the grid they annotate.
-wrap_plots(
-  below_header(axis_title("Task Difficulty", rot = 90)), below_header(y_strip), heatmaps,
-  plot_spacer(), plot_spacer(), x_strip,
-  plot_spacer(), plot_spacer(), axis_title("Illusion Strength"),
-  ncol = 3,
-  widths = grid::unit(c(0.3, stim_h * stim_aspect + 0.2, 1), c("in", "in", "null")),
-  heights = grid::unit(c(1, stim_h + 0.2, 0.3), c("null", "in", "in"))
-)
 ```
+
+::: {.panel-tabset}
+
+#### Muller-Lyer
+
+```{r}
+#| fig-width: 9
+#| fig-height: 16.5
+
+plot_heatmaps(preds_heatmaps$MullerLyer, "MullerLyer")
+```
+
+#### Vertical-Horizontal
+
+```{r}
+#| fig-width: 9
+#| fig-height: 16.5
+
+plot_heatmaps(preds_heatmaps$VerticalHorizontal, "VerticalHorizontal")
+```
+
+:::
 
 
 ## Best Model
@@ -796,18 +848,37 @@ layout <- matrix(c(
   rep(7, 2)
 ), ncol = 2, byrow = FALSE)
 
-preds_curves |> 
-  filter(Model == "LNR") |>
-  mutate(Illusion_Difference = as.factor(Illusion_Difference)) |> 
-  ggplot(aes(x = Illusion_Strength, y = Predicted)) +
-  # geom_ribbon(aes(ymin = CI_low, ymax = CI_high, group = Illusion_Difference), alpha = 0.1) +
-  geom_line(aes(color = Illusion_Difference, group = interaction(Type, Illusion_Difference), linetype = Type),
-            linewidth = 1.5) +
-  scale_color_manual(
-    values = colorRampPalette(c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50"))(length(unique(preds_curves$Illusion_Difference)))
-    ) +
-  scale_linetype_manual(values = c("GAM" = "solid", "LM" = "dashed")) +
-  # facet_wrap(~Parameter, scales = "free_y") +
-  ggh4x::facet_manual(vars(Parameter), design = layout, scales = "free_y") +
-  theme_minimal()
+# One element of preds_curves, i.e. one illusion
+plot_best_model <- function(preds_curves, model = "LNR") {
+  preds_curves |>
+    filter(Model == model) |>
+    mutate(Illusion_Difference = as.factor(round(Illusion_Difference, 5))) |>
+    ggplot(aes(x = Illusion_Strength, y = Predicted)) +
+    # geom_ribbon(aes(ymin = CI_low, ymax = CI_high, group = Illusion_Difference), alpha = 0.1) +
+    geom_line(aes(color = Illusion_Difference, group = interaction(Type, Illusion_Difference), linetype = Type),
+              linewidth = 1.5) +
+    scale_color_manual(
+      values = colorRampPalette(c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50"))(length(unique(preds_curves$Illusion_Difference)))
+      ) +
+    scale_linetype_manual(values = c("GAM" = "solid", "LM" = "dashed")) +
+    # facet_wrap(~Parameter, scales = "free_y") +
+    ggh4x::facet_manual(vars(Parameter), design = layout, scales = "free_y") +
+    theme_minimal()
+}
 ```
+
+::: {.panel-tabset}
+
+### Muller-Lyer
+
+```{r}
+plot_best_model(preds_curves$MullerLyer)
+```
+
+### Vertical-Horizontal
+
+```{r}
+plot_best_model(preds_curves$VerticalHorizontal)
+```
+
+:::
