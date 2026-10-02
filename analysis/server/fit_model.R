@@ -14,12 +14,16 @@ library(brms)
 library(cogmod) # remotes::install_github("DominiqueMakowski/cogmod@dev")
 library(dplyr)
 
-# cogmod 0.3.3 fixed the LNR/LogNormal tail gradient (chains rejecting their
-# initial value, divergences) and the jitter that started smooths far from
-# their targets. Fitting with an older one wastes days, so fail in the first
-# second rather than the twentieth hour. See cogmod_inits_issue.md.
-if (utils::packageVersion("cogmod") < "0.3.3") {
-  stop("cogmod ", utils::packageVersion("cogmod"), " is too old; need >= 0.3.3. ",
+# New fits use cogmod >= 0.3.4 (decision 2026-10-02, AGENT.md 2). 0.3.3 fixed
+# the LNR/LogNormal tail gradient and the init jitter (AGENT.md 4.5); 0.3.4
+# changed the priors of every model with a smooth, so a fit made with an older
+# one is on other priors than the new ones. Fail in the first second rather
+# than the twentieth hour. IGC_COGMOD_MIN=0.3.3 at submission lets a shard of
+# an older model run while the library is still 0.3.3; it cannot bring 0.3.3
+# back once 0.3.4 is installed. combine_model.R refuses shards of mixed versions.
+cogmod_min <- Sys.getenv("IGC_COGMOD_MIN", unset = "0.3.4")
+if (utils::packageVersion("cogmod") < cogmod_min) {
+  stop("cogmod ", utils::packageVersion("cogmod"), " is too old; need >= ", cogmod_min, ". ",
        "Run  ./hpc install cogmod", call. = FALSE)
 }
 
@@ -154,6 +158,9 @@ report_fit <- function(m, name, wall_min) {
   invisible(stat)
 }
 
+shard_file <- file.path(models_dir, sprintf("%s_%s_%d.rds", spec$name, spec$illusion, task_id))
+mtime_before <- if (file.exists(shard_file)) file.mtime(shard_file)
+
 t0 <- Sys.time()
 m <- brm(f,
   data = data,
@@ -175,10 +182,23 @@ m <- brm(f,
     stanc_options = list("O1"),
     cpp_options = list(STAN_CPP_OPTIMS = TRUE, STAN_NO_RANGE_CHECKS = TRUE)
   ),
-  file = file.path(models_dir, sprintf("%s_%s_%d.rds", spec$name, spec$illusion, task_id)),
+  file = shard_file,
   file_refit = file_refit
 )
 wall_min <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
+
+# Record which cogmod built the shard, for combine_model.R's check and for
+# deciding later which fits predate 0.3.4. Only when brm() actually fitted:
+# a shard reused from disk keeps what it had, which for one made before this
+# stamp existed is nothing.
+if (is.null(mtime_before) || file.mtime(shard_file) > mtime_before) {
+  sha <- utils::packageDescription("cogmod")$RemoteSha
+  m$cogmod <- list(version = format(utils::packageVersion("cogmod")),
+                   sha = if (is.null(sha)) NA_character_ else sha)
+  saveRDS(m, shard_file)
+}
+cat("cogmod of this shard:", if (is.null(m$cogmod)) "unrecorded" else
+  paste(m$cogmod$version, m$cogmod$sha), "\n")
 
 cat(spec$name, "-", spec$illusion, "shard", task_id, ": SUCCESSFUL.\n")
 tryCatch(report_fit(m, paste0(spec$name, "_", spec$illusion), wall_min),

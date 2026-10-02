@@ -49,11 +49,54 @@ shared by every project on the account — and why each piece is what it is:
 
 - The module must be `CmdStanR/0.7.1-foss-2023a-R-4.3.2`: the `t2()` smooths
   need **mgcv**, which `R/4.4.1-gfbf-2023b` does not ship.
-- **cogmod >= 0.3.3** (`dev` branch, commit `e920d44`, installed 2026-09-18)
-  fixed the non-finite tail gradient and the init jitter (4.5).
-  `install_pkgs.R` and `fit_model.R` both refuse anything older. Refresh with
-  `./hpc install cogmod`; `IGC_COGMOD_REF` picks the branch — `dev` until
-  0.3.3 is merged into `main`, at which point change the default in `hpc`.
+- **cogmod 0.3.3** (installed 2026-09-18 and refreshed to `d04c7f8` on
+  2026-09-20) fixed the non-finite tail gradient and the init jitter (4.5).
+  Every production fit so far was made with it or with something older. It
+  was merged into `main` on 2026-09-26.
+- **New fits use cogmod 0.3.4** (`dev`, `e8c0555`, 2026-10-02). That is the
+  user's decision of 2026-10-02. Once every wanted model is fitted, the user
+  will decide whether to refit the ones made with older versions. 0.3.4
+  changes the priors of every model with a smooth. In cogmod's `NEWS.md` it:
+  - gives `sds` an `exponential(rate)` prior, with the rate set per smooth from
+    its own basis, so that the prior is `exponential(1)` in link units;
+  - gives the unpenalised `bs_*` columns on a family-named dpar that dpar's
+    slope prior, in link units;
+  - in the race families, gives `mu`'s participant SD the same
+    `exponential(1)` as the other accumulator's;
+  - starts smooth SDs at 0.1 link units of wiggle and LBA2's `driftone` at 1;
+  - scales the init jitter on `bs_*` blocks by how far their design columns
+    reach.
+
+  How that is enforced, from 2026-10-02:
+  - `IGC_COGMOD_REF` stays `dev`, so `./hpc install cogmod` installs 0.3.4.
+  - **The floor is 0.3.4.** `install_pkgs.R` and `fit_model.R` refuse anything
+    older. `IGC_COGMOD_MIN=0.3.3 ./hpc fit <model>` lets a shard of an older
+    model run while the library is still 0.3.3; it cannot bring 0.3.3 back
+    after 0.3.4 is installed.
+  - **Each new shard records its cogmod** as `m$cogmod` (version and commit),
+    which `combine_model.R` carries into the combined fit. A fit without
+    `$cogmod` predates the stamp, so it is 0.3.3 or older. That is how to list
+    the refit candidates later. Fits submitted before 2026-09-20 also predate
+    0.3.3's `sds` fix (5.7).
+  - **`combine_model.R` refuses shards of mixed cogmod versions**, an
+    unstamped shard counting as one version. `brms::combine_models()` does not
+    compare priors, so without this check a mixed set would combine silently.
+
+  The library is shared by all of an account's jobs, FakeArt's included.
+  Installing 0.3.4 while an array still has tasks pending gives those shards
+  other priors than their siblings. The combine check now catches that, but it
+  costs the shard. The order is:
+  1. wait until no array on the account has pending tasks;
+  2. `./hpc push`;
+  3. `./hpc install cogmod`;
+  4. then submit.
+
+  After a push, a pending task of an older array meets the 0.3.4 floor and
+  stops in its first second. That is the intended failure.
+
+  A `loo` comparison between a 0.3.4 fit and an older one compares models on
+  different priors. At 324k rows the likelihood dominates, but smooth `sds`
+  and the `bs_*` slopes moved a lot (5.7).
 - Keep `precompile.R`'s `cpp_options` identical to `stan_model_args` in
   `fit_model.R`, or a different precompiled-header variant is keyed and the
   race comes back ([hub](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#precompiled-header)).
@@ -62,7 +105,7 @@ shared by every project on the account — and why each piece is what it is:
 
 ## 3. Traps
 
-Only 3.6 is specific to this project. The rest are cluster facts and moved to
+Only 3.6 and 3.9 are specific to this project. The rest are cluster facts and moved to
 the lab hub on 2026-09-22; the numbers are kept so older references resolve.
 
 | § | trap | now in the hub |
@@ -87,6 +130,161 @@ Probe and test runs **must** use a separate `IGC_MODELS_DIR` so their output can
 never be mistaken for production shards. Since 2026-09-18 `./hpc push` also
 mirrors rather than merges, so a renamed script cannot be left behind on the
 cluster and submitted by accident — the same class of bug one level up.
+
+### 3.9 The laptop's brms rebuilds a cluster fit's smooths, wrongly (2026-10-02)
+
+**Rule: post-process a fit only with the brms that fitted it, i.e. on the
+cluster via `./hpc predict`, or use one of the local workarounds below.** Every
+fit so far was made with brms 2.21.0, and the laptop has 2.23.1. Under 2.23.1,
+`log_lik()`, `loo()`, `waic()`, `posterior_epred/linpred/predict()`,
+`fitted()`, `predict()`, `conditional_effects()`, `pp_check()` and
+`modelbased::estimate_*()` all return wrong numbers for these fits. **Nothing
+errors and nothing warns.**
+
+`gam_lnr6` (MullerLyer), summed over all 323,981 rows at one draw:
+
+| draw | `lp__` | log-lik behind `lp__` | `log_lik()`, brms 2.23.1 | `log_lik()`, 2.21.0 or patched 2.23.1 |
+| --- | --- | --- | --- | --- |
+| 1000 (chain 2) | 38,830 | 61,083 | **-198,679** | 61,083 |
+| 3500 (chain 7, the stuck one) | -55,604 | -41,083 | **-227,091** | -41,083 |
+
+The "log-lik behind `lp__`" column was computed by hand: `cogmod::dcogmod_lnr()`
+on the stored design matrices. Adding the std_normal `z`/`zs` terms (-22.2k and
+-14.5k) gives back `lp__` exactly. The 2026-09-28 `gam_rdm` finding (README →
+"Three traps": `mu` correlation 0.67, inverted error-rate curves) is the same
+bug. Its diagnosis there, "same smooth design matrices, so not mgcv or the
+BLAS", was wrong, for the reason given below.
+
+**Mechanism.** Every post-processing function goes through
+`prepare_predictions()`, whose first line is `x <- restructure(x)`. brms 2.23.0
+added this to `restructure_v2()`:
+
+```r
+if (version < "2.23.0") {
+  bframe <- brmsframe(x$formula, data = x$data)
+  x$basis <- frame_basis(bframe, data = x$data)
+}
+```
+
+This throws away the bases stored in the fit and rebuilds them from `m$data`
+with the local mgcv. brms has stored those bases since 2.20.0 for exactly this
+reason, so that predicting on another machine stays correct (brms#1465). 2.23.0
+changed the basis format: `levels` became `group_levels`, and the GP part
+changed for brms#1739. The rebuild is how old fits get the new format.
+
+A `t2()` basis is not unique. Each `cr` marginal's penalty has a
+two-dimensional null space (eigenvalues ~1e-14), and the sign of its basis
+vectors is whatever LAPACK returns. Comparing the rebuilt bases with the stored
+ones on the laptop gives the same pattern in every dpar (`-` is an exact sign
+flip):
+
+| matrix | columns, rebuilt vs stored |
+| --- | --- |
+| `Xs_<dpar>` (3) | `= - -` |
+| `Zs_<dpar>_1_1` (9) | all `=` |
+| `Zs_<dpar>_1_2` (6) | `= = = - - -` |
+| `Zs_<dpar>_1_3` (6) | all `=` |
+
+The draws are coefficients of the stored basis, so the flipped columns get
+their coefficients with the wrong sign. That breaks two of the three
+unpenalised (linear) columns and one of the three penalised components of
+every smooth, at every point.
+
+`standata(m)` and `standata(m, newdata = ...)` do **not** restructure, so they
+return the stored bases. That is why the 2026-09-28 comparison of design
+matrices saw nothing. It is also why `lba_modes/` is correct: those scripts
+compute by hand from `standata(m)`. And it means `standata()` cannot be used to
+check what `posterior_*()` computes.
+
+**Version or platform? Both, in that order.**
+
+- **The brms version decides whether the basis is rebuilt.** brms 2.21.0 on the
+  laptop uses the stored bases and is exact (table above; `gam_rdm` matched the
+  cluster to 1e-15 on 2026-09-28). Only brms >= 2.23.0 reading a fit made before
+  2.23.0 rebuilds. A fit made with >= 2.23.0 is never rebuilt, but that does not
+  help with the fits we have.
+- **The platform decides what the rebuild gives.** Rebuilding with mgcv alone
+  (`smoothCon()` + `smooth2random()`, as brms calls them) on the laptop gives
+  the same flips under mgcv 1.9-0, the cluster's version (built from source
+  into a scratch library), as under the laptop's 1.9.4. So mgcv's version is
+  not the cause; LAPACK/BLAS is. The laptop runs R's reference LAPACK 3.12.1,
+  the cluster FlexiBLAS/OpenBLAS with LAPACK 3.11.0. A rebuild on the cluster
+  itself would probably reproduce the stored bases. That is untested, and
+  nothing should depend on it.
+
+**Restoring the whole stored basis is not enough either.** 2.23 reads group
+levels from `basis$group_levels`, but a 2.21 basis calls them `levels`. With
+`m$basis <- <stored basis>` the smooths come out right, but a `newdata` that
+holds only some participants is matched to them by position. The 4
+participants in a 6-row `newdata` got the `r_` of the first 4 levels in
+alphabetical order. With every participant in `newdata`, or with
+`re_formula = NA`, the result is correct. So the patch swaps back only the
+smooths:
+
+```r
+b <- m$basis
+m <- brms::restructure(m)   # what 2.23 does anyway; it also records the version, so later calls skip it
+m$basis$dpars <- b$dpars    # the stored smooths; keep the rebuilt group_levels
+```
+
+`keep_stored_basis.R` wraps this as `keep_stored_basis(m)`, with
+guards for the cases it does not cover. Apply it to a fit fresh from
+`readRDS()`: once 2.23 has restructured a fit, the stored bases are gone.
+
+Verified 2026-10-02 against brms 2.21.0 on the same laptop. For `gam_lnr6`,
+`gam_rdm` and `gam_ddm4` (MullerLyer) the patched 2.23.1 is identical, with
+max |diff| 0, on every check: each dpar's linear predictor on 500 training rows
+with participants, the same on a 40-point grid without participants,
+`log_lik()` on those rows, and `estimate_relation(predict = "mu")`. The
+unpatched 2.23.1 on `gam_lnr6` is off by up to 9.4 on the link scale
+(`sigmabias`), 5.2 (`nuone`) and 2.6 (`mu`); only `poutlier`, which has no
+smooth, is unaffected. Its `estimate_relation(mu)` correlates 0.65 with the
+right one, and the summed `log_lik()` over the 500 rows is -277 against +110.
+
+The scripts behind these numbers were one-off and are not kept; this section
+is the record. The patch covers what these fits contain (`t2()` smooths and one
+grouping factor), not `gp()` terms, and only for fits with
+`m$version$brms < 2.23.0`.
+
+**What is affected** (audited 2026-10-02):
+
+| where | affected? |
+| --- | --- |
+| `1_modelcomparison.qmd` | **no.** It reads prediction files only. All 11 in `analysis/models/predictions/` are format 2 and were made on the cluster with brms 2.21.0 (their `$meta$packages`). The local fallback, `run_predictions()`, refuses a brms other than the fit's. |
+| `combine_model.R` (`loo`) | **no.** It runs on the cluster under 2.21.0. |
+| `2_analysis.qmd` | **yes:** `estimate_relation()` at ~116 (the density plots) and ~307 (the heatmaps), on whatever fit it loads. It currently reads `models/gam_lnr_muller.rds`, which no longer exists, and nothing has been rendered from it, so no wrong output exists yet. Before reviving it, move its predictions into `predictions.R`, or patch the fit right after `readRDS()`. |
+| `server/lba_modes/` | **no.** Computed by hand from `standata(m)` and validated against `lp__` (`lba_decompose.R`). |
+| `0_preprocessing.qmd` | **no.** Its `estimate_relation()` calls are on `mgcv::bam` models fitted in the same session. |
+| summaries of the draws (`summary()`, `fixef()`, `as_draws_*()`, Rhat, `lp__`) | **no.** No basis is involved. |
+| ad hoc calls on the laptop | **yes**, any of the functions listed at the top of this section, plus `conditional_smooths()`, `bayes_R2()`, `insight::get_predicted()` and `marginaleffects`, on a cluster fit under 2.23.1 |
+
+**Safe workflow, in order of preference:**
+
+1. **Predict on the cluster**, with `./hpc predict <model>`. That uses the fit's
+   own brms, mgcv and LAPACK. Anything new that needs a fit goes into
+   `predictions.R` (AGENTS.md ground rule).
+2. **Locally, brms 2.21.0 in a library of its own**, put first on the path
+   before brms loads: `.libPaths(c("<lib>", .libPaths()))`. Build it once with
+   `install.packages("https://cloud.r-project.org/src/contrib/Archive/brms/brms_2.21.0.tar.gz", repos = NULL, type = "source", lib = "<lib>")`.
+   brms is pure R, so this needs no compiler. This is what the
+   `run_predictions()` guard asks for.
+3. **Locally under 2.23.x, `keep_stored_basis()`**, for exploratory work.
+   `run_predictions()` still refuses this, on purpose: the guard compares
+   versions and cannot see whether the basis was patched.
+4. **Do not upgrade brms on the cluster** while these fits are in use. Pin 2.21.0
+   in `install_pkgs.R`, which has been open since 3.8. A rebuild there would
+   probably agree with the stored bases, but that is the same untested
+   assumption that failed on the laptop.
+
+**A check that catches it, whichever route:** at one draw, compare
+`posterior_linpred(m, dpar = <any smoothed dpar>)` on a few training rows (no
+`newdata`) with the same predictor computed from `standata(m)` and the draws.
+Or sum `log_lik()` over all rows at one draw, add the std_normal `z`/`zs` terms,
+and compare with `lp__` (`lba_modes/lba_decompose.R` does that bookkeeping).
+
+Reported upstream on 2026-10-02, with the fix of keeping the stored `$sm`
+entries in `restructure_v2()`. It reintroduces brms#1465 for every fit older
+than 2.23.0, and it is still in brms master (2.23.2) as of that date.
 
 ---
 
@@ -307,7 +505,7 @@ chain that dies costs nothing but its share of the task; the task continues
 with the survivors.
 
 **Fixed in cogmod 0.3.3 (2026-09-18).** The cause was run down to a single
-trial per rejection and written up in `cogmod_inits_issue.md`: the `A == 0`
+trial per rejection, and the fix is in cogmod's `NEWS.md` (0.3.3): the `A == 0`
 branch of `cogmod_lognormal_acc_ltails()` called Stan's `lognormal_lcdf` /
 `lognormal_lccdf`, which are `erfc` alone and underflow ~38 standardized log
 units out, giving `-inf` with a `NaN` partial; the outlier mixture kept the
@@ -409,10 +607,12 @@ are unaffected, and so are the other new families. Leave the entry in
 
 Measured 2026-09-18 with a standalone Stan program calling `wiener_lpdf` in
 each of its forms, cost normalised by `n_leapfrog__` so the variants are
-comparable. Full report — the mechanism verified against cogmod source, the
-proposed fix and its design constraints — in **`cogmod_ddm_cost_issue.md`**.
-The harness that produced the table below was never committed and is not
-recoverable; that report's §5 specifies one that would re-derive it, unrun.
+comparable. cogmod's `NEWS.md` (0.3.3) records the mechanism. The full report,
+with the proposed fix and its design constraints, was
+`cogmod_ddm_cost_issue.md`; it was removed on 2026-10-02 and is still in git:
+`git show 402f9ae:analysis/server/cogmod_ddm_cost_issue.md`. The harness that
+produced the table below was never committed and is not recoverable; the
+report's §5 specifies one that would re-derive it, unrun.
 
 `cogmod_ddm_decision_lpdf()` routes on an **exact-zero test**:
 
@@ -483,7 +683,8 @@ with 8 threads the classic path predicts 80 ms per gradient against the 78 ms
   (`.pwald_sv()` / `.WALD_STAN_PRELUDE` in `R/core_shifted.R`). A 3x3 rule
   projects to ~6x faster, which is what would make a six-parameter DDM routine
   and a seven-parameter one reachable in combination with a warm start.
-  `cogmod_ddm_cost_issue.md` §4.1 has the design constraints.
+  The design constraints are §4.1 of the removed report (the `git show`
+  above).
 
 ### 4.8 Criterion cost — `loo` over every draw is affordable (2026-09-20)
 
@@ -501,10 +702,30 @@ makes:
 | 3000, `cores = 16` | — | 535 s |
 
 Reading and merging the three shards is 8 s of that. The log-likelihood matrix
-is 3.6 GB at 1500 draws and 7.2 GB at 3000. On memory, use the **45 GB** that
-the real `waic`-at-1500 combine reported, not the 185 GB peak of the probe job:
-the probe ran all five cells in one R session and kept every result, so its
-peak says nothing about a single combine. `combine.slurm`'s 128 GB stands.
+is 3.6 GB at 1500 draws and 7.2 GB at 3000.
+
+**Memory: 192G since 2026-09-29, not 128G.** The 128G was set from the 45 GB of
+a `waic`-at-1,500-draws combine. With `loo` over every draw of four shards, the
+peak is several times that. It scales with draws x rows: `log_lik()` evaluates
+each distributional parameter over all draws x rows, and `loo()` makes several
+copies of the log-likelihood matrix, each 9.7 GiB at 4,000 draws x 323,981 rows.
+`MaxRSS` (cgroup, sampled every 30 s unless noted):
+
+| combine | shards (draws) | peak |
+| --- | --- | --- |
+| `gam_ddm4`, `gam_lnr6`, `gam_ddm5` | 2 (2,000) | 53-65 GiB |
+| `gam_lnr`, `gam_ddm4`, `gam_ddm5`, `gam_lnr_vh`, `gam_ddm4_vh` | 4 (4,000) | 100-106 GiB |
+| `gam_lnr6` (11417254, 128G) | 4 (4,000) | OOM-killed at 17 min, in `log_lik()` |
+| `gam_lnr6` (11417275, 192G, 5 s sampling) | 4 (4,000) | **122 GiB**, 18.5 min |
+
+`gam_lnr6` has seven draws x rows parameters (one more than `gam_lnr`), and at
+122 GiB resident it sits at 95% of 128 GiB before page cache and the spikes
+between samples. Expect the same from `gam_lnr6_*` on the other illusions and
+from `gam_lba*`, which also have seven. The 30 s rows understate their true
+peaks too, so 128G was never a comfortable margin at four shards. The general
+nodes had 300-990 GB free, and the 192G job dispatched within two minutes.
+Ignore the 185 GB peak of the probe job: it ran all five cells in one R
+session and kept every result.
 
 Three measurements set the defaults:
 
@@ -556,6 +777,86 @@ re-combined under `loo`.
 So the guard is now manual, and it is the one thing to remember about this
 change: **a changed parametrisation or formula needs its own `IGC_MODELS_DIR`,
 or `IGC_FILE_REFIT=always`.** `IGC_DELETE_SHARDS=1` restores the old behaviour.
+
+### 4.9 `gam_lba` (MullerLyer) did not converge: two modes (2026-10-01)
+
+Fitted and combined on the second account (4 shards x 2 chains, warmup 1000 +
+500, brms 2.21.0, cold starts, the post-5.7 priors with `exponential(1)` on
+`sds`). The combined file was uploaded to `models/combined/` on `dmm56`. **It
+has no prediction file and is not in `1_modelcomparison.qmd`.** Do not run
+`./hpc predict gam_lba` on it as it stands.
+
+The eight chains sit in two modes and none of them crosses between them. lp__
+is flat from the first 100 draws to the last in every chain:
+
+| | chains (shard.chain) | lp__ | lprior | `driftone` | `sigmaone` | `sigmabias` | `boundary` | sd(`driftone` \| ppt) | sd(`boundary` \| ppt) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| A | 1.1, 1.2, 2.2, 3.2, 4.2 | ~36,965 | ~ -91 | -4.9 | 2.0 | -0.04 | 0.38 | 1.23 | 0.55 |
+| B | 2.1, 3.1, 4.1 | 38,226-38,308 | ~ -143 | -7.0 | 2.6 | -0.45 to -0.78 | 0.57-0.64 | 1.77-1.86 | 0.34 |
+
+The parameter columns are intercepts on the link scale. `driftone` is identity
+and the other three are softplus. The `mu`, `ndt` and `poutlier` intercepts
+barely differ between the modes.
+
+The investigation is written up in **`cogmod_lba_modes_issue.md`**, and the
+scripts are in `lba_modes/`. In short:
+
+- **The modes are real.** Along the straight line between them the
+  log-likelihood dips by 4,500-5,700. A is a tight local optimum: its 5 chains
+  agree (Rhat 1.03). B fits better by **1,364 log-likelihood units** (lp__ split
+  by hand, then checked observation by observation), but its 3 chains disagree
+  (Rhat 1.86, on `ndt` / `sigmabias` / `boundary`).
+- **B's gain is in correct-response RTs** (+1,433, against -69 on errors),
+  mostly in conflicting D2-D4. It is spread across participants, not
+  concentrated in a few.
+- **cogmod's Stan density is accurate** (to 1e-11 against direct integration,
+  with smooth gradients), so the code is not the cause. The geometry is.
+  Facilitating trials have 1-3% errors, so the error accumulator sits at
+  v/s of -4 to -5.4. There the truncated drift becomes Exponential-like and is
+  identified only through |v|/s². The modes place it at drift -7 to -12 and
+  -15 to -17 with the same realised drift, and they split threshold against
+  start-point range differently across the design.
+- **Both modes predict the same behaviour**, and both miss fast errors in the
+  easy cells the same way. A longer run would not reveal the "true"
+  parameters.
+- **The diagnostics show the split:** max Rhat 13.8 on a `sigmabias` smooth
+  coefficient, and population SDs at 7-10, against the 1.3-1.9 that
+  participant terms give the other models (6.1). 6,342 of 15,690 parameters
+  have Rhat > 1.1. There were no divergences, and 492 observations have Pareto
+  k > 0.7, which is ordinary here. Divergences and k do not show this problem.
+- **Every iteration of every chain hits treedepth 10** (1,023 leapfrogs). Step
+  sizes are 0.0017-0.0052. Chains took 48-72 h each (31-50 h of warmup), so a
+  shard runs 2.3-3 days.
+- **The priors are overwhelmed, not causal.** The `driftone` intercept sits
+  3-4 SDs below `normal(1, 2)`, and the smooth SDs are 15-36 against
+  `exponential(1)`. The prior difference between the modes (52) is small next
+  to the likelihood difference (1,364).
+- **The init is worth fixing in cogmod:** LBA2 starts `driftone = mu = 3`, the
+  cold-start pattern cogmod already corrected for the RDM. But all 8 chains
+  started at the same point and still split, so it is unlikely to be the
+  whole story.
+
+More shards of the same model would only add more chains to A or B. A warm
+start near mode B would also do, but 5.5 rules it out.
+
+**Plan (user's decision, 2026-10-01):**
+1. **First, adjust cogmod's defaults**, listed in
+   **`cogmod_lba_priors_inits.md`**: the LBA2 `driftone` start, the `sds` start
+   and prior on the drift smooths, and the `mu`/`driftone` prior asymmetry.
+   Then the user re-runs `gam_lba` unchanged to see whether the split
+   replicates. Give the re-run its own `IGC_MODELS_DIR` (or
+   `IGC_FILE_REFIT=always`), and `./hpc install cogmod` first.
+   *Status 2026-10-02:* this is done in cogmod 0.3.4 on `dev` (2), apart from
+   the warning that B3 of the note proposes; the note's header lists what
+   was changed. The next step is the re-run itself, on 0.3.4 like every new
+   fit (2).
+2. **Only if it replicates**, change the model:
+   **`sigmaone ~ 1 + (1 | Participant)`** (no smooth on `sigmaone`). With the
+   error accumulator's drift SD shared across conditions, |v|/s² pins
+   `driftone` in every condition. It would be a new `models.R` entry, not an
+   edit to `gam_lba`. Further options, in reserve: `sigmabias` treated the same
+   way, `sigmaone = 1`, or dropping the LBA in favour of `gam_lnr6`
+   (`cogmod_lba_modes_issue.md` §6).
 
 ---
 
@@ -667,7 +968,7 @@ was subtler than a missing prior: brms fills the *blanket* `sds` row itself and
 leaves the per-term rows empty, so cogmod's filler never saw a candidate and an
 `sds` on a dpar silently kept brms's default while `?cogmod_priors` advertised
 `exponential(1)`. 0.3.3 replaces the blanket row instead
-(`R/cogmod_priors.R:920-933`; `cogmod_ddm_cost_issue.md` §4.2 has the detail).
+(`R/cogmod_priors.R:920-933`; cogmod's `NEWS.md`, 0.3.3, has the detail).
 
 Verified 2026-09-22: the cluster library is cogmod 0.3.3 at commit `d04c7f8`,
 built 2026-09-20, and that commit contains the fix. So **fits submitted from
@@ -675,6 +976,12 @@ built 2026-09-20, and that commit contains the fix. So **fits submitted from
 does not** — which makes it a property of the library at submission time rather
 than of anything in this repo. Worth knowing before comparing smooth surfaces
 across models fitted at different times.
+
+cogmod 0.3.4 changes this again (2). The fixed `exponential(1)` becomes a rate
+set per smooth from its basis. On these `t2()` smooths one unit of `sds` is
+only about 0.1 link units of wiggle, so 0.3.3's `exponential(1)` was tight
+there, and 0.3.4's prior is much looser. Fits built after a 0.3.4 install are
+a third prior set.
 
 ---
 
@@ -766,7 +1073,7 @@ It doubles as the measurement that closes open question 7.1. In the `.out`:
   tested (4.6), and cogmod 0.3.3 removed the `NaN` gradient that made some of
   the earlier divergences (4.5).
 - In the `.err`: no "Rejecting initial value". Any at all means the 0.3.3 fix
-  is incomplete at this scale — reopen `cogmod_inits_issue.md`.
+  is incomplete at this scale — reopen the init investigation (4.5).
 - `max Rhat` and `min neff_ratio` are expected to look bad (1.3-1.9, ~0.005)
   because one or two participants' `ndt`/`poutlier` trade off; check the
   population-level terms rather than the global maximum (4.4.1).
@@ -893,7 +1200,7 @@ machinery removed (2026-09-18); `verylong` — not worth it.
 | file | role |
 | --- | --- |
 | `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/queue/log/ls/pull/cancel/sh |
-| `install_pkgs.R` | builds the project R library (`./hpc install`); enforces cogmod >= 0.3.3 |
+| `install_pkgs.R` | builds the project R library (`./hpc install`); enforces cogmod >= 0.3.4 (`IGC_COGMOD_MIN`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model, read by everything else |
 | `fit_model.R` | fits the model named by `IGC_MODEL`, one shard per array task |
@@ -901,7 +1208,6 @@ machinery removed (2026-09-18); `verylong` — not worth it.
 | `combine_model.R` | merges one model's shards, adds `loo`, keeps them |
 | `combine.slurm` | job for the above |
 | `README.md` | command reference, partition quotas, PCH detail |
-| `cogmod_inits_issue.md` | the cold-start init failures, root cause, and the 0.3.3 fix |
-| `cogmod_ddm_cost_issue.md` | why a freed DDM variability costs 18-55x per gradient, and the cogmod fix it needs |
+| `keep_stored_basis.R` | `keep_stored_basis()`, the local workaround for 3.9 |
 | `hpc.local` | **gitignored** — this machine's account settings |
 | `server.md` | **gitignored** — local notes on this project's cluster directories (account, keys and VPN live in the lab hub's `hpc/private/`) |

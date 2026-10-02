@@ -133,9 +133,10 @@ When they are done:
 ```
 
 `combine` is one job, not an array, and its constraint is memory rather than
-CPU: `--mem=128G` on `general`, because `add_criterion()` builds a
-draws x 323,981 pointwise log-likelihood matrix (7.2 GB over all draws) through
-an R-level `log_lik` called once per response. Measured peak was 45 GB.
+CPU: `--mem=192G` on `general`. `add_criterion()` holds several
+draws x 323,981 matrices at once, 9.7 GiB each at 4,000 draws. Four-shard
+combines peaked at 100-106 GiB, and `gam_lnr6` peaked at 122 GiB: it was
+OOM-killed at the old 128G on 2026-09-29 (AGENT.md §4.8).
 
 Since 2026-09-20 it adds **`loo` over every draw** and **keeps the shards**.
 Both were measured rather than assumed: `loo` over all 3,000 draws of the
@@ -213,16 +214,24 @@ scripts are in `tests/predict_speed/` on the cluster.
   `estimate_relation()` then fails on it (fixed in insight's development
   version, 1.5.4.1). `predict_parameters()` now takes the parameters from brms
   (`brmsterms()$dpars`) instead, so it no longer depends on insight for this.
-- **brms 2.23.1 mispredicts fits made with 2.21.0.** Same draws, same smooth
-  design matrices, and still a different `mu` on the training rows
-  (correlation 0.67 with 2.21.0's, on `gam_rdm`); its error-rate curves come
-  out roughly inverted along illusion difference — correlation 0.26–0.30 with
-  the observed error rates, against 0.98 for the cluster's. The same fit under
-  brms 2.21.0 on the same laptop matches the cluster to 1e-15, so it is brms,
-  not R, mgcv or the BLAS. Nothing errors, so `run_predictions()` now refuses a
-  brms other than `m$version$brms`, records it in `$meta$fit_brms`, and
+- **brms 2.23.1 mispredicts fits made with 2.21.0.** Same draws, and still a
+  different `mu` on the training rows (correlation 0.67 with 2.21.0's, on
+  `gam_rdm`). Its error-rate curves come out roughly inverted along illusion
+  difference, correlating 0.26–0.30 with the observed error rates against 0.98
+  for the cluster's. The same fit under brms 2.21.0 on the same laptop matches
+  the cluster to 1e-15. Nothing errors, so `run_predictions()` now refuses a
+  brms other than `m$version$brms` and records it in `$meta$fit_brms`.
   `igc_predictions_version` went to 2, which retires every file made before
   (all of them laptop-made with 2.23.1, and wrong). **Predict on the cluster.**
+  *Corrected 2026-10-02:* this said "same smooth design matrices, so it is
+  brms, not R, mgcv or the BLAS", and that was wrong. On its way into every
+  prediction, brms 2.23's `restructure()` replaces an older fit's stored smooth
+  bases with ones rebuilt by the local mgcv. On the laptop's LAPACK the
+  rebuilt `t2()` bases have sign-flipped columns. `log_lik()` is wrong the
+  same way, so this is not only about predictions. The check missed it because
+  `standata(m)` returns the stored bases. The mechanism, what it affects, and
+  a verified local workaround (`keep_stored_basis.R`) are in
+  `AGENT.md` §3.9.
 
 **Re-run `predict` whenever its input changes** — a model re-combined, or
 anything in `predictions.R` that changes the output (`plot_ranges`, the grid
@@ -264,7 +273,7 @@ Every model is fitted to **MullerLyer** unless its row says otherwise.
 | `gam_ddm7` | `cogmod_ddm()` | all seven: as DDM-5 plus `sigmabias`, `sigmandt` | — | ⚠ **not viable at full data — subsample only** |
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
 | `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — |
-| `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` |
+| `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **MullerLyer fit (2026-10-01) not converged: two modes, max Rhat 13.8, so no predictions** (`AGENT.md` §4.9, `cogmod_lba_modes_issue.md`) |
 | `gam_lnr_verticalhorizontal` | `cogmod_lnr()` | as `gam_lnr` | `sigmabias = 0` | fitted to **VerticalHorizontal**; see [Running models on other illusions](#running-models-on-other-illusions) |
 | `gam_ddm4_verticalhorizontal` | `cogmod_ddm()` | as `gam_ddm4` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 | fitted to **VerticalHorizontal** |
 
@@ -319,7 +328,7 @@ What follows from that, before anyone spends a run rediscovering it:
   Give it its own `IGC_MODELS_DIR`.
 
 `gam_ddm4` and `gam_ddm5` are unaffected. Full numbers and the proposed cogmod
-fix in `AGENT.md` §4.7.1 and `cogmod_ddm_cost_issue.md`.
+fix in `AGENT.md` §4.7.1.
 
 Adding a model is one entry in `models.R` and nothing else. Which account is
 fitting what is deliberately not recorded here — it changes, and `./hpc queue`
@@ -579,16 +588,22 @@ new commits. Naming a package on the command line force-reinstalls it:
 ./hpc install all        # force-reinstall everything
 ```
 
+**New fits use cogmod 0.3.4 (`dev`), decided 2026-10-02.** It changes the
+priors of every model with a smooth. Install it only when no array has tasks
+pending: push, then install, then submit. `AGENT.md` §2 has the reasons and
+the guards.
+
 This runs through `srun` on a compute node rather than compiling on the login
 node, and prints the resulting versions plus the cogmod ref and commit SHA at
 the end.
 
-**The fits require cogmod >= 0.3.3**, which fixed the non-finite tail gradient
-in the LNR and the init jitter that started smooths far from their targets (see
-`cogmod_inits_issue.md`). `install_pkgs.R` fails if the installed version is
-below that floor, and `fit_model.R` refuses to start — better a failed install
-than a 20-hour job with the old numerics. `IGC_COGMOD_REF` is `dev` until 0.3.3
-is merged into `main`; change the default in `hpc` when it lands.
+**The fits require cogmod >= 0.3.4** (`IGC_COGMOD_MIN`, default `0.3.4`; it
+was 0.3.3 until 2026-10-02). 0.3.3 fixed the LNR's non-finite tail gradient and
+the init jitter (`AGENT.md` §4.5), and 0.3.4 changed the smooth priors
+(`AGENT.md` §2). `install_pkgs.R` fails if the installed version is below the
+floor, and `fit_model.R` refuses to start. Each new shard records its cogmod as
+`m$cogmod`, and `combine_model.R` refuses shards whose versions differ.
+`IGC_COGMOD_REF` stays `dev`.
 
 CmdStan itself is already built at `~/.cmdstan/cmdstan-2.39.0` on `dmm56` and
 is found automatically by `cmdstanr`. On an account that has none, `./hpc
@@ -628,7 +643,9 @@ belt and braces.
 | `predict_model.R` | runs `predictions.R` on one combined model (`./hpc predict`) |
 | `predict.slurm` | job for the above |
 | `AGENT.md` | the measurements and the traps — read before changing settings |
-| `cogmod_inits_issue.md` | the cold-start init failures and their root cause |
-| `cogmod_ddm_cost_issue.md` | why `gam_ddm7` is 55x dearer per gradient, and the cogmod fix for it |
+| `keep_stored_basis.R` | makes the laptop's brms 2.23 predict the cluster's 2.21.0 fits correctly (`AGENT.md` §3.9) |
+| `cogmod_lba_modes_issue.md` | why the full-data `gam_lba` split into two modes, and the options |
+| `cogmod_lba_priors_inits.md` | the cogmod defaults to fix before re-running `gam_lba` (drift-smooth priors, starting values), with the model written out in full |
+| `lba_modes/` | the laptop scripts behind it (they read the combined fit; nothing is refitted) |
 | `hpc.local` | **gitignored** — this machine's account settings, e.g. `IGC_HPC_USER=oc236` |
 | `server.md` | **gitignored** — local notes on this project's cluster dirs |

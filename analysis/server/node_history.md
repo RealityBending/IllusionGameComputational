@@ -47,7 +47,7 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_ddm5 | 11404322 | 2 | a40-11 | zen3 | done | 116.5 h |
 | gam_ddm5 | 11404322 | 4 | a40-11 | zen3 | done | 137.1 h |
 | gam_lnr6 | 11406608 | 5 | a40-02 | zen3 | **cancelled at 200/1500** | 38.6 h |
-| gam_lnr6 | 11410717 | 6 | rtx-01 | zen5 (`--constraint`) | running, 1400-1500/1500 after 82 h (2026-09-28) | |
+| gam_lnr6 | 11410717 | 6 | rtx-01 | zen5 (`--constraint`) | done, **chain 1 stuck** (step size 2.9e-05, lp__ -55,700 vs +38,900) | 84.8 h |
 | gam_lnr_verticalhorizontal | 11411625 | 1 | rtx-00 | zen5 (`--constraint`) | done | 17.5 h |
 | gam_lnr_verticalhorizontal | 11411625 | 2 | rtx-00 | zen5 (`--constraint`) | done | 20.6 h |
 | gam_lnr_verticalhorizontal | 11411625 | 3 | rtx-00 | zen5 (`--constraint`) | done | 20.7 h |
@@ -56,6 +56,19 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_ddm4_verticalhorizontal | 11414141 | 2 | rtx-01 | zen5 (`--constraint`) | done | 17.8 h |
 | gam_ddm4_verticalhorizontal | 11414141 | 3 | rtx-01 | zen5 (`--constraint`) | done | 21.4 h |
 | gam_ddm4_verticalhorizontal | 11414141 | 4 | rtx-01 | zen5 (`--constraint`) | done | 20.1 h |
+| gam_lnr6_verticalhorizontal | 11415945 | 1 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-28 | |
+| gam_lnr6_verticalhorizontal | 11415945 | 2 | rtx-01 | zen5 (`--constraint`) | running, started 2026-09-28 | |
+| gam_lnr6_verticalhorizontal | 11415945 | 3 | rtx-01 | zen5 (`--constraint`) | running, started 2026-09-28 | |
+| gam_lnr6_verticalhorizontal | 11415945 | 4 | rtx-02 | zen5 (`--constraint`) | running, started 2026-09-28 | |
+| gam_ddm5_verticalhorizontal | 11415949 | 1 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 23.9 h |
+| gam_ddm5_verticalhorizontal | 11415949 | 2 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 23.8 h |
+| gam_ddm5_verticalhorizontal | 11415949 | 3 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 22.1 h |
+| gam_ddm5_verticalhorizontal | 11415949 | 4 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 23.4 h |
+| gam_rdm_verticalhorizontal | 11417276 | 1 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-29 | |
+| gam_rdm_verticalhorizontal | 11417276 | 2 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-29 | |
+| gam_rdm_verticalhorizontal | 11417276 | 3 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-29 | |
+| gam_rdm_verticalhorizontal | 11417276 | 4 | rtx-02 | zen5 (`--constraint`) | running, started 2026-09-29 | |
+| gam_lnr6 | 11417300 | 6 (refit, `IGC_FILE_REFIT=always`) | rtx-02 | zen5 (`--constraint` on sussexneuro) | running, started 2026-09-29 | |
 
 ## What it says so far (updated 2026-09-26)
 

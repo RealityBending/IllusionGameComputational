@@ -343,12 +343,15 @@ par_lapply <- function(x, f, cores = 1) {
 # does not depend on which others run or in what order.
 #
 # Only with the brms that fitted the model. brms 2.23.1 reads a fit made with
-# 2.21.0 without complaint, with the same draws and the same smooth bases, and
-# still predicts something else from them -- mu on the training rows
-# correlates 0.67 with what 2.21.0 gives, and the error-rate curves come out
-# roughly inverted along illusion difference. Measured 2026-09-28 on gam_rdm;
-# the same fit under 2.21.0 on the same laptop matched the cluster exactly.
-# Nothing fails, so this check is the only thing that catches it.
+# 2.21.0 without complaint and predicts something else from the same draws --
+# mu on the training rows correlates 0.67 with what 2.21.0 gives, and the
+# error-rate curves come out roughly inverted along illusion difference.
+# Measured 2026-09-28 on gam_rdm; the same fit under 2.21.0 on the same laptop
+# matched the cluster exactly. The cause (found 2026-10-02, AGENT.md 3.9):
+# 2.23's restructure() replaces an older fit's stored smooth bases with ones
+# rebuilt by the local mgcv, and on the laptop's LAPACK those have
+# sign-flipped columns. Nothing fails, so this check is the only thing that
+# catches it.
 run_predictions <- function(m, name, fit_file = NULL, settings = list()) {
   fit_brms <- as.character(m$version$brms)
   if (length(fit_brms) && utils::packageVersion("brms") != fit_brms) {

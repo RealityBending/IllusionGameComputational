@@ -59,8 +59,9 @@ R_MODULE="${IGC_R_MODULE:-CmdStanR/0.7.1-foss-2023a-R-4.3.2}"
 EB_MODULES="${IGC_EB_MODULES:-/mnt/shared/easybuild/modules/all}"
 R_LIBS_DIR="${IGC_R_LIBS:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cluster_R_libs/x86_64-pc-linux-gnu-library/4.3}"
 
-# Which cogmod the cluster library tracks. 'dev' until 0.3.3 is merged into
-# main; the fits refuse to start below 0.3.3.
+# Which cogmod the cluster library tracks. 'dev', which is 0.3.4: new fits use
+# it (decision 2026-10-02, AGENT.md 2), and fit_model.R refuses anything below
+# IGC_COGMOD_MIN (default 0.3.4).
 COGMOD_REF="${IGC_COGMOD_REF:-dev}"
 
 # Passed through to fit_model.R. Default "never" resumes a killed array by
@@ -191,6 +192,7 @@ cmd_install() {
       module load \"${R_MODULE}\"
       export IGC_R_LIBS=\"${R_LIBS_DIR}\"
       export IGC_COGMOD_REF=\"${COGMOD_REF}\"
+      export IGC_COGMOD_MIN=\"${IGC_COGMOD_MIN:-0.3.4}\"
       export IGC_FORCE=\"${forced}\"
       Rscript install_pkgs.R
     '"
@@ -233,7 +235,7 @@ submit_per_model() {
   #   IGC_NPARTICIPANTS=30 IGC_WARMUP=300 ./hpc fit gam_lnr
   #   IGC_CRITERION=waic IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_lnr
   local extra="" v val
-  for v in IGC_NPARTICIPANTS IGC_WARMUP IGC_SAMPLES IGC_CHAINS \
+  for v in IGC_NPARTICIPANTS IGC_WARMUP IGC_SAMPLES IGC_CHAINS IGC_COGMOD_MIN \
            IGC_CRITERION IGC_CRITERION_NDRAWS IGC_DELETE_SHARDS; do
     eval "val=\${$v:-}"
     [ -n "$val" ] && extra="${extra},${v}='${val}'"

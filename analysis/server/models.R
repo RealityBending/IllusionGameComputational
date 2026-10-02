@@ -144,7 +144,7 @@ igc_models <- list(
   # start (it buys back warmup, not per-gradient cost). What does work is fewer
   # participants -- about 2.7-4.7 days per chain at 200, with 1 chain x 16
   # threads and its own IGC_MODELS_DIR. The real fix is a fixed-node quadrature
-  # rule in cogmod; see cogmod_ddm_cost_issue.md.
+  # rule in cogmod; see AGENT.md 4.7.1.
   gam_ddm7 = list(
     illusion = "MullerLyer",
     formula = function() {
@@ -225,6 +225,12 @@ igc_models <- list(
   # is what lets the two accumulators differ. Do not free sigmazero without
   # replacing the constraint with another one, or the chains will wander along
   # that ridge and Rhat will show it.
+  #
+  # NOT CONVERGED at full data (MullerLyer, 2026-10-01): the chains split into
+  # two modes that differ in the error accumulator and in how individual
+  # differences divide between drift and boundary. Max Rhat is 13.8. See
+  # AGENT.md 4.9 before refitting it, or its _verticalhorizontal / _ebbinghaus
+  # siblings.
   gam_lba = list(
     illusion = "MullerLyer",
     formula = function() {

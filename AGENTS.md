@@ -22,12 +22,20 @@ project lives in `analysis/server/`:
   partition, a resource request, warmup, or the number of chains.** Several of
   those settings look arbitrary and are not; each one that was changed
   carelessly cost a failed run, and they are written up with the evidence.
-- `analysis/server/cogmod_inits_issue.md` — the cold-start initialisation
-  failures and their root cause, fixed in cogmod 0.3.3.
-- `analysis/server/cogmod_ddm_cost_issue.md` — why `gam_ddm7` costs 55x per
-  gradient (a branch into numerical quadrature, not model geometry), what does
-  and does not fix it, and the change cogmod would need. Read it before
-  proposing anything about the seven-parameter DDM.
+- cogmod's [`NEWS.md`](https://github.com/DominiqueMakowski/cogmod/blob/main/NEWS.md)
+  (0.3.3 entries) records the cold-start initialisation failures and their fix.
+  It also explains why freeing `sigmabias` / `sigmandt` makes the DDM so much
+  dearer per gradient: a branch into numerical quadrature, not model geometry.
+  Read that, and `analysis/server/AGENT.md` §4.7.1, before proposing anything
+  about the seven-parameter DDM.
+- `analysis/server/cogmod_lba_modes_issue.md` — why the full-data `gam_lba`
+  fit split into two posterior modes: not a code bug, but the error
+  accumulator's identifiability where it rarely wins. Also what cogmod could
+  change, and the reparametrised variants. Read it before refitting any
+  `gam_lba*`.
+- `analysis/server/cogmod_lba_priors_inits.md` — the cogmod defaults that were
+  to be fixed before re-running `gam_lba`, most of them now changed in cogmod
+  0.3.4 on `dev` (its status table), and the full `gam_lba` specification.
 
 The workflow, in one line:
 
@@ -63,6 +71,20 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   `analysis/server/predictions.R`, which the qmd and the cluster job share;
   the qmd itself only relabels and plots. Bump `igc_predictions_version` when
   the structure of what that file returns changes.
+- **Never run brms post-processing on a cluster fit with the laptop's brms.**
+  The fits are brms 2.21.0, and the laptop's 2.23.1 rebuilds their smooth
+  bases with the wrong signs. `log_lik()`, `loo()`, `posterior_*()`,
+  `fitted()`/`predict()` and `modelbased::estimate_*()` then return wrong
+  numbers without any warning. Predict on the cluster, use brms 2.21.0, or
+  call `analysis/server/keep_stored_basis.R` on the fit straight
+  after `readRDS()`. `standata(m)` is unaffected, so it is not a check.
+  `analysis/server/AGENT.md` §3.9 has the details.
+- **New fits use cogmod 0.3.4** (decision 2026-10-02), which changes the
+  priors of every model with a smooth. Whether to refit the older fits is
+  decided once every wanted model is fitted, so do not propose it before then.
+  The guards are a 0.3.4 floor, a per-shard `m$cogmod` stamp, and a combine
+  step that refuses mixed versions. Read `analysis/server/AGENT.md` §2 before
+  `./hpc install cogmod`.
 
 ## Two ways to fit more than one model at a time
 

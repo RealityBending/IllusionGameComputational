@@ -3,25 +3,24 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=128G
+#SBATCH --mem=192G
 #SBATCH --partition=general
 #SBATCH --output=combine_%j.out
 #SBATCH --error=combine_%j.err
 #SBATCH --mail-type=END,FAIL
 
-# One job = one model (IGC_MODEL): merge its shards, add waic, delete them.
-# Not an array.
+# One job = one model (IGC_MODEL): merge its shards, add loo over every draw,
+# keep the shards. Not an array.
 #
-# Memory, not CPU, is the binding constraint: every shard is read into RAM at
-# once, and add_criterion("waic", ndraws = 1500) then builds a pointwise
-# log-likelihood matrix of 1500 draws x 323,981 responses, which is ~3.9 GB
-# before R makes a copy of it. Hence 128G and only 4 CPUs -- the custom
-# family's log_lik is R code called once per response and is not parallelised,
-# so extra cores buy nothing and a slimmer request dispatches sooner. That
-# serial loop over 324k responses is also why this runs on `general` rather
-# than a slot on `short`. No --time is set, so the job takes general's 8 h
-# maximum (see README, "Getting jobs dispatched sooner"). See the note in
-# fit.slurm about the command-line overrides.
+# Memory, not CPU, is the binding constraint, and it scales with draws x rows:
+# log_lik() and loo() hold several draws x 323,981 matrices at once (9.7 GiB
+# each at 4,000 draws). Measured peaks for 4-shard (4,000-draw) combines:
+# 100-106 GiB for the 5-6-parameter models, 122 GiB for gam_lnr6, which was
+# OOM-killed at 128G on 2026-09-29 (job 11417254) and finished at 192G
+# (11417275). Hence 192G (AGENT.md 4.8). Only 4 CPUs: more cores do not speed
+# it up (4.8), and a slimmer request dispatches sooner. No --time is set, so
+# the job takes general's 8 h maximum; loo over 4,000 draws takes 11-18 min.
+# See the note in fit.slurm about the command-line overrides.
 
 PROJECT_DIR="${IGC_USERS_DIR:-$SLURM_SUBMIT_DIR}"
 export IGC_MODELS_DIR="${IGC_MODELS_DIR:-$PROJECT_DIR/models}"

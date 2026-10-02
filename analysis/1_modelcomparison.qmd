@@ -111,10 +111,15 @@ models <- list(
     "DDM-5" = "gam_ddm5_MullerLyer",
     "RDM" = "gam_rdm_MullerLyer",
     "RDM-5" = "gam_rdm5_MullerLyer"
+    # "LBA" = "gam_lba_MullerLyer"  # NOT CONVERGED (2026-10-01): its chains sit
+    # in two modes, max Rhat 13.8 (server/AGENT.md 4.9). No predictions made.
   ),
   VerticalHorizontal = c(
     "LNR" = "gam_lnr_verticalhorizontal_VerticalHorizontal",
-    "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal"
+    "LNR-6" = "gam_lnr6_verticalhorizontal_VerticalHorizontal",
+    "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal",
+    "DDM-5" = "gam_ddm5_verticalhorizontal_VerticalHorizontal",
+    "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal"
   )
 )
 
@@ -130,7 +135,7 @@ preds <- lapply(models, \(m) lapply(m, load_predictions))
 # One colour per model, whatever the illusion, so a model looks the same in
 # every tab
 model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#212121", "DDM-4" = "#FB8C00", "DDM-5" = "#6D4C41",
-                  "RDM" = "#43A047", "RDM-5" = "#1B5E20")
+                  "RDM" = "#43A047", "RDM-5" = "#1B5E20", "LBA" = "#8E24AA")
 ```
 
 ```{r}
@@ -182,7 +187,7 @@ plot_efficiency <- function(preds) {
     geom_point(size = 2.5, alpha = 0.35) +
     geom_point(data = efficiency_means, size = 5, shape = 18) +
     # Both axes log: families differ in cost per gradient by orders of magnitude
-    # (the DDM's numerical quadrature is 55x, see cogmod_ddm_cost_issue.md), and
+    # (the DDM's numerical quadrature is 55x, see server/AGENT.md 4.7.1), and
     # on a linear axis the cheap ones collapse onto the origin
     scale_x_log10() +
     scale_y_log10() +
@@ -285,6 +290,66 @@ show_loo <- function(preds) {
   print(parameters(rez_loo))
   print(report(rez_loo))
 }
+
+# What the fit costs against how well it does: the elpd against the time a chain
+# took, the y axis of the computational cost plot. The elpd is relative to the
+# best model (loo_compare), with the SE of that difference: each model's own SE
+# (~800 here) is mostly shared between models fitted to the same trials, and
+# would swamp differences that are in fact well resolved.
+plot_loo_cost <- function(preds) {
+  if (length(preds) < 2) {
+    cat("Only one model so far (", names(preds), "): nothing to compare.\n", sep = "")
+    return(invisible(NULL))
+  }
+  # loo 2.10 returns a data frame with the names in a `model` column, earlier
+  # versions a matrix with them as row names
+  rez_loo <- as.data.frame(loo_compare(lapply(preds, \(p) p$loo)))
+  elpd <- data.frame(
+    Model = factor(if (is.null(rez_loo$model)) rownames(rez_loo) else rez_loo$model,
+                   levels = names(preds)),
+    elpd_diff = rez_loo$elpd_diff,
+    se_diff = rez_loo$se_diff
+  )
+
+  # One point per chain, as in the cost plot: a model has one elpd, so its
+  # chains spread along x only
+  efficiency <- tidy_efficiency(preds) |>
+    mutate(Time_total = Time_total / 3600) |>
+    left_join(elpd, by = "Model")
+  efficiency_means <- efficiency |>
+    summarise(.by = c(Model, elpd_diff, se_diff),
+              Time_total = mean(Time_total))
+
+  ggplot(efficiency, aes(x = Time_total, y = elpd_diff, colour = Model)) +
+    geom_hline(yintercept = 0, colour = "grey60", linetype = "dashed") +
+    geom_point(size = 2.5, alpha = 0.35) +
+    geom_linerange(data = efficiency_means,
+                   aes(ymin = elpd_diff - se_diff, ymax = elpd_diff + se_diff)) +
+    geom_point(data = efficiency_means, size = 5, shape = 18) +
+    # Labelled in place: with the colours already shared with every other
+    # plot, a legend would only be a lookup. The chains come along with an
+    # empty label, which ggrepel then keeps the labels off.
+    ggrepel::geom_text_repel(data = bind_rows(mutate(efficiency, Label = ""),
+                                              mutate(efficiency_means, Label = as.character(Model))),
+                             aes(label = Label),
+                             size = 3.5, fontface = "bold", seed = 3, box.padding = 0.5,
+                             max.overlaps = Inf) +
+    # Log, as in the cost plot
+    scale_x_log10() +
+    # Headroom above the best model, whose label otherwise has nowhere to go
+    # but onto the chains of its neighbours on the zero line
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
+    scale_colour_manual(values = model_colors, guide = "none") +
+    labs(
+      x = "Wall clock per chain, warmup included (hours, log)",
+      y = "ELPD difference from the best model",
+      title = "Performance against computational cost",
+      subtitle = paste("Higher is better (dashed: the best model), left is cheaper. Diamond is the model's",
+                       "mean over its chains, faint points the chains, bars ±1 SE of the difference.",
+                       sep = "\n")
+    ) +
+    theme_minimal()
+}
 ```
 
 ::: {.panel-tabset}
@@ -295,10 +360,24 @@ show_loo <- function(preds) {
 show_loo(preds$MullerLyer)
 ```
 
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+plot_loo_cost(preds$MullerLyer)
+```
+
 ### Vertical-Horizontal
 
 ```{r}
 show_loo(preds$VerticalHorizontal)
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+plot_loo_cost(preds$VerticalHorizontal)
 ```
 
 :::
@@ -435,11 +514,15 @@ param_labels <- function(family) {
       lvls["mu"] <- "Drift"
     },
     # sigmabias is only estimated in LNR-6, where it is the start-point range
-    # of the race, as in the other racing families
+    # of the race, as in the other racing families. Each accumulator's
+    # parameters are kept together - the correct response's nu and its
+    # variability, then the error's - rather than the two nus first.
     "cogmod_lnr" = {
       lvls[c("mu", "sigmazero", "sigmaone", "sigmabias")] <-
         c("Nu (Correct)", "Nu Variability (Correct)", "Nu Variability (Errors)",
           "Start Point Range")
+      first <- c("Error Rate", "Mean RT", "mu", "sigmazero", "nuone", "sigmaone")
+      lvls <- lvls[c(first, setdiff(names(lvls), first))]
     },
     # Both racing families: mu is the drift of the accumulator for correct
     # responses and driftone that of the other one, and sigmabias is the

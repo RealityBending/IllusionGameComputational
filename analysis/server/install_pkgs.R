@@ -29,12 +29,12 @@ force <- strsplit(Sys.getenv("IGC_FORCE", unset = ""), "[, ]+")[[1]]
 force <- force[nzchar(force)]
 forced <- function(p) "all" %in% force || p %in% force
 
-# Which cogmod to install, and the floor the fits require. 0.3.3 fixed the LNR
-# tail gradient (chains rejecting their initial value) and the init jitter;
-# fit_model.R refuses to start below it. Until 0.3.3 is merged, that is the
-# dev branch -- set IGC_COGMOD_REF=main once it lands.
+# Which cogmod to install, and the floor the fits require. New fits use 0.3.4
+# (decision 2026-10-02, AGENT.md 2), which is on the dev branch; it changed
+# the priors of every model with a smooth. fit_model.R refuses to start below
+# the same floor.
 cogmod_ref <- Sys.getenv("IGC_COGMOD_REF", unset = "dev")
-cogmod_min <- Sys.getenv("IGC_COGMOD_MIN", unset = "0.3.3")
+cogmod_min <- Sys.getenv("IGC_COGMOD_MIN", unset = "0.3.4")
 
 # cmdstanr is NOT on CRAN and the CmdStanR module pins 0.7.1, which cannot read
 # the CSV metadata written by CmdStan >= 2.36 (fails with

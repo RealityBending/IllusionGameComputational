@@ -70,8 +70,27 @@ crit_ndraws <- Sys.getenv("IGC_CRITERION_NDRAWS", unset = "")
 
 # Full
 out <- file.path(combined_dir, paste0(name, ".rds"))
-m <- brms::combine_models(mlist = lapply(files, read_shard))
+shards <- lapply(files, read_shard)
+
+# Every shard must come from the same cogmod: since 0.3.4 the priors depend on
+# it (AGENT.md 2), and combine_models() does not compare priors. fit_model.R
+# stamps a shard with its cogmod; one fitted before the stamp existed (all
+# 0.3.3 or older) reads "unrecorded".
+cogmod_of <- vapply(shards, function(s) {
+  if (is.null(s$cogmod$version)) "unrecorded" else s$cogmod$version
+}, "")
+cat("** cogmod per shard:", paste0(basename(files), " ", cogmod_of, collapse = ", "), "\n")
+if (length(unique(cogmod_of)) > 1) {
+  stop("the shards of ", name, " were fitted with different cogmod versions (",
+       paste(unique(cogmod_of), collapse = ", "), "), so on different priors. ",
+       "Refit the odd ones, or combine each set in its own IGC_MODELS_DIR.", call. = FALSE)
+}
+
+stamp <- shards[[1]]$cogmod
+m <- brms::combine_models(mlist = shards)
+rm(shards)
 m$file <- NULL
+m$cogmod <- stamp
 if (identical(criterion, "none")) {
   cat("** IGC_CRITERION=none, no criterion added\n")
 } else {
