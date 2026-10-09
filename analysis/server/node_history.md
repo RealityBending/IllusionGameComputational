@@ -69,6 +69,24 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_rdm_verticalhorizontal | 11417276 | 3 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-29 | |
 | gam_rdm_verticalhorizontal | 11417276 | 4 | rtx-02 | zen5 (`--constraint`) | running, started 2026-09-29 | |
 | gam_lnr6 | 11417300 | 6 (refit, `IGC_FILE_REFIT=always`) | rtx-02 | zen5 (`--constraint` on sussexneuro) | running, started 2026-09-29 | |
+| gam_ddm4_ebbinghaus | 11423962 | 1 | rtx-00 | zen5 | done | 20.8 h (sacct) |
+| gam_ddm4_ebbinghaus | 11423962 | 2 | rtx-01 | zen5 | done | 18.7 h (sacct) |
+| gam_ddm4_ebbinghaus | 11423962 | 3 | rtx-00 | zen5 | done | 19.5 h (sacct) |
+| gam_ddm4_ebbinghaus | 11423962 | 4 | rtx-01 | zen5 | done | 36.5 h (sacct) |
+| gam_rdm_ebbinghaus | 11423963 | 1 | rtx-02 | zen5 | sampled, **saveRDS failed** (truncated shard deleted 2026-10-06) | 23.5 h (sacct) |
+| gam_rdm_ebbinghaus | 11423963 | 2 | rtx-02 | zen5 | done | 33.7 h (sacct) |
+| gam_rdm_ebbinghaus | 11423963 | 3 | rtx-02 | zen5 | done | 22.3 h (sacct) |
+| gam_rdm_ebbinghaus | 11423963 | 4 | rtx-02 | zen5 | sampled, **saveRDS failed** (truncated shard deleted 2026-10-06) | 24.2 h (sacct) |
+| gam_ddm5_ebbinghaus | 11423966 | 1 | rtx-01 | zen5 (sussexneuro) | sampled, **saveRDS failed** (truncated shard deleted 2026-10-06) | 32.4 h (sacct) |
+| gam_ddm5_ebbinghaus | 11423966 | 2 | rtx-01 | zen5 (sussexneuro) | sampled, **saveRDS failed** (truncated shard deleted 2026-10-06) | 33.3 h (sacct) |
+| gam_ddm5_ebbinghaus | 11423966 | 3 | rtx-01 | zen5 (sussexneuro) | sampled, **saveRDS failed** (truncated shard deleted 2026-10-06) | 32.4 h (sacct) |
+| gam_ddm5_ebbinghaus | 11423966 | 4 | rtx-01 | zen5 (sussexneuro) | done | 33.6 h (sacct) |
+| gam_rdm_ebbinghaus | 11430274 | 1 (refit of a failed save) | rtx-00 | zen5 (`--constraint`) | done | 25.3 h (sacct) |
+| gam_rdm_ebbinghaus | 11430274 | 4 (refit of a failed save) | rtx-02 | zen5 (`--constraint`) | done | 30.3 h (sacct) |
+| gam_ddm5_ebbinghaus | 11430275 | 1-3 (refit of the failed saves) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 27.9 / 24.2 / 26.4 h (sacct) |
+| gam_rdm5_ebbinghaus | 11553382 | 1-4 | | zen5 (`--constraint`) | submitted 2026-10-09 | |
+| gam_lnr6_ebbinghaus | 11553384 | 1-4 | | zen5 (`--constraint`) | submitted 2026-10-09 | |
+| gam_lnr_ebbinghaus | 11553388 | 1-4 (refit on cogmod 0.3.4) | rtx-00 | zen5 (`--constraint` on sussexneuro) | running 2026-10-09 | |
 
 ## What it says so far (updated 2026-09-26)
 

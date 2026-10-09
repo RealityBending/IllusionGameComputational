@@ -51,7 +51,12 @@ dir.create(models_dir, recursive = TRUE, showWarnings = FALSE)
 # stale shard is reused silently even if the formula or data changed -- so
 # combine_model.R deletes shards once they are combined, and you can force a
 # clean refit with:  IGC_FILE_REFIT=always ./hpc fit <model>
+# This script does the reuse and the save itself (see "Save" below), so brms's
+# third value, "on_change", is not supported.
 file_refit <- Sys.getenv("IGC_FILE_REFIT", unset = "never")
+if (!file_refit %in% c("never", "always")) {
+  stop("IGC_FILE_REFIT must be 'never' or 'always', not '", file_refit, "'", call. = FALSE)
+}
 
 warmup <- as.integer(Sys.getenv("IGC_WARMUP", unset = "1000"))
 iter <- warmup + as.integer(Sys.getenv("IGC_SAMPLES", unset = "500"))
@@ -158,45 +163,87 @@ report_fit <- function(m, name, wall_min) {
   invisible(stat)
 }
 
-shard_file <- file.path(models_dir, sprintf("%s_%s_%d.rds", spec$name, spec$illusion, task_id))
-mtime_before <- if (file.exists(shard_file)) file.mtime(shard_file)
+shard_name <- sprintf("%s_%s_%d", spec$name, spec$illusion, task_id)
+shard_file <- file.path(models_dir, paste0(shard_name, ".rds"))
+
+# Save --------------------------------------------------------------------
+# On 2026-10-05 five shards sampled for 23-33 h and then died in saveRDS
+# ("error writing to connection", Lustre briefly unwritable), leaving truncated
+# .rds files and no draws: brm() wrote the shard straight to its final name,
+# and the Stan CSVs were in the node's tempdir, deleted with the job. So:
+# - the Stan CSVs go to models/stan_csv/<shard>_<job>/ on Lustre and are only
+#   deleted once the shard is safely saved. After a failed save, rebuild the
+#   fit from them instead of resampling, the way brm() does after sampling:
+#   brm(..., empty = TRUE), then m$fit <- brms:::read_csv_as_stanfit(<csv
+#   files>, ...) and m <- brms:::rename_pars(m).
+# - the shard is written to <shard>.rds.tmp and renamed, so a failed write
+#   never leaves a half-written file under the shard's name.
+save_shard <- function(m, file, keep_dir) {
+  tmp <- paste0(file, ".tmp")
+  ok <- tryCatch({
+    saveRDS(m, tmp)
+    file.rename(tmp, file)
+  }, error = function(e) {
+    cat("saveRDS failed:", conditionMessage(e), "\n")
+    FALSE
+  })
+  if (!isTRUE(ok)) {
+    unlink(tmp)
+    stop("could not save ", file, ". The Stan CSVs are kept in ", keep_dir, call. = FALSE)
+  }
+}
+
+# Reuse a finished shard (file_refit = "never"). An unreadable one -- a
+# truncated write from before the .tmp rename -- is refitted, as brms did.
+m <- NULL
+if (file_refit == "never" && file.exists(shard_file)) {
+  m <- tryCatch(readRDS(shard_file), error = function(e) {
+    cat("existing shard unreadable (", conditionMessage(e), "); refitting\n")
+    NULL
+  })
+  if (!is.null(m)) cat("reusing existing shard", shard_file, "\n")
+}
+
+csv_dir <- file.path(models_dir, "stan_csv",
+                     paste0(shard_name, "_", Sys.getenv("SLURM_ARRAY_JOB_ID", unset = "local")))
 
 t0 <- Sys.time()
-m <- brm(f,
-  data = data,
-  prior = priors,
-  init = cogmod_inits(f, data),
-  stanvars = cogmod_stanvars(f),
-  backend = "cmdstanr",
-  warmup = warmup,
-  iter = iter,
-  algorithm = "sampling",
-  chains = chains_per_task,
-  cores = chains_per_task,
-  threads = threading(threads_per_chain),
-  # save_pars(all = TRUE) dropped: it keeps every Stan parameter, including
-  # the latents behind ~6 x n_participants group-level coefficients, which
-  # dominates memory at full scale. Only moment-matched loo needs it; we use
-  # waic. Restore it if you ever want loo(moment_match = TRUE).
-  stan_model_args = list(
-    stanc_options = list("O1"),
-    cpp_options = list(STAN_CPP_OPTIMS = TRUE, STAN_NO_RANGE_CHECKS = TRUE)
-  ),
-  file = shard_file,
-  file_refit = file_refit
-)
-wall_min <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
+if (is.null(m)) {
+  dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
+  m <- brm(f,
+    data = data,
+    prior = priors,
+    init = cogmod_inits(f, data),
+    stanvars = cogmod_stanvars(f),
+    backend = "cmdstanr",
+    warmup = warmup,
+    iter = iter,
+    algorithm = "sampling",
+    chains = chains_per_task,
+    cores = chains_per_task,
+    threads = threading(threads_per_chain),
+    # save_pars(all = TRUE) dropped: it keeps every Stan parameter, including
+    # the latents behind ~6 x n_participants group-level coefficients, which
+    # dominates memory at full scale. Only moment-matched loo needs it; we use
+    # waic. Restore it if you ever want loo(moment_match = TRUE).
+    stan_model_args = list(
+      stanc_options = list("O1"),
+      cpp_options = list(STAN_CPP_OPTIMS = TRUE, STAN_NO_RANGE_CHECKS = TRUE)
+    ),
+    output_dir = csv_dir # passed on to cmdstanr's $sample()
+  )
 
-# Record which cogmod built the shard, for combine_model.R's check and for
-# deciding later which fits predate 0.3.4. Only when brm() actually fitted:
-# a shard reused from disk keeps what it had, which for one made before this
-# stamp existed is nothing.
-if (is.null(mtime_before) || file.mtime(shard_file) > mtime_before) {
+  # Record which cogmod built the shard, for combine_model.R's check and for
+  # deciding later which fits predate 0.3.4. Only for a new fit: a shard reused
+  # from disk keeps what it had, which for one made before this stamp existed is
+  # nothing.
   sha <- utils::packageDescription("cogmod")$RemoteSha
   m$cogmod <- list(version = format(utils::packageVersion("cogmod")),
                    sha = if (is.null(sha)) NA_character_ else sha)
-  saveRDS(m, shard_file)
+  save_shard(m, shard_file, keep_dir = csv_dir)
+  unlink(csv_dir, recursive = TRUE)
 }
+wall_min <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
 cat("cogmod of this shard:", if (is.null(m$cogmod)) "unrecorded" else
   paste(m$cogmod$version, m$cogmod$sha), "\n")
 

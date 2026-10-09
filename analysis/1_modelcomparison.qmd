@@ -120,6 +120,12 @@ models <- list(
     "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal",
     "DDM-5" = "gam_ddm5_verticalhorizontal_VerticalHorizontal",
     "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal"
+  ),
+  Ebbinghaus = c(
+    "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",  # BROKEN (cogmod 0.3.3, stuck chains); refit 11553388 running
+    "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
+    "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",
+    "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus"
   )
 )
 
@@ -136,6 +142,25 @@ preds <- lapply(models, \(m) lapply(m, load_predictions))
 # every tab
 model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#212121", "DDM-4" = "#FB8C00", "DDM-5" = "#6D4C41",
                   "RDM" = "#43A047", "RDM-5" = "#1B5E20", "LBA" = "#8E24AA")
+
+# For the tables: the same colours behind the model names, and a way to fill
+# the cells of a column. The text is white on a dark fill and black on a light
+# one.
+text_on <- function(fill) {
+  lum <- apply(grDevices::col2rgb(fill), 2, \(x) sum(c(0.299, 0.587, 0.114) * x)) / 255
+  ifelse(lum < 0.55, "white", "black")
+}
+fill_cells <- function(tab, j, fill) {
+  for (i in seq_along(fill)) {
+    tab <- tinytable::style_tt(tab, i = i, j = j, background = fill[i], color = text_on(fill[i]))
+  }
+  tab
+}
+model_fill <- function(labels) {
+  fill <- model_colors[as.character(labels)]
+  fill[is.na(fill)] <- "#BDBDBD"
+  unname(fill)
+}
 ```
 
 ```{r}
@@ -152,6 +177,108 @@ model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#212121", "DDM-4" = "#FB8C00", "
 # 
 # write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")
 ```
+
+## Convergence
+
+A model is only worth comparing if its chains agree. Each cell is coloured by
+how it fares against the usual thresholds, and the verdict is the worst of
+them. Population-level parameters are the smooth coefficients and their SDs and
+the group-level SDs; the participant offsets are in the "all parameters"
+columns, where a few participants can sit above 1.01 in a fit that is otherwise
+fine.
+
+| | satisfactory | borderline | poor |
+|---|---|---|---|
+| R-hat (population, and lp__) | ≤ 1.01 | ≤ 1.05 (lp__: ≤ 1.1) | above |
+| Bulk ESS (population, minimum) | ≥ 400 | ≥ 100 | below |
+| Divergent transitions | none | under 1% | 1% or more |
+
+```{r}
+# What compute_convergence() in server/predictions.R stored for each model. A
+# prediction file made before it existed has none, and is listed as not computed.
+show_convergence <- function(preds) {
+  conv <- lapply(preds, \(p) p$convergence)
+  have <- !vapply(conv, is.null, logical(1))
+  if (any(!have)) {
+    cat("Not computed yet (re-run `./hpc predict` and pull): ",
+        paste(names(preds)[!have], collapse = ", "), "
+", sep = "")
+  }
+  if (!any(have)) return(invisible(NULL))
+  conv <- conv[have]
+  get <- \(k) vapply(conv, \(x) as.numeric(x[[k]]), numeric(1))
+
+  rhat_pop <- get("rhat_pop_max")
+  rhat_all <- get("rhat_all_max")
+  rhat_lp <- get("rhat_lp")
+  ess <- get("ess_bulk_pop_min")
+  div <- get("divergent")
+  div_pct <- get("divergent_pct")
+
+  # 1 = satisfactory, 2 = borderline, 3 = poor. A missing value (the sampler
+  # diagnostics could not be read) is not counted against the model.
+  grade <- \(x, ok, warn, higher_is_worse = TRUE) {
+    if (!higher_is_worse) { x <- -x; ok <- -ok; warn <- -warn }
+    ifelse(is.na(x), 1L, ifelse(x <= ok, 1L, ifelse(x <= warn, 2L, 3L)))
+  }
+  g_rhat <- grade(rhat_pop, 1.01, 1.05)
+  g_lp <- grade(rhat_lp, 1.01, 1.1)
+  g_ess <- grade(ess, 400, 100, higher_is_worse = FALSE)
+  g_div <- ifelse(is.na(div), 1L, ifelse(div == 0, 1L, ifelse(div_pct < 1, 2L, 3L)))
+  g_all <- pmax(g_rhat, g_lp, g_ess, g_div)
+
+  palette <- c("#C8E6C9", "#FFE082", "#EF9A9A")
+  verdict <- c("Satisfactory", "Borderline", "Poor")
+
+  n_params <- get("n_params")
+  tab <- data.frame(
+    Model = names(conv),
+    Chains = get("n_chains"),
+    "R-hat, population (max)" = formatC(rhat_pop, format = "f", digits = 3),
+    "R-hat, all (max)" = formatC(rhat_all, format = "f", digits = 3),
+    "All parameters above 1.01" = sprintf("%.1f%%", 100 * get("n_rhat_101_all") / n_params),
+    "R-hat, lp__" = formatC(rhat_lp, format = "f", digits = 3),
+    "Bulk ESS, population (min)" = formatC(ess, format = "f", digits = 0, big.mark = ","),
+    "Divergent" = ifelse(is.na(div), "n/a", sprintf("%d (%.2f%%)", as.integer(div), div_pct)),
+    "At max treedepth" = ifelse(is.na(get("treedepth_hit_pct")), "n/a",
+                                sprintf("%.0f%%", get("treedepth_hit_pct"))),
+    Verdict = verdict[g_all],
+    check.names = FALSE
+  )
+
+  out <- tinytable::tt(tab) |>
+    tinytable::style_tt(j = 2:9, align = "r") |>
+    fill_cells(1, model_fill(tab$Model)) |>
+    fill_cells(3, palette[g_rhat]) |>
+    fill_cells(6, palette[g_lp]) |>
+    fill_cells(7, palette[g_ess]) |>
+    fill_cells(8, palette[g_div]) |>
+    fill_cells(10, palette[g_all])
+  out
+}
+```
+
+::: {.panel-tabset}
+
+### Muller-Lyer
+
+```{r}
+show_convergence(preds$MullerLyer)
+```
+
+### Vertical-Horizontal
+
+```{r}
+show_convergence(preds$VerticalHorizontal)
+```
+
+### Ebbinghaus
+
+```{r}
+show_convergence(preds$Ebbinghaus)
+```
+
+:::
 
 ## Computational Cost
 
@@ -271,6 +398,19 @@ plot_efficiency(preds$VerticalHorizontal)
 table_compute_time(preds$VerticalHorizontal)
 ```
 
+### Ebbinghaus
+
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+plot_efficiency(preds$Ebbinghaus)
+```
+
+```{r}
+table_compute_time(preds$Ebbinghaus)
+```
+
 :::
 
 
@@ -287,8 +427,37 @@ show_loo <- function(preds) {
     return(invisible(NULL))
   }
   rez_loo <- loo_compare(lapply(preds, \(p) p$loo))
-  print(parameters(rez_loo))
   print(report(rez_loo))
+
+  # Ranked by ELPD, best first, as loo_compare() has them. LOOIC is left out: it
+  # is -2 x ELPD, so it ranks the models the same way but in the opposite
+  # direction (lower is better), which only confuses the table. The model names
+  # carry their colour from the plots, and the ELPD cells are shaded from the
+  # worst model to the best, so the gaps can be read off the colour. The
+  # difference is given with its SE, and the best model, which has none, with a
+  # dash. p is the z-test of the difference to the best model.
+  tab <- as.data.frame(parameters(rez_loo))
+  num <- \(x) formatC(x, format = "f", digits = 1, big.mark = ",")
+  best <- seq_len(nrow(tab)) == 1
+  weight <- if (diff(range(tab$ELPD)) == 0) 1 else (tab$ELPD - min(tab$ELPD)) / diff(range(tab$ELPD))
+  elpd_fill <- rgb(colorRamp(c("#f7fcf5", "#238b45"))(weight), maxColorValue = 255)
+
+  # Formatted by hand (one decimal, thousands marks): format_tt()'s digits are
+  # significant digits, which writes 0 and -176 next to -2,372.7
+  tab <- data.frame(
+    Model = tab$Name,
+    ELPD = num(tab$ELPD),
+    "ELPD diff ± SE" = ifelse(best, "—", paste0(num(tab$Difference), " ± ", num(tab$Difference_SE))),
+    p = ifelse(is.na(tab$p), "", insight::format_p(tab$p, name = NULL)),
+    check.names = FALSE
+  )
+
+  out <- tinytable::tt(tab) |>
+    tinytable::style_tt(j = 2:4, align = "r") |>
+    fill_cells(1, model_fill(tab$Model)) |>
+    fill_cells(2, elpd_fill) |>
+    tinytable::style_tt(i = 1, j = 2, bold = TRUE)
+  out
 }
 
 # What the fit costs against how well it does: the elpd against the time a chain
@@ -378,6 +547,19 @@ show_loo(preds$VerticalHorizontal)
 #| fig-height: 5
 
 plot_loo_cost(preds$VerticalHorizontal)
+```
+
+### Ebbinghaus
+
+```{r}
+show_loo(preds$Ebbinghaus)
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 5
+
+plot_loo_cost(preds$Ebbinghaus)
 ```
 
 :::
@@ -478,6 +660,15 @@ plot_ppc(preds$MullerLyer)
 #| fig-height: 6
 
 plot_ppc(preds$VerticalHorizontal)
+```
+
+### Ebbinghaus
+
+```{r}
+#| fig-width: 10
+#| fig-height: 6
+
+plot_ppc(preds$Ebbinghaus)
 ```
 
 :::
@@ -717,6 +908,15 @@ plot_curves(preds_curves$MullerLyer)
 plot_curves(preds_curves$VerticalHorizontal)
 ```
 
+#### Ebbinghaus
+
+```{r}
+#| fig-width: 9
+#| fig-height: 10
+
+plot_curves(preds_curves$Ebbinghaus)
+```
+
 :::
 
 ## Parameter Heatmaps
@@ -914,6 +1114,15 @@ plot_heatmaps(preds_heatmaps$MullerLyer, "MullerLyer")
 plot_heatmaps(preds_heatmaps$VerticalHorizontal, "VerticalHorizontal")
 ```
 
+#### Ebbinghaus
+
+```{r}
+#| fig-width: 9
+#| fig-height: 16.5
+
+plot_heatmaps(preds_heatmaps$Ebbinghaus, "Ebbinghaus")
+```
+
 :::
 
 
@@ -962,6 +1171,12 @@ plot_best_model(preds_curves$MullerLyer)
 
 ```{r}
 plot_best_model(preds_curves$VerticalHorizontal)
+```
+
+### Ebbinghaus
+
+```{r}
+plot_best_model(preds_curves$Ebbinghaus)
 ```
 
 :::

@@ -198,6 +198,69 @@ compute_efficiency <- function(m, pars = "^b_|^bs_|^sd_|^sds_") {
 }
 
 
+# Convergence ---------------------------------------------------------------
+
+# Whether the chains of the combined fit agree, for the convergence table of the
+# qmd. Rhat is the rank-normalised split Rhat of the posterior package, over
+# every parameter, and over the population-level ones on their own: the
+# participant offsets reach Rhat 1.3-1.9 in a few participants in models that
+# are otherwise fine (AGENT.md 6.1), so the two answer different questions. The
+# effective sample sizes are for the population-level parameters only, which is
+# also what the efficiency plot counts. lp__ is kept apart because a chain
+# stuck somewhere else (gam_lnr6's shard 6, gam_lba) shows in it first. The
+# sampler's own diagnostics are the divergent transitions and the share of
+# iterations that hit the treedepth limit.
+#
+# Added after version 2 of the prediction files without a bump: the qmd shows
+# a model whose file has no `convergence` as not computed, and nothing else in
+# it reads this.
+compute_convergence <- function(m, pars = "^b_|^bs_|^sd_|^sds_") {
+  draws <- posterior::as_draws_array(m)
+  rhat <- posterior::summarise_draws(draws, rhat = posterior::rhat)
+  rhat <- rhat[!is.na(rhat$rhat), ]
+  is_pop <- grepl(pars, rhat$variable)
+  is_lp <- rhat$variable == "lp__"
+  all_rhat <- rhat[!is_lp, ]
+  pop_rhat <- rhat[is_pop, ]
+
+  pop <- posterior::subset_draws(draws, variable = pars, regex = TRUE)
+  ess <- posterior::summarise_draws(pop, ess_bulk = posterior::ess_bulk,
+                                    ess_tail = posterior::ess_tail)
+
+  lp <- posterior::extract_variable_matrix(draws, "lp__")
+
+  # Sampler diagnostics. Not every fit keeps them in a form brms can hand
+  # back, so a failure here is a missing value rather than a failed job.
+  np <- tryCatch(brms::nuts_params(m), error = function(e) NULL)
+  max_treedepth <- tryCatch(m$fit@stan_args[[1]]$control$max_treedepth, error = function(e) NULL)
+  if (is.null(max_treedepth)) max_treedepth <- 10
+  nuts <- function(name) if (is.null(np)) NA_real_ else np$Value[np$Parameter == name]
+
+  list(
+    n_chains = posterior::nchains(draws),
+    n_draws = posterior::ndraws(draws),
+    n_params = nrow(all_rhat),
+    n_pop_params = nrow(pop_rhat),
+    rhat_pop_max = max(pop_rhat$rhat),
+    rhat_pop_worst = pop_rhat$variable[which.max(pop_rhat$rhat)],
+    rhat_all_max = max(all_rhat$rhat),
+    rhat_all_worst = all_rhat$variable[which.max(all_rhat$rhat)],
+    rhat_lp = rhat$rhat[is_lp],
+    n_rhat_101_pop = sum(pop_rhat$rhat > 1.01),
+    n_rhat_101_all = sum(all_rhat$rhat > 1.01),
+    n_rhat_105_all = sum(all_rhat$rhat > 1.05),
+    ess_bulk_pop_min = min(ess$ess_bulk, na.rm = TRUE),
+    ess_tail_pop_min = min(ess$ess_tail, na.rm = TRUE),
+    divergent = sum(nuts("divergent__")),
+    divergent_pct = 100 * mean(nuts("divergent__")),
+    treedepth_hit_pct = 100 * mean(nuts("treedepth__") >= max_treedepth),
+    lp_chain_mean = colMeans(lp),
+    stepsize_chain = if (is.null(np)) NA_real_ else
+      tapply(nuts("stepsize__"), np$Chain[np$Parameter == "stepsize__"], mean)
+  )
+}
+
+
 # Posterior predictive check ---------------------------------------------
 
 # brms::posterior_predict() calls the family's sampler once per trial
@@ -362,6 +425,7 @@ run_predictions <- function(m, name, fit_file = NULL, settings = list()) {
   s <- do.call(igc_prediction_settings, settings)
   components <- list(
     efficiency = function(s) compute_efficiency(m),
+    convergence = function(s) compute_convergence(m),
     loo = function(s) m$criteria$loo,
     ppc = function(s) compute_ppc(m, s),
     curves = function(s) compute_curves(m, s),

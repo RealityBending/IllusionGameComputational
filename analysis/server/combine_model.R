@@ -53,7 +53,8 @@ if (length(files) == 0) {
   stop("no shards matching ", pattern, " in ", models_dir)
 }
 
-# A shard was written by brm(file = ...), so it carries that path in $file --
+# A shard written before 2026-10-06 came from brm(file = ...), so it carries
+# that path in $file (fit_model.R now saves shards itself, without it) --
 # and add_criterion() writes the fit back there when it does. combine_models()
 # keeps the first shard's $file, so without this the combined fit is silently
 # saved *over shard 1*, and the mini below then re-reads that path and merges
@@ -111,7 +112,22 @@ if (identical(criterion, "none")) {
   cat(sprintf("** %s over %d draws in %.1f min\n", criterion, nd,
               as.numeric(difftime(Sys.time(), t0, units = "mins"))))
 }
-saveRDS(m, out)
+# Written to <out>.tmp and renamed, as fit_model.R does for shards: on
+# 2026-10-06 a combine died in saveRDS ("error writing to connection", Lustre
+# briefly unwritable) after an hour of loo, which a direct write would leave
+# as a half-written file under the combined fit's name.
+tmp <- paste0(out, ".tmp")
+ok <- tryCatch({
+  saveRDS(m, tmp)
+  file.rename(tmp, out)
+}, error = function(e) {
+  cat("saveRDS failed:", conditionMessage(e), "\n")
+  FALSE
+})
+if (!isTRUE(ok)) {
+  unlink(tmp)
+  stop("could not save ", out, ". The shards are untouched; re-run the combine.", call. = FALSE)
+}
 cat("** wrote", out, "with", brms::ndraws(m), "draws\n")
 
 

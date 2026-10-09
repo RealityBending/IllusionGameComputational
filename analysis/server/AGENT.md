@@ -896,8 +896,33 @@ Stan cannot checkpoint mid-chain, but the shard is a good checkpoint: each
 array task writes its own `.rds` as it completes. With `"never"`, a resubmitted
 array skips shards that finished and resumes. With `"always"` (the old value) a
 job killed at the wall restarted from nothing. See 3.6 for the staleness
-trade-off; brms also offers `"on_change"`, which refits automatically when
-formula, data or prior change.
+trade-off. brms also offers `"on_change"`, which refits when the formula,
+data or prior change. It is no longer supported here, because since
+2026-10-06 `fit_model.R` does the reuse and the save itself (5.3.1).
+
+#### 5.3.1 Saving a shard without losing it (2026-10-06)
+
+On 2026-10-05, five Ebbinghaus shards finished sampling and then died in
+`saveRDS` with `error writing to connection`: `gam_rdm_ebbinghaus` 1 and 4,
+`gam_ddm5_ebbinghaus` 1-3. Each had run 23-33 h. Each left a truncated `.rds`
+(68K to 114M, where a good shard is 166M or 203M) and no draws: `brm(file = )`
+wrote straight to the shard's final name, and the Stan CSVs were in the
+node's tempdir, deleted with the job. The account was at 68 GB with no quota
+set, and `/mnt/lustre` was 93% full (1.4 PB). Shards saved at 13:05 and 21:41
+that same day are fine. So this was the shared filesystem failing for a few
+hours, not our usage, and tidying our files cannot prevent it.
+
+`fit_model.R` now:
+- writes the Stan CSVs to `models/stan_csv/<shard>_<jobid>/` and deletes them
+  only once the shard is saved. After a failed save, rebuild the fit from them
+  (the recipe is in the script) instead of sampling again;
+- saves to `<shard>.rds.tmp` and renames it, so a failed write leaves no file
+  under the shard's name;
+- reuses an existing shard only if `readRDS()` can read it, and refits an
+  unreadable one, as brms itself did.
+
+There is no automatic retry. If a save fails, the job fails and sends its
+FAIL mail, and the CSVs are still there.
 
 ### 5.4 The LNR formula must fix `sigmabias`
 
@@ -1156,6 +1181,32 @@ chain instead of multiplying warmup. It still does not reach 8 h at full data
 (halving ~19 h leaves ~10 h), and 1 chain per task stakes the task on one
 chain's survival — defensible now that 0.3.3 has fixed the init failures (4.5),
 but unproven at scale.
+
+### 6.4 Ebbinghaus queue (2026-10-04)
+
+cogmod 0.3.4 (`e01f8de`) was installed on 2026-10-04 with nothing pending on
+the account, and the Ebbinghaus models still unfitted went out on it. The
+`gam_lba*` models are left to the colleague who is fitting them. Two or three
+models at a time is what `long` takes in practice (one `long` array is 64 CPUs
+against the 140-CPU cap, and `long` is shared with other groups), so the
+queue is limited to that, with the rest to be submitted as slots free up:
+
+| model | state |
+| --- | --- |
+| `gam_ddm5_ebbinghaus` | done: 11423966 (task 4) + refit 11430275 (tasks 1-3, failed saves), combined and predicted 2026-10-09 |
+| `gam_ddm4_ebbinghaus` | done: 11423962, combined and predicted 2026-10-07 (second combine, 11462276; the first failed at save) |
+| `gam_rdm_ebbinghaus` | done: 11423963 + refit 11430274 (tasks 1 and 4, failed saves), combined and predicted 2026-10-09 |
+| `gam_rdm5_ebbinghaus` | submitted 2026-10-09 on `long` (zen5), job 11553382 |
+| `gam_lnr6_ebbinghaus` | submitted 2026-10-09 on `long` (zen5), job 11553384; the slowest, 2-3.5 days a shard |
+| `gam_lnr_ebbinghaus` | refit on 0.3.4 submitted 2026-10-09 on `sussexneuro` (zen5), job 11553388. The broken 0.3.3 shards were renamed `..._<n>_20261002.rds`; the old combined fit and predictions are still under the plain name until the new combine replaces them |
+
+Submit the two to-do ones as an array finishes, with
+`./hpc fit <model> --constraint=amd_zen5`. Do not reinstall cogmod while any
+array has pending tasks (2).
+
+Once every model is fitted, the older fits (all of Muller-Lyer and
+Vertical-Horizontal, and `gam_lnr_ebbinghaus`, which are cogmod 0.3.3) are to
+be refitted on 0.3.4, slowly, alongside the work on the full pipeline.
 
 ---
 
