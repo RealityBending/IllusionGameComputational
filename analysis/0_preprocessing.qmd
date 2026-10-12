@@ -247,7 +247,7 @@ illu |>
 
 ### Extreme RTs
 
-We removed `r sum(illu$RT >= 6)` trials (`r insight::format_percent(sum(illu$RT >= 6) / nrow(illu))` of the data) with RTs longer than 4 seconds, as these likely reflect participants taking breaks during the task. 
+We removed `r sum(illu$RT >= 6)` trials (`r insight::format_percent(sum(illu$RT >= 6) / nrow(illu))` of the data) with RTs of 6 seconds or longer, as these likely reflect participants taking breaks during the task. 
 
 ```{r}
 #| code-fold: false
@@ -306,7 +306,6 @@ p_tail1 <- illu |>
   stat_bin(aes(y=after_stat(density), color = Dataset), geom="step",
            binwidth = binwidth,
            position = position_nudge(x = -0.5 * binwidth)) +
-  geom_vline(xintercept = 1/6, linetype = "dashed", color = "red") +
   scale_x_sqrt() +
   scale_color_manual(values = cols) +
   coord_cartesian(ylim = c(0, 6)) +
@@ -320,7 +319,6 @@ p_tail2 <- illu |>
   stat_bin(aes(y=after_stat(density), color = Dataset), geom="step",
            binwidth = binwidth,
            position = position_nudge(x = -0.5 * binwidth)) +
-  geom_vline(xintercept = 4, linetype = "dashed", color = "red") +
   scale_x_sqrt() +
   scale_color_manual(values = cols) +
   labs(title = "Zoom on Upper Tail") +
@@ -351,52 +349,92 @@ p1 | (p_tail1 / p_tail2 ) + plot_layout(guides = "collect") & theme(legend.posit
 #| fig-height: 8
 
 outliers <- illu |>
-  summarize(Error = mean(Error), 
-            RT_SD = sd(RT), 
+  # Before Error is overwritten by its mean. Negative strength = the illusion
+  # points to the correct answer, so engaged participants are near-perfect.
+  summarize(Error_Facilitating = mean(Error[Illusion_Strength < 0]),
+            N_Facilitating = sum(Illusion_Strength < 0),
+            Error = mean(Error),
+            RT_SD = sd(RT),
             # RT_Skew = datawizard::skewness(RT),
             # RT_Kurtosis = datawizard::kurtosis(RT),
-            RT = mean(RT), 
-            .by = c("Participant", "Illusion_Type", "Block", "Dataset")) |> 
-  mutate(RT_SD = ifelse(is.na(RT_SD), 1, RT_SD)) |> 
+            RT = mean(RT),
+            N = n(),
+            .by = c("Participant", "Illusion_Type", "Block", "Dataset")) |>
+  mutate(RT_SD = ifelse(is.na(RT_SD), 1, RT_SD)) |>
   arrange(desc(Error), desc(RT))
 
-# Rules
-outliers$Outlier <- ifelse(outliers$RT < 1/3, "Outlier", "Normal")
-outliers$Outlier <- ifelse(outliers$RT > 3, "Outlier", outliers$Outlier)
-outliers$Outlier <- ifelse(outliers$Error >= 0.45, "Outlier", outliers$Outlier)
+# Rule: a third or more errors on facilitating trials (guessing or reversed responding)
+outliers$Outlier <- ifelse(outliers$Error_Facilitating >= 1/3, "Outlier", "Normal")
 
 
-outliers |> 
+outliers |>
   ggplot(aes(x = Error, y = RT)) +
   see::geom_point_borderless(aes(color = Outlier), alpha = 1/4, size = 2) +
-  geom_density_2d(color = "orange", alpha = 0.8, show.legend = FALSE, linewidth = 1, 
+  geom_density_2d(color = "orange", alpha = 0.8, show.legend = FALSE, linewidth = 1,
                   breaks = c(0.5, 1, 2, 4, 8)) +
-  annotate("rect", xmin = -Inf, xmax = 0.45, ymin = -Inf, ymax = 1/3, alpha = 0.1, fill = "red") +
-  annotate("rect", xmin = -Inf, xmax = 0.45, ymin = 3, ymax = Inf, alpha = 0.1, fill = "red") +
-  annotate("rect", xmin = 0.45, xmax = Inf, ymin = -Inf, ymax = Inf, alpha = 0.1, fill = "red") +
-  geom_hline(yintercept = c(1/3), linetype = "dashed", color = "red") +
-  geom_vline(xintercept = 0.5, linetype = "dotted", color = "white") +
-  geom_abline(intercept = 2.5, slope = -4.25, linetype = "dashed", color = "white") +
   scale_color_manual(values = c("Outlier" = "red", "Normal" = "white")) +
   scale_x_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.2), labels = scales::percent) +
   scale_y_continuous(expand = c(0, 0)) +
   coord_cartesian(xlim = c(0, 0.7), ylim = c(0, 3)) +
-  labs(title = "Outlier Participants", subtitle = "Mean RT and % Errors per illusion and block for each participant", x = "Errors") + 
+  labs(title = "Outlier Blocks", subtitle = "Mean RT and % Errors per illusion and block for each participant", x = "Errors") +
   # ggside::geom_xsidedensity(aes(y = after_stat(density)), alpha = 0.5) +
   ggside::geom_xsidedensity(aes(y = after_stat(density), color = Outlier), alpha = 0.5) +
   ggside::geom_ysidedensity(aes(x = after_stat(density), color = Outlier), alpha = 0.5) +
   theme_abyss() +
   ggside::theme_ggside_void()
-
-outliers <- outliers |> 
-  mutate(Section = paste(Participant, Illusion_Type, Block, Dataset)) |>
-  filter(Outlier == "Outlier") |> 
-  pull(Section)
-
-flagged <- paste(illu$Participant, illu$Illusion_Type, illu$Block, illu$Dataset) %in% outliers
 ```
 
-We removed `r sum(flagged)` trials (`r insight::format_percent(sum(flagged) / nrow(illu))`) from `r length(unique(illu$Participant[flagged]))` participants flagged as outliers based on their overall error rate and RT distribution.
+```{r}
+#| fig-width: 8
+#| fig-height: 6
+
+outliers |>
+  ggplot(aes(x = Error, y = Error_Facilitating)) +
+  see::geom_point_borderless(aes(color = Outlier), alpha = 1/4, size = 2) +
+  annotate("rect", xmin = -Inf, xmax = Inf, ymin = 1/3, ymax = Inf, alpha = 0.1, fill = "red") +
+  geom_hline(yintercept = 1/3, linetype = "dashed", color = "red") +
+  scale_color_manual(values = c("Outlier" = "red", "Normal" = "white")) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.1), labels = scales::percent) +
+  scale_y_continuous(labels = scales::percent) +
+  coord_cartesian(xlim = c(0, 0.7)) +
+  labs(title = "Errors on Facilitating Trials",
+       subtitle = "Where the illusion points to the correct answer",
+       x = "Errors (all trials)", y = "Errors (facilitating trials)") +
+  theme_abyss()
+```
+
+```{r}
+# Where does a block become more likely invalid than engaged? Mixture of the
+# facilitating error counts: engaged (beta-binomial, near 0), guessing
+# (binomial at 50%) and reversed (beta-binomial, near 100%).
+dbetabinom <- function(k, n, a, b) exp(lchoose(n, k) + lbeta(k + a, n - k + b) - lbeta(a, b))
+mixture <- function(p, k, n) {
+  w <- exp(c(0, p[1:2])) / sum(exp(c(0, p[1:2])))
+  cbind(Engaged = w[1] * dbetabinom(k, n, exp(p[3]), exp(p[4])),
+        Guessing = w[2] * dbinom(k, n, 0.5),
+        Reversed = w[3] * dbetabinom(k, n, exp(p[5]), exp(p[6])))
+}
+k <- round(outliers$Error_Facilitating * outliers$N_Facilitating)
+fit <- optim(c(-4, -5, log(0.5), log(10), log(10), log(0.5)),
+             \(p) -sum(log(rowSums(mixture(p, k, outliers$N_Facilitating)))),
+             control = list(maxit = 5000))
+
+# For a block of 40 facilitating trials (the most common)
+dens <- mixture(fit$par, 0:40, 40)
+crossing <- (min(which(dens[, "Engaged"] / rowSums(dens) < 0.5)) - 1) / 40
+p_guess <- 1 - pbinom(ceiling(40 / 3) - 1, 40, 0.5)
+```
+
+```{r}
+sections <- outliers |>
+  mutate(Section = paste(Participant, Illusion_Type, Block, Dataset)) |>
+  filter(Outlier == "Outlier") |>
+  pull(Section)
+
+flagged <- paste(illu$Participant, illu$Illusion_Type, illu$Block, illu$Dataset) %in% sections
+```
+
+We removed `r sum(flagged)` trials (`r insight::format_percent(sum(flagged) / nrow(illu))`) from `r length(sections)` blocks (an illusion type in a block of a participant, from `r length(unique(illu$Participant[flagged]))` participants) with errors on a third or more of the facilitating trials. On these trials the illusion points to the correct answer, so engaged participants are near-perfect, however sensitive they are to the illusion (median error rate: `r insight::format_percent(median(outliers$Error_Facilitating))`). Guessing shows up as errors on about half of these trials. Misunderstood instructions show up as errors on almost all of them. Most such blocks are from the Ebbinghaus illusion, where responses went against the illusion on every trial, as if the participants judged the surrounding circles instead of the targets. In a mixture model of the facilitating error counts (engaged, guessing, reversed), a block of 40 facilitating trials becomes more likely invalid than engaged from `r insight::format_percent(crossing)` errors onwards. A random responder reaches a third `r insight::format_percent(p_guess)` of the time. We did not use the overall error rate: it rises with sensitivity to the illusion as well as with invalid responding. A cutoff on it would mostly remove the most illusion-sensitive participants, whose errors come from the conflicting trials. We did not use mean RT either. The very fast blocks were near chance, and most of them are caught by this rule. The very slow ones were accurate.
 
 ```{r}
 #| code-fold: false

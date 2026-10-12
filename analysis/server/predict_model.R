@@ -1,5 +1,5 @@
 # =========================================================================
-# Posterior predictions of ONE combined model, for 1_modelcomparison.qmd
+# Posterior predictions of ONE combined model, for 2_modelcomparison.qmd
 # =========================================================================
 # Reads IGC_MODELS_DIR/combined/<model>_<illusion>.rds (written by
 # combine_model.R) and writes IGC_MODELS_DIR/predictions/<model>_<illusion>.rds:

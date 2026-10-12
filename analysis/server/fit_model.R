@@ -14,14 +14,16 @@ library(brms)
 library(cogmod) # remotes::install_github("DominiqueMakowski/cogmod@dev")
 library(dplyr)
 
-# New fits use cogmod >= 0.3.4 (decision 2026-10-02, AGENT.md 2). 0.3.3 fixed
+# New fits use cogmod >= 0.3.5 (decision 2026-10-12, AGENT.md 2). 0.3.3 fixed
 # the LNR/LogNormal tail gradient and the init jitter (AGENT.md 4.5); 0.3.4
-# changed the priors of every model with a smooth, so a fit made with an older
-# one is on other priors than the new ones. Fail in the first second rather
-# than the twentieth hour. IGC_COGMOD_MIN=0.3.3 at submission lets a shard of
-# an older model run while the library is still 0.3.3; it cannot bring 0.3.3
-# back once 0.3.4 is installed. combine_model.R refuses shards of mixed versions.
-cogmod_min <- Sys.getenv("IGC_COGMOD_MIN", unset = "0.3.4")
+# changed the priors of every model with a smooth, and 0.3.5 those of every
+# model (`poutlier`, and the DDM's `boundary` and `bias`), so a fit made with
+# an older one is on other priors than the new ones. Fail in the first second
+# rather than the twentieth hour. IGC_COGMOD_MIN=0.3.4 at submission lets a
+# shard of an older model run while the library is still 0.3.4; it cannot
+# bring 0.3.4 back once 0.3.5 is installed. combine_model.R refuses shards of
+# mixed versions.
+cogmod_min <- Sys.getenv("IGC_COGMOD_MIN", unset = "0.3.5")
 if (utils::packageVersion("cogmod") < cogmod_min) {
   stop("cogmod ", utils::packageVersion("cogmod"), " is too old; need >= ", cogmod_min, ". ",
        "Run  ./hpc install cogmod", call. = FALSE)
@@ -58,8 +60,13 @@ if (!file_refit %in% c("never", "always")) {
   stop("IGC_FILE_REFIT must be 'never' or 'always', not '", file_refit, "'", call. = FALSE)
 }
 
+# 1,000 draws per chain since 2026-10-09 (500 before). Warmup stays at 1,000:
+# every chain was stationary from its first draw, so a longer warmup buys
+# nothing, while more draws give the per-participant solutions more chances to
+# switch and lift the low ESS on the ndt intercept (AGENT.md 4.10, 6).
+# combine_model.R refuses to merge shards with different draw counts.
 warmup <- as.integer(Sys.getenv("IGC_WARMUP", unset = "1000"))
-iter <- warmup + as.integer(Sys.getenv("IGC_SAMPLES", unset = "500"))
+iter <- warmup + as.integer(Sys.getenv("IGC_SAMPLES", unset = "1000"))
 
 cat(sprintf(
   "config: model=%s illusion=%s shard=%d warmup=%d samples=%d chains=%d threads/chain=%g refit=%s\n",
@@ -120,11 +127,20 @@ cat("participants:", length(unique(data$Participant)), " rows:", nrow(data), "\n
 
 f <- spec$formula()
 
-# cogmod's family-aware priors, plus a standard normal on the slopes brms would
+# cogmod's family-aware priors, plus normal(0, 2) on the slopes brms would
 # otherwise leave flat. poutlier keeps cogmod's own prior.
 #
+# 2, not 1: until 2026-10-12 this was normal(0, 1), and DDM-5's first `mu`
+# smooth column sat at +-2.2-2.5, past the 99th percentile in two illusions
+# (1_models.qmd, cogmod_priors_review.md). The t2() columns have an rms near
+# 1, so this is about 2 link units of linear trend, and the largest slope
+# seen so far (2.5) sits at z = 1.3: weak, but proper. The
+# user chose to widen it here rather than have cogmod scale the response's
+# smooth slopes. Once cogmod sets `boundary` and `bias` slopes itself (0.3.5),
+# this reaches only `mu`.
+#
 # Only the FLAT ones. cogmod already names a slope prior for the dpars it knows
-# to be hard to identify, and it is tighter than normal(0, 1) on purpose:
+# to be hard to identify, and it is tighter than this blanket on purpose:
 # normal(0, 0.2) for `ndt` and normal(0, 0.5) for `sigmadrift` / `sigmabias` /
 # `sigmandt`. Until 2026-09-18 this loop overwrote those with normal(0, 1)
 # unconditionally, i.e. it widened by 5x and 2x exactly the priors cogmod had
@@ -136,7 +152,7 @@ for (par in c("", setdiff(unique(priors$dpar), c("poutlier", "")))) {
   blanket <- priors$class == "b" & priors$dpar == par &
     !nzchar(priors$coef) & !nzchar(priors$group)
   if (any(blanket & nzchar(priors$prior))) next # cogmod set it; keep it
-  priors <- c(priors, brms::prior_string("normal(0, 1)", class = "b", dpar = par),
+  priors <- c(priors, brms::prior_string("normal(0, 2)", class = "b", dpar = par),
               replace = TRUE)
 }
 

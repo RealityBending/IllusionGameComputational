@@ -106,23 +106,25 @@ load_predictions <- function(name) {
 models <- list(
   MullerLyer = c(
     "LNR" = "gam_lnr_MullerLyer",
-    "LNR-6" = "gam_lnr6_MullerLyer",
+    "LNR-6" = "gam_lnr6_MullerLyer",  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
     "DDM-4" = "gam_ddm4_MullerLyer",
     "DDM-5" = "gam_ddm5_MullerLyer",
     "RDM" = "gam_rdm_MullerLyer",
-    "RDM-5" = "gam_rdm5_MullerLyer"
+    "RDM-5" = "gam_rdm5_MullerLyer"  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
     # "LBA" = "gam_lba_MullerLyer"  # NOT CONVERGED (2026-10-01): its chains sit
     # in two modes, max Rhat 13.8 (server/AGENT.md 4.9). No predictions made.
   ),
   VerticalHorizontal = c(
     "LNR" = "gam_lnr_verticalhorizontal_VerticalHorizontal",
-    "LNR-6" = "gam_lnr6_verticalhorizontal_VerticalHorizontal",
+    "LNR-6" = "gam_lnr6_verticalhorizontal_VerticalHorizontal",  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
     "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal",
     "DDM-5" = "gam_ddm5_verticalhorizontal_VerticalHorizontal",
     "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal"
   ),
   Ebbinghaus = c(
-    "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",  # BROKEN (cogmod 0.3.3, stuck chains); refit 11553388 running
+    # "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the cogmod 0.3.4
+    # refit (11553388, combined 2026-10-12) still has every chain drifting, Rhat
+    # ~3 (server/lnr_modes/). Not predicted; the 0.3.3 predictions are *_20261002.
     "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
     "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",
     "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus"
@@ -279,6 +281,109 @@ show_convergence(preds$Ebbinghaus)
 ```
 
 :::
+
+### Participants That Do Not Mix
+
+In the models that converge, the population terms agree between chains, but a
+few dozen participants do not mix. Their own parameters sit in one of two
+local solutions and no chain switches between them. Almost always it is the
+non-decision time, traded against the boundary or the outlier probability
+(`server/AGENT.md` 4.10). No participant is excluded for this. There is no
+a priori reason to: no rule on the data picks them out without also removing
+many participants that mix well. The participants that still do not mix after
+the longer refit are a result in themselves, a response profile these models
+cannot accommodate. The list is written by `server/mixing_participants.R` from
+the combined fits.
+
+```{r}
+mixing <- read.csv(if (dir.exists("server")) "server/poorly_mixing_participants.csv"
+                   else "analysis/server/poorly_mixing_participants.csv")
+data_dir <- if (dir.exists("../data")) "../data" else "data"
+illu <- bind_rows(lapply(1:3, \(i) read.csv(file.path(data_dir, paste0("illusion_part", i, ".csv"))))) |>
+  filter(Illusion_Type %in% unique(mixing$Illusion)) |>
+  left_join(distinct(mixing, Participant, Illusion_Type = Illusion, Flagged = TRUE),
+            by = c("Participant", "Illusion_Type")) |>
+  mutate(Flagged = !is.na(Flagged),
+         Response = ifelse(Error == 1, "Error", "Correct"))
+
+mixing |>
+  summarize(Models = n(),
+            Fits = paste0(Model, " (", Illusion, ")", collapse = ", "),
+            Rhat = max(Rhat),
+            Parameters = paste(unique(unlist(strsplit(Parameters, ";"))), collapse = ", "),
+            .by = c("Participant", "Dataset")) |>
+  arrange(desc(Models), desc(Rhat)) |>
+  gt::gt() |>
+  gt::fmt_number(columns = "Rhat", decimals = 2) |>
+  gt::opt_interactive(use_search = TRUE, page_size_default = 10)
+```
+
+Compared participant by participant with everyone else who did the same
+illusion, they respond faster and more consistently, make more errors, and
+their errors are no slower than their correct responses. Each row gives the
+percentile of the median flagged participant among the others.
+
+```{r}
+mixing_profile <- illu |>
+  summarize(`Error rate` = mean(Error),
+            `Median RT` = median(RT),
+            `RT spread (IQR)` = IQR(RT),
+            `5th percentile RT` = quantile(RT, 0.05),
+            `Errors slower than correct (log RT)` =
+              median(log(RT[Error == 1])) - median(log(RT[Error == 0])),
+            .by = c("Participant", "Illusion_Type", "Flagged"))
+
+mixing_profile |>
+  pivot_longer(-c(Participant, Illusion_Type, Flagged), names_to = "Feature") |>
+  filter(!is.na(value)) |>
+  summarize(Others = median(value[!Flagged]),
+            `Do not mix` = median(value[Flagged]),
+            Percentile = 100 * mean(value[!Flagged] < median(value[Flagged])),
+            .by = "Feature") |>
+  gt::gt() |>
+  gt::fmt_number(columns = c("Others", "Do not mix"), n_sigfig = 2) |>
+  gt::fmt_number(columns = "Percentile", decimals = 0)
+```
+
+```{r}
+#| fig-width: 12
+#| fig-height: 8
+
+# Each of them as a density line, against the pooled RTs of everyone else
+# (grey). The pooled histogram also carries the between-participant spread, so
+# any single participant looks narrow against it: the table above is the fair
+# comparison, this shows the shapes.
+illu |>
+  filter(!Flagged) |>
+  ggplot(aes(x = RT)) +
+  geom_histogram(aes(y = after_stat(density)), binwidth = 0.02, fill = "grey75") +
+  geom_density(data = filter(illu, Flagged), aes(group = Participant),
+               color = scales::alpha("#E91E63", 0.4), linewidth = 0.4, bounds = c(0, Inf)) +
+  scale_x_sqrt(breaks = c(0.15, 0.25, 0.5, 1, 2, 3)) +
+  coord_cartesian(xlim = c(0, 3)) +
+  facet_grid(Illusion_Type ~ Response, scales = "free_y") +
+  labs(y = NULL, title = "Participants that do not mix (pink) against everyone else (grey)") +
+  theme_minimal()
+```
+
+```{r}
+#| fig-width: 14
+#| fig-height: 22
+
+# Every one of them, by response
+illu |>
+  filter(Flagged) |>
+  mutate(Panel = paste0(str_remove(Participant, "IllusionGame"), "\n", Illusion_Type)) |>
+  ggplot(aes(x = RT)) +
+  geom_histogram(aes(fill = Response), binwidth = 0.05, position = "identity", alpha = 0.6) +
+  scale_x_sqrt(breaks = c(0.15, 0.5, 1, 2, 4)) +
+  scale_fill_manual(values = c("Correct" = "#4CAF50", "Error" = "#F44336")) +
+  facet_wrap(~Panel, ncol = 8, scales = "free_y") +
+  labs(y = NULL) +
+  theme_minimal() +
+  theme(legend.position = "top", strip.text = element_text(size = 7),
+        axis.text.y = element_blank())
+```
 
 ## Computational Cost
 
@@ -802,21 +907,42 @@ parameter_grid_header <- 0.35
 # there. Families do not share them, so across families rows cannot be matched
 # by name: each family's rows are packed from the top (which lines up the drift
 # rates and the nus, both "mu"), and the non-decision time - the one parameter
-# every family has - is anchored to the bottom row. Shorter columns get NA in
-# between, drawn as spacers, so the columns stay aligned however many
-# parameters they have.
-parameter_grid_rows <- function(data, anchor_bottom = c("NDT", "NDT Variability")) {
+# every family has - is anchored to the bottom row. The exception is a
+# parameter that means the same thing in several families (`align`, the
+# start-point range of the racing models): it goes in the same row everywhere,
+# the lowest it falls in any family, with gaps above it in the others. Shorter
+# columns get NA in between, drawn as spacers, so the columns stay aligned
+# however many parameters they have.
+parameter_grid_rows <- function(data, anchor_bottom = c("NDT", "NDT Variability"),
+                                align = "Start Point Range") {
   data$Model <- droplevels(factor(data$Model))
   # Data without a family (made by hand, say) treats each model as its own
   if (is.null(data$Family)) data$Family <- as.character(data$Model)
 
   in_order <- function(d) unique(as.character(d$Parameter[order(d$Parameter_Order)]))
+  families <- lapply(split(data, data$Family), \(d) {
+    rows <- in_order(d)
+    rows[!rows %in% anchor_bottom]
+  })
+  # Pad the families' top rows so that each aligned parameter lands in the row
+  # of the family where it comes lowest
+  for (p in align) {
+    target <- max(0, unlist(lapply(families, \(rows) match(p, rows))), na.rm = TRUE)
+    families <- lapply(families, \(rows) {
+      at <- match(p, rows)
+      if (is.na(at) || at == target) return(rows)
+      append(rows, rep(NA_character_, target - at), after = at - 1)
+    })
+  }
+
   slots <- lapply(levels(data$Model), function(model) {
-    family_rows <- in_order(data[data$Family == data$Family[data$Model == model][1], ])
+    family <- data$Family[data$Model == model][1]
+    family_rows <- in_order(data[data$Family == family, ])
     own <- in_order(data[data$Model == model, ])
-    rows <- ifelse(family_rows %in% own, family_rows, NA_character_)
-    list(top = rows[!family_rows %in% anchor_bottom],
-         bottom = rows[family_rows %in% anchor_bottom])
+    top <- families[[family]]
+    bottom <- family_rows[family_rows %in% anchor_bottom]
+    list(top = ifelse(top %in% own, top, NA_character_),
+         bottom = ifelse(bottom %in% own, bottom, NA_character_))
   })
   names(slots) <- levels(data$Model)
   n_top <- max(lengths(lapply(slots, `[[`, "top")))

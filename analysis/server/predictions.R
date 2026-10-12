@@ -1,13 +1,13 @@
 # =========================================================================
 # Posterior predictions for the model comparison -- the compute half
 # =========================================================================
-# Everything in 1_modelcomparison.qmd that needs a fitted model lives here, so
+# Everything in 2_modelcomparison.qmd that needs a fitted model lives here, so
 # that it can run on the cluster, where the fits are, rather than on a laptop
 # that has to hold every 500 MB fit in memory at once. Sourced by
 #
 #   - predict_model.R (on Artemis, via `./hpc predict <model>`), which writes
 #     IGC_MODELS_DIR/predictions/<model>_<illusion>.rds, and
-#   - 1_modelcomparison.qmd, which reads those files and only relabels and
+#   - 2_modelcomparison.qmd, which reads those files and only relabels and
 #     plots -- or, for a fit that has no predictions file yet, calls
 #     run_predictions() itself as a fallback.
 #

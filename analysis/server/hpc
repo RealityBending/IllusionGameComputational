@@ -12,7 +12,10 @@
 #   ./hpc fit <model|all> [..]  one array job per model (extra args -> sbatch)
 #   ./hpc combine <model|all>   merge a model's shards, add loo
 #   ./hpc predict <model|all>   posterior predictions of a combined model, for
-#                               1_modelcomparison.qmd (extra args -> sbatch)
+#                               2_modelcomparison.qmd (extra args -> sbatch)
+#   ./hpc priors [model|all]    priors against posteriors of every combined
+#                               fit (or one model's), for 1_models.qmd; one job
+#                               (IGC_PRIORS_FORCE=1 redoes up-to-date ones)
 #   ./hpc queue                 squeue for this user
 #   ./hpc log [jobid|model]     tail the newest .out/.err in scratch
 #   ./hpc ls                    list fitted models on the cluster
@@ -21,6 +24,7 @@
 #                               analysis/models/predictions/ (so does any
 #                               pattern under predictions/, e.g.
 #                               'predictions/gam_lnr_*.rds')
+#   ./hpc pull priors           the same for analysis/models/priors/
 #   ./hpc cancel <jobid|all>    scancel
 #   ./hpc sh '<cmd>'            run an arbitrary command on the login node
 #
@@ -278,6 +282,16 @@ cmd_predict() {
   submit_per_model predict.slurm predict "$want" "$@"
 }
 
+# Not per model: one short job loops over the combined fits (prior_check.R),
+# since each takes about a minute.
+cmd_priors() {
+  local want="${1:-all}"; shift || true
+  require_link
+  local force=""
+  [ -n "${IGC_PRIORS_FORCE:-}" ] && force=",IGC_PRIORS_FORCE='${IGC_PRIORS_FORCE}'"
+  remote "mkdir -p '${SCRATCH_DIR}' && cd '${USERS_DIR}' && sbatch       --chdir='${USERS_DIR}'       --job-name='igc_priors_${want}'       --output='${SCRATCH_DIR}/priors_${want}_%j.out'       --error='${SCRATCH_DIR}/priors_${want}_%j.err'       --mail-user='${MAIL_USER}'       --export=ALL,IGC_MODEL='${want}',IGC_MODELS_DIR='${MODELS_DIR}',IGC_R_MODULE='${R_MODULE}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_EB_MODULES='${EB_MODULES}'${force}       $* priors.slurm"
+}
+
 cmd_queue() {
   require_link
   remote "squeue -u '${HPC_USER}' -o '%.10i %.12P %.28j %.8T %.12M %.12L %R'"
@@ -312,6 +326,8 @@ cmd_pull() {
   case "$pattern" in
     predictions)   pattern="predictions/*.rds"; dest="$LOCAL_MODELS/predictions" ;;
     predictions/*) dest="$LOCAL_MODELS/predictions" ;;
+    priors)        pattern="priors/*.rds"; dest="$LOCAL_MODELS/priors" ;;
+    priors/*)      dest="$LOCAL_MODELS/priors" ;;
   esac
   mkdir -p "$dest"
   info "pulling '${pattern}' into ${dest#"$HERE/../"}/"
@@ -347,11 +363,12 @@ case "${1:-}" in
   fit)        shift; cmd_fit "$@" ;;
   combine)    shift; cmd_combine "$@" ;;
   predict)    shift; cmd_predict "$@" ;;
+  priors)     shift; cmd_priors "$@" ;;
   queue)      shift; cmd_queue "$@" ;;
   log)        shift; cmd_log "$@" ;;
   ls)         shift; cmd_ls "$@" ;;
   pull)       shift; cmd_pull "$@" ;;
   cancel)     shift; cmd_cancel "$@" ;;
   sh)         shift; cmd_sh "$@" ;;
-  *) sed -n '2,28p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
 esac

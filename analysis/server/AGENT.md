@@ -68,11 +68,13 @@ shared by every project on the account — and why each piece is what it is:
     reach.
 
   How that is enforced, from 2026-10-02:
-  - `IGC_COGMOD_REF` stays `dev`, so `./hpc install cogmod` installs 0.3.4.
-  - **The floor is 0.3.4.** `install_pkgs.R` and `fit_model.R` refuse anything
-    older. `IGC_COGMOD_MIN=0.3.3 ./hpc fit <model>` lets a shard of an older
-    model run while the library is still 0.3.3; it cannot bring 0.3.3 back
-    after 0.3.4 is installed.
+  - `IGC_COGMOD_REF` stays `dev`, so `./hpc install cogmod` installs whatever
+    `dev` holds: 0.3.4, then 0.3.5 from 2026-10-12 (next bullet).
+  - **The floor is 0.3.5** (0.3.4 from 2026-10-02 to 2026-10-12).
+    `install_pkgs.R` and `fit_model.R` refuse anything older.
+    `IGC_COGMOD_MIN=0.3.4 ./hpc fit <model>` lets a shard of an older model
+    run while the library is still 0.3.4; it cannot bring 0.3.4 back after
+    0.3.5 is installed.
   - **Each new shard records its cogmod** as `m$cogmod` (version and commit),
     which `combine_model.R` carries into the combined fit. A fit without
     `$cogmod` predates the stamp, so it is 0.3.3 or older. That is how to list
@@ -83,20 +85,41 @@ shared by every project on the account — and why each piece is what it is:
     compare priors, so without this check a mixed set would combine silently.
 
   The library is shared by all of an account's jobs, FakeArt's included.
-  Installing 0.3.4 while an array still has tasks pending gives those shards
-  other priors than their siblings. The combine check now catches that, but it
+  Installing a new cogmod while an array still has tasks pending gives those
+  shards other priors than their siblings. The combine check now catches that, but it
   costs the shard. The order is:
   1. wait until no array on the account has pending tasks;
   2. `./hpc push`;
   3. `./hpc install cogmod`;
   4. then submit.
 
-  After a push, a pending task of an older array meets the 0.3.4 floor and
-  stops in its first second. That is the intended failure.
+  After a push, a pending task of an older array meets the floor and stops in
+  its first second. That is the intended failure.
 
   A `loo` comparison between a 0.3.4 fit and an older one compares models on
   different priors. At 324k rows the likelihood dominates, but smooth `sds`
   and the `bs_*` slopes moved a lot (5.7).
+- **New fits use cogmod 0.3.5** (`dev`, user's decision of 2026-10-12),
+  which implements part of `cogmod_priors_review.md`. cogmod refitted each
+  proposal on its vignettes' data before implementing it
+  (`benchmarks/driftone_priors/README.md` in cogmod). In cogmod's `NEWS.md`
+  it:
+  - centres `poutlier` at 0.25% rather than 0.7%: `normal(-6, 1)` on the
+    logit link, `exponential(280)` when `poutlier` is left out of `bf()`.
+    Every model's priors change;
+  - gives the DDM's `boundary` `normal(1, 1)` on its intercept and
+    `normal(0, 0.5)` on its slopes, and the `bias` slopes `normal(0, 0.5)`.
+    Both participant SDs get `exponential(1)` instead of brms's
+    `student_t(3, 0, 2.5)`, so `fit_model.R`'s blanket `b` prior now reaches
+    only `mu`;
+  - does **not** re-centre the RDM's and LBA's `driftone` priors (R2-R4 of the
+    review). Refitted, those predicted the same error rates and RTs, cost
+    9-26% more leapfrog steps per draw on the RDM, and added divergences on
+    the LBA2. A `driftone` posterior in its prior's lower tail is expected for
+    the error accumulator (cogmod's `?cogmod_priors`), not a flag to act on.
+
+  The order above applies, with one step in front: cogmod's 0.3.5 has to be
+  committed and pushed to `dev` before `./hpc install cogmod` can install it.
 - Keep `precompile.R`'s `cpp_options` identical to `stan_model_args` in
   `fit_model.R`, or a different precompiled-header variant is keyed and the
   race comes back ([hub](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#precompiled-header)).
@@ -250,9 +273,9 @@ grouping factor), not `gp()` terms, and only for fits with
 
 | where | affected? |
 | --- | --- |
-| `1_modelcomparison.qmd` | **no.** It reads prediction files only. All 11 in `analysis/models/predictions/` are format 2 and were made on the cluster with brms 2.21.0 (their `$meta$packages`). The local fallback, `run_predictions()`, refuses a brms other than the fit's. |
+| `2_modelcomparison.qmd` | **no.** It reads prediction files only. All 11 in `analysis/models/predictions/` are format 2 and were made on the cluster with brms 2.21.0 (their `$meta$packages`). The local fallback, `run_predictions()`, refuses a brms other than the fit's. |
 | `combine_model.R` (`loo`) | **no.** It runs on the cluster under 2.21.0. |
-| `2_analysis.qmd` | **yes:** `estimate_relation()` at ~116 (the density plots) and ~307 (the heatmaps), on whatever fit it loads. It currently reads `models/gam_lnr_muller.rds`, which no longer exists, and nothing has been rendered from it, so no wrong output exists yet. Before reviving it, move its predictions into `predictions.R`, or patch the fit right after `readRDS()`. |
+| `3_analysis.qmd` | **yes:** `estimate_relation()` at ~116 (the density plots) and ~307 (the heatmaps), on whatever fit it loads. It currently reads `models/gam_lnr_muller.rds`, which no longer exists, and nothing has been rendered from it, so no wrong output exists yet. Before reviving it, move its predictions into `predictions.R`, or patch the fit right after `readRDS()`. |
 | `server/lba_modes/` | **no.** Computed by hand from `standata(m)` and validated against `lp__` (`lba_decompose.R`). |
 | `0_preprocessing.qmd` | **no.** Its `estimate_relation()` calls are on `mgcv::bam` models fitted in the same session. |
 | summaries of the draws (`summary()`, `fixef()`, `as_draws_*()`, Rhat, `lp__`) | **no.** No basis is involved. |
@@ -704,6 +727,12 @@ makes:
 Reading and merging the three shards is 8 s of that. The log-likelihood matrix
 is 3.6 GB at 1500 draws and 7.2 GB at 3000.
 
+**Memory: 320G since 2026-10-09**, because fits now carry 8,000 draws (6). The
+peaks below scale linearly with draws, which gives ~210 GiB for the
+5-6-parameter models and ~245 GiB for `gam_lnr6` / `gam_lba`. This is a
+projection: measure the first 8,000-draw combine. A 4,000-draw combine still
+fits in `--mem=192G`.
+
 **Memory: 192G since 2026-09-29, not 128G.** The 128G was set from the 45 GB of
 a `waic`-at-1,500-draws combine. With `loo` over every draw of four shards, the
 peak is several times that. It scales with draws x rows: `log_lik()` evaluates
@@ -783,7 +812,7 @@ or `IGC_FILE_REFIT=always`.** `IGC_DELETE_SHARDS=1` restores the old behaviour.
 Fitted and combined on the second account (4 shards x 2 chains, warmup 1000 +
 500, brms 2.21.0, cold starts, the post-5.7 priors with `exponential(1)` on
 `sds`). The combined file was uploaded to `models/combined/` on `dmm56`. **It
-has no prediction file and is not in `1_modelcomparison.qmd`.** Do not run
+has no prediction file and is not in `2_modelcomparison.qmd`.** Do not run
 `./hpc predict gam_lba` on it as it stands.
 
 The eight chains sit in two modes and none of them crosses between them. lp__
@@ -850,13 +879,190 @@ start near mode B would also do, but 5.5 rules it out.
    the warning that B3 of the note proposes; the note's header lists what
    was changed. The next step is the re-run itself, on 0.3.4 like every new
    fit (2).
+   *Status 2026-10-09:* **re-run done, and the split replicated.** The
+   `gam_lba_MullerLyer.rds` on the laptop is a 0.3.4 fit (`732be30`, sampled
+   2026-10-07). It is a new run, not the old one re-saved: the draws differ
+   from `gam_lba_MullerLyer_20261001.rds`. It shows the same 5/3 clusters at
+   the same lp__ levels (about 37,000 against 38,300), and the
+   VerticalHorizontal fit splits too (4.10). That triggers step 2.
 2. **Only if it replicates**, change the model:
    **`sigmaone ~ 1 + (1 | Participant)`** (no smooth on `sigmaone`). With the
    error accumulator's drift SD shared across conditions, |v|/s² pins
    `driftone` in every condition. It would be a new `models.R` entry, not an
    edit to `gam_lba`. Further options, in reserve: `sigmabias` treated the same
    way, `sigmaone = 1`, or dropping the LBA in favour of `gam_lnr6`
-   (`cogmod_lba_modes_issue.md` §6).
+   (`cogmod_lba_modes_issue.md` §6). Note that `gam_lnr6` has the same
+   problem (4.10).
+
+### 4.10 Convergence across the registry: three kinds of failure (2026-10-09)
+
+Every combined fit on the laptop was examined chain by chain, from the draws
+only (safe with the laptop's brms, 3.9). That covers MullerLyer and
+VerticalHorizontal for all families. Ebbinghaus and `gam_rdm5_verticalhorizontal`
+were seen only through the summaries stored in their prediction files. The
+checks were: per-chain lp__ by quarter of sampling; Rhat on the first half of
+the draws against the second; and the distance between chains, as the RMS over
+the population terms of the gap between chain means, in within-chain SDs.
+Sampling noise alone gives 0.1-0.3.
+
+**No fit is still moving.** In every fit, each chain's lp__ is flat from the
+first quarter of its draws to the last, and Rhat on the first half equals Rhat
+on the second. So no group is "almost converged": a longer warmup or more
+draws would not change the picture in any of them. What separates the fits is
+whether the chains agree.
+
+#### A. Converged at the population level: DDM-4, DDM-5, LNR, RDM
+
+All 8 chains agree (distance 0.1-0.3). The population Rhat is at most 1.04
+(1.10 for DDM-4 VerticalHorizontal) and the lp__ Rhat at most 1.02. The
+Ebbinghaus DDM-4, DDM-5 and RDM summaries look the same. What remains:
+
+- **Low ESS on a few population terms**, mostly `b_ndt_Intercept` (bulk ESS
+  53-310 over 4,000 draws). More draws would fix this; a longer warmup would
+  not.
+- **3-25 participants per fit (66 in all) that do not mix**, with Rhat 1.1-1.8 on
+  their own terms. Each such participant's chains sit in one of two tight
+  solutions and never switch. Examples: DDM-4 VerticalHorizontal, Validation
+  S42, `ndt` -0.035 in 4 chains and +0.089 in the other 4 (within-chain SD
+  0.01). DDM-5 MullerLyer, EEG sub-4, `poutlier` 5.0 against -0.5, i.e.
+  whether that participant's trials are treated as contaminants. The parameter
+  is always `ndt`, usually traded against `boundary` and/or `poutlier`. Ten
+  participants recur across models. RDM has none.
+  `mixing_participants.R` writes the list (`poorly_mixing_participants.csv`),
+  and `2_modelcomparison.qmd` → Convergence → "Participants That Do Not Mix"
+  shows them.
+
+  **Their profile.** Compared participant by participant with the others, they
+  are faster (median RT at the 22nd percentile of the others), more consistent
+  (RT IQR at the 15th), more error-prone (error rate at the 85th), and their
+  errors are no slower than their correct responses (22nd).
+
+  **There is no rule for excluding them a priori.** Every threshold on those
+  features removes far more participants who mix well than ones who don't.
+  For example, "IQR < 0.12 s and errors > 30%" catches 8 of the 71 flagged
+  participant-illusion pairs and 74 others. "Any RT < 0.15 s" catches 8 and
+  201. It is the tail of a continuum, not a separate group.
+
+  **Decision (user, 2026-10-09):** no participant is flagged or excluded
+  beforehand. The models are refitted with longer runs. Any participants who
+  still do not mix are reported as a result in their own right: a response
+  profile these models cannot accommodate. The evidence above predicts that
+  the longer run will not merge the per-participant solutions. It does give
+  each chain more chances to switch, and the refits on 0.3.4 are due anyway
+  (6.4). Rerun `mixing_participants.R` on the refits to get the final list.
+
+#### B. Separate stationary modes: every model that frees `sigmabias`
+
+LNR-6, RDM-5 and LBA, on both illusions. Their worst-mixing parameters are
+`sigmabias` terms (intercept, smooth, `sds`, participant SD and participant
+terms), along with whatever trades off against `sigmabias`: `mu`'s smooth in
+the LNR and `driftone` in the LBA. No model with `sigmabias = 0` has this
+problem. The chains form clusters. Within a cluster they agree (distance 0.1);
+between clusters they are 3-6 SDs apart on average over all the population
+terms. No chain crosses between clusters:
+
+| fit | clusters (combined chain index) | lp__ of the other clusters, against the largest |
+| --- | --- | --- |
+| `gam_lba` ML, 0.3.4 re-run | {1,4,6,7,8} / {2,3,5} | +1,350: the 4.9 split replicated |
+| `gam_lba` VH, 0.3.4 | {3,5,6,7} / {2,4,8} / {1} | +1,560 / -70 |
+| `gam_rdm5` ML | {1,2,3,4,5,8} / {6} / {7} | **+1,670** / -70 |
+| `gam_rdm5` VH (summary only) | 5 chains / 3 chains | -2,300 |
+| `gam_lnr6` VH | {1,6,7,8} / {2,3,4,5} | about -80; participant `sigmabias` changes sign between modes |
+| `gam_lnr6` ML | {2,4,5,6,8} / {1} / {3} (+ chain 7 frozen, C) | -1,015 / about 0, 3 SDs away |
+
+Points worth keeping:
+
+- **The modes are local traps, not one wide posterior.** They differ by
+  hundreds to thousands of log-density units, and the cluster with the most
+  chains is often not the best one: in `gam_rdm5` ML a single chain out of 8
+  found a mode 1,670 units higher. There may be modes no chain has found.
+- `gam_lnr6` ML chain 3 is the clearest case of a ridge. It matches the main
+  cluster's lp__ but sits 3 SDs away.
+- Most of these models hit treedepth 10 on every iteration (1,023 leapfrogs);
+  `gam_lnr6` VerticalHorizontal does not. Over 500 draws no chain moved. More
+  warmup or more draws will not join the clusters.
+- **Their prediction files mix modes.** `gam_lnr6` and `gam_rdm5` are plotted
+  in `2_modelcomparison.qmd`, and their curves and `loo` average over every
+  cluster. Treat them as unreliable until refitted.
+- **This is a result in itself**, to report in the paper. On this data, with
+  trial-level smooths on every parameter, the start-point range cannot be
+  identified by any racing family. Freeing it turns a well-behaved model
+  (RDM: 0 participants above Rhat 1.05) into a multimodal one.
+
+Options, not yet decided (each is a new `models.R` entry, never an edit to an
+existing model):
+
+1. **A simpler formula: `sigmabias ~ 1 + (1 | Participant)`**, so no smooth on
+   the start-point range. Its smooth and participant terms are where the
+   clusters disagree most (`sds_sigmabias` at 2, 12 and 22 in the three
+   `gam_rdm5` ML clusters). This is the same move already planned for the
+   LBA's `sigmaone` (4.9). A further step is `sigmabias ~ 1`, a single range
+   for everyone. **This is the preferred option** (2026-10-09), for two
+   reasons the paper's Discussion is to make (TODO in
+   `paper/manuscript.qmd`):
+   - *Theory: a motivation, not a proof.* The start point precedes the
+     stimulus, and trials are interleaved. But the DDM's `bias` is smoothed
+     too and does vary with the predictors, so this argument alone cannot
+     single out `sigmabias`. What separates them: with `dec(Error)`
+     (accuracy coding), a pre-stimulus `bias` would average 0.5, so a
+     stimulus effect on it is early stimulus-driven processing (e.g. an
+     automatic pull of the illusion), and that is directional. `sigmabias` in
+     the race models is a symmetric range shared by both accumulators, with
+     no direction. Their directional early pull lives in `mu` vs `driftone`.
+     Its DDM counterpart is start-point *variability*, fixed at 0 in DDM-4 and
+     DDM-5. So an effect on `bias` does not predict one on `sigmabias`.
+   - *Identifiability, the decisive argument.* The response depends on the
+     distance from start point to boundary, and `boundary` already varies
+     with the conditions. A condition effect on `sigmabias` is nearly
+     interchangeable with one on `boundary`, which is the trade-off that
+     separates the modes. The empirical contrast: DDM-4 and DDM-5 converge
+     with `bias` smoothed, while every race model with `sigmabias` smoothed
+     does not.
+
+   Linear terms (`~ Illusion_StrengthZ + Illusion_DifferenceZ + (1 |
+   Participant)`) would shrink that trade-off from about 24 coefficients to 2,
+   but not remove it. A single slope on the *signed* strength would also force
+   the two sides of the illusion to mirror each other. That variant is worth
+   fitting only as an explicit test of selective influence (slopes near 0),
+   not as a fix. `(1 | Participant)` is kept because people plausibly differ
+   in start-point variability, but its terms also disagree between modes (sign
+   flips in `gam_lnr6` VH), so `~ 1` is the fallback if it still splits.
+2. **Tighter priors on `sigmabias`.** This is less promising. In the LBA the
+   likelihood gap between modes is 25 times the prior gap (4.9), so only a
+   prior close to fixing the parameter would choose between them. Note that
+   0.3.4's `sds` prior is *looser* than 0.3.3's on these `t2()` smooths
+   (5.7). The `gam_lnr6` and `gam_rdm5` fits in the table are 0.3.3, and the
+   two `gam_lba` fits are 0.3.4, so cogmod's 0.3.4 defaults did not remove
+   the split. The 0.3.4 Ebbinghaus runs of `gam_rdm5` and `gam_lnr6` (6.4)
+   will show the same for those two. A tighter-prior variant would set the
+   `sds` prior on `sigmabias` explicitly, rather than through cogmod's
+   default.
+3. **Test either option cheaply first.** The question is whether 8 chains
+   still split on a subsample of 200-480 participants with the current
+   formula. If they do, the variants can be compared at that size before any
+   full-data run.
+
+#### C. Frozen chains
+
+A chain whose step size collapsed during adaptation. Its lp__ barely moves, far
+below the others, and its smooth coefficients stay pinned near their start.
+This is a sampler failure, not a mode, and a restart of that shard fixes it.
+
+- `gam_lnr6` MullerLyer, combined chain 7 (shard 4, chain 1). Step size 3e-5
+  against about 8e-3, lp__ -94,600 below the other chains, lp__ SD 42 against
+  about 120.
+- `gam_lnr_ebbinghaus` on 0.3.3: step sizes down to 1e-8, and lp__ 40,000-82,000 below
+  the others in two chains. It is already being refitted on 0.3.4 (6.4).
+
+Restarting `gam_lnr6` MullerLyer's shard 4 alone is not worth the compute while
+the model is in group B. `combine_model.R` now prints one line per chain (step
+size, treedepth, divergences, lp__ level and spread). It warns on a frozen
+chain, naming the shard, and on a chain whose lp__ is more than 5 within-chain
+SDs from the median, which is likely a separate mode. Chains in the same mode
+differ by about 0.3 SD. A mode at the same lp__ (`gam_lnr6` ML chain 3, or
+`gam_lnr6` VH) shows only in the parameters, so the check cannot see it.
+Tested on `gam_lnr6` ML: it finds chain 7 as frozen and chain 1 (8.5 SDs) as
+off.
 
 ---
 
@@ -943,7 +1149,7 @@ from `cogmod_inits()` with Stan's own adaptation. `fit_model.R` no longer reads
 a supplied inverse metric survive adaptation, which is meaningless without a
 warm start. `cogmod_warmstart()` still exists in cogmod if the decision is ever
 revisited; `analysis/warmstart.csv` and the chunk in
-`analysis/1_modelcomparison.qmd` that writes it are untouched.
+`analysis/2_modelcomparison.qmd` that writes it are untouched.
 
 ### 5.6 Everything is parameterised by environment variable
 
@@ -957,7 +1163,8 @@ can be compared without pulling the `.rds`.
 
 ### 5.7 The slope prior fills flats only; it does not overwrite cogmod's
 
-`fit_model.R` adds `normal(0, 1)` on class `b` because brms leaves slopes flat.
+`fit_model.R` adds a blanket normal on class `b` because brms leaves slopes flat
+(`normal(0, 1)` until 2026-10-12, `normal(0, 2)` since; `cogmod_priors_review.md`).
 Until 2026-09-18 it did that **unconditionally**, with `replace = TRUE`, which
 overwrote the slope priors cogmod sets for the dpars it knows to be hard to
 identify. Measured over the registry, before and after the loop:
@@ -1027,7 +1234,7 @@ defaults *are* this configuration, so the production run is two bare commands:
 | partition | `long`, `--time=8-00:00:00` | `long`'s actual max (3.7) — 12-20 h per chain was the projection (4.4.1), but three `gam_lnr` shards measured 42.7-44 h on 2026-09-20, so request the ceiling rather than the guess; `--time` doesn't affect dispatch here (4.2's CPU cap does) |
 | participants | `IGC_NPARTICIPANTS=all` (default) | 2,215 participants, 323,981 rows |
 | warmup | `IGC_WARMUP=1000` | the only value shown to adapt at full data; 300 provably does not (4.4.1) |
-| draws | `IGC_SAMPLES=500` | 8 chains x 500 = 4,000 draws per model; at ESS/draw ~0.3 that is ~1,200 ESS on population terms |
+| draws | `IGC_SAMPLES=1000` (500 until 2026-10-09) | 8 chains x 1,000 = 8,000 draws per model. At 500, `b_ndt_Intercept` had a bulk ESS of only 53-310, and the per-participant solutions never switched; the longer run is the test of whether they ever do (4.10). It costs about a third more wall time: a `gam_lnr` shard goes from 43 h to about 57 h, and DDM-5 from a projected 2.5-5.2 days to 3.3-6.9, still inside `long`'s 8 days. It doubles the combine's memory, hence `combine.slurm`'s 320G (4.8). A task reads the default when it starts, so do not push a change to it while an array has pending tasks; `combine_model.R` refuses shards of different lengths |
 | array | `--array=1-4` per model | 4 x 16 = 64 CPUs per model against `long`'s 140-CPU per-user cap, so 8 of the 12 production tasks run at once and the rest start as they finish (`--time` is per task, so pending costs nothing) |
 | chains | `IGC_CHAINS=2`, 8 threads each | threading scales nearly linearly, so more chains per task buys nothing; one chain per task risks the whole task on one init (4.5) |
 | memory | `--mem=32G` | ~6.5 GB per chain at full data (4.3), so ~13 GB used; the rest is headroom against an OOM killing a 20 h job |
@@ -1251,7 +1458,7 @@ machinery removed (2026-09-18); `verylong` — not worth it.
 | file | role |
 | --- | --- |
 | `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/queue/log/ls/pull/cancel/sh |
-| `install_pkgs.R` | builds the project R library (`./hpc install`); enforces cogmod >= 0.3.4 (`IGC_COGMOD_MIN`) |
+| `install_pkgs.R` | builds the project R library (`./hpc install`); enforces cogmod >= 0.3.5 (`IGC_COGMOD_MIN`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model, read by everything else |
 | `fit_model.R` | fits the model named by `IGC_MODEL`, one shard per array task |

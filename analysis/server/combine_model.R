@@ -87,6 +87,48 @@ if (length(unique(cogmod_of)) > 1) {
        "Refit the odd ones, or combine each set in its own IGC_MODELS_DIR.", call. = FALSE)
 }
 
+# One line per chain, so that a frozen chain or a chain in another mode is
+# seen here rather than as a bad Rhat after the combine (AGENT.md 4.10). A
+# frozen chain has a step size orders of magnitude below the others: lp__
+# barely moves, far below the rest. A chain in another mode samples normally,
+# but its lp__ is off by hundreds or thousands. The first needs a restart of
+# its shard. The second will not be fixed by one.
+chains <- do.call(rbind, Map(function(s, f) {
+  sp <- rstan::get_sampler_params(s$fit, inc_warmup = FALSE)
+  lp <- rstan::extract(s$fit, pars = "lp__", permuted = FALSE)[, , 1, drop = FALSE]
+  data.frame(shard = basename(f), chain = seq_along(sp),
+             stepsize = vapply(sp, \(x) mean(x[, "stepsize__"]), 0),
+             treedepth_hit = vapply(sp, \(x) mean(x[, "treedepth__"] >= 10), 0),
+             divergent = vapply(sp, \(x) mean(x[, "divergent__"]), 0),
+             lp_mean = apply(lp, 2, mean), lp_sd = apply(lp, 2, sd))
+}, shards, files))
+chains$lp_gap <- chains$lp_mean - stats::median(chains$lp_mean)
+chains$frozen <- chains$stepsize < 1e-4 | chains$stepsize < stats::median(chains$stepsize) / 20
+cat("** chains:\n")
+print(format(chains, digits = 3), row.names = FALSE)
+if (any(chains$frozen)) {
+  warning("frozen chain(s) in ", paste(unique(chains$shard[chains$frozen]), collapse = ", "),
+          ": refit that shard (AGENT.md 4.10)", call. = FALSE)
+}
+off <- abs(chains$lp_gap) > 5 * stats::median(chains$lp_sd) & !chains$frozen
+if (any(off)) {
+  warning(sum(off), " chain(s) with lp__ more than 5 SDs from the others: ",
+          "likely separate modes (AGENT.md 4.10)", call. = FALSE)
+}
+
+# Every shard must also have the same warmup and number of draws. The default
+# went from 500 to 1,000 draws on 2026-10-09, and fit_model.R reads it when a
+# task starts, so a push while an array still has pending tasks gives that
+# array shards of both lengths.
+run_of <- vapply(shards, function(s) {
+  sprintf("%d warmup + %d draws", s$fit@sim$warmup, s$fit@sim$iter - s$fit@sim$warmup)
+}, "")
+if (length(unique(run_of)) > 1) {
+  stop("the shards of ", name, " differ in run length (",
+       paste0(basename(files), ": ", run_of, collapse = ", "), "). ",
+       "Refit the odd ones with IGC_SAMPLES/IGC_WARMUP set to match.", call. = FALSE)
+}
+
 stamp <- shards[[1]]$cogmod
 m <- brms::combine_models(mlist = shards)
 rm(shards)

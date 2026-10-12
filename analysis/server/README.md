@@ -17,7 +17,7 @@ code, submit, watch, pull results — over SSH.
 `./hpc fit <model>` submits an array for it, each array task writing one shard;
 `./hpc combine <model>` merges that model's shards into a single fit;
 `./hpc predict <model>` turns that fit into the few MB of results that
-`1_modelcomparison.qmd` plots.
+`2_modelcomparison.qmd` plots.
 
 ## The cluster, and one-time setup
 
@@ -115,8 +115,11 @@ Settings below are the ones measured in `AGENT.md` §4. Full data, cold starts,
 The defaults in `fit.slurm` are that production configuration: `--array=1-4`,
 `--cpus-per-task=16`, `--mem=32G`, `--partition=long` and no `--time` (so each
 task gets `long`'s 8-day maximum), with `IGC_NPARTICIPANTS=all`,
-`IGC_WARMUP=1000`, `IGC_SAMPLES=500` and `IGC_CHAINS=2`. That is 4 shards x 2
-chains x 500 = **4,000 draws per model**.
+`IGC_WARMUP=1000`, `IGC_SAMPLES=1000` and `IGC_CHAINS=2`. That is 4 shards x 2
+chains x 1,000 = **8,000 draws per model**. The draws were 500 until
+2026-10-09; fits made before then have 4,000 (AGENT.md 4.10). Push a change to
+the run length only when no array has pending tasks: a task reads the default
+when it starts. `combine_model.R` refuses shards of different lengths.
 
 Three models is 12 tasks against `long`'s 140-CPU per-user cap, which allows
 `140 / 16 = 8` at a time, so the last four start as earlier ones finish. That
@@ -133,10 +136,12 @@ When they are done:
 ```
 
 `combine` is one job, not an array, and its constraint is memory rather than
-CPU: `--mem=192G` on `general`. `add_criterion()` holds several
+CPU: `--mem=320G` on `general`. `add_criterion()` holds several
 draws x 323,981 matrices at once, 9.7 GiB each at 4,000 draws. Four-shard
 combines peaked at 100-106 GiB, and `gam_lnr6` peaked at 122 GiB: it was
-OOM-killed at the old 128G on 2026-09-29 (AGENT.md §4.8).
+OOM-killed at the old 128G on 2026-09-29 (AGENT.md §4.8). At 8,000 draws
+(since 2026-10-09) that doubles, hence 320G. Combining an older 4,000-draw fit
+needs only `./hpc combine <model> --mem=192G`, which dispatches sooner.
 
 Since 2026-09-20 it adds **`loo` over every draw** and **keeps the shards**.
 Both were measured rather than assumed: `loo` over all 3,000 draws of the
@@ -166,7 +171,7 @@ mini merged that with shard 2 and came out larger than the full fit. Found on
 
 ## Predictions for the model comparison
 
-Everything in `1_modelcomparison.qmd` that needs a fitted model — sampling
+Everything in `2_modelcomparison.qmd` that needs a fitted model — sampling
 efficiency, `loo`, the posterior predictive check, the parameter curves and
 the heatmaps — is computed by `predictions.R`, which the qmd and the cluster
 share. On the cluster:
@@ -254,6 +259,21 @@ predictions moved to the cluster (2026-09-25): run `./hpc install` once. If
 `bayestestR` is already in the library, force those too:
 `./hpc install insight datawizard bayestestR parameters modelbased`.
 
+## Priors against posteriors, for `1_models.qmd`
+
+```
+./hpc priors                 # one short job over every combined fit; skips those already done
+./hpc pull priors            # -> analysis/models/priors/
+```
+
+For each population-level parameter: the prior brms resolved for it, the
+posterior median and 90% interval, where that median falls in the prior (its
+CDF), and the contraction. Flags: *conflict* beyond the prior's 1st/99th
+percentile, *tail* beyond the 5th/95th, *weak data* contraction below 0.1.
+The resolved priors are checked against the `lprior` Stan stored (up to a
+constant; see the header of `priors.R`). Re-run after any combine: a fit whose
+size changed is redone, `IGC_PRIORS_FORCE=1` redoes them all.
+
 ## Models
 
 `models.R` holds one entry per model: the illusion it is fitted to and a
@@ -267,13 +287,13 @@ Every model is fitted to **MullerLyer** unless its row says otherwise.
 | model | family | distributional parameters with a 2-D smooth | fixed | |
 | --- | --- | --- | --- | --- |
 | `gam_lnr` | `cogmod_lnr()` | drift, `nuone`, `sigmazero`, `sigmaone`, `ndt` | `sigmabias = 0` |
-| `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias` | — |
+| `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal fits not converged: chains in separate `sigmabias` modes** (`AGENT.md` §4.10) |
 | `gam_ddm4` | `cogmod_ddm()` | drift, `boundary`, `bias`, `ndt` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 |
 | `gam_ddm5` | `cogmod_ddm()` | as DDM-4 plus `sigmadrift` | `sigmabias`/`sigmandt` = 0 |
 | `gam_ddm7` | `cogmod_ddm()` | all seven: as DDM-5 plus `sigmabias`, `sigmandt` | — | ⚠ **not viable at full data — subsample only** |
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
-| `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — |
-| `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **MullerLyer fit (2026-10-01) not converged: two modes, max Rhat 13.8, so no predictions** (`AGENT.md` §4.9, `cogmod_lba_modes_issue.md`) |
+| `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal fits not converged: chains in separate `sigmabias` modes** (`AGENT.md` §4.10) |
+| `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **not converged: two modes, max Rhat 13.8, so no predictions. The 0.3.4 re-run (2026-10-07) replicated the split, and VerticalHorizontal splits too** (`AGENT.md` §4.9, §4.10, `cogmod_lba_modes_issue.md`) |
 | `gam_lnr_verticalhorizontal` | `cogmod_lnr()` | as `gam_lnr` | `sigmabias = 0` | fitted to **VerticalHorizontal**; see [Running models on other illusions](#running-models-on-other-illusions) |
 | `gam_ddm4_verticalhorizontal` | `cogmod_ddm()` | as `gam_ddm4` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 | fitted to **VerticalHorizontal** |
 
@@ -520,7 +540,7 @@ the script default.
 | --- | --- | --- |
 | `IGC_NPARTICIPANTS` | `all` | subset size for tests, e.g. `30` |
 | `IGC_WARMUP` | `1000` | warmup iterations |
-| `IGC_SAMPLES` | `500` | post-warmup draws per chain |
+| `IGC_SAMPLES` | `1000` | post-warmup draws per chain (500 until 2026-10-09) |
 | `IGC_CHAINS` | `2` | chains per array task; threads per chain is `cpus / chains` |
 | `IGC_FILE_REFIT` | `never` | `always` forces a clean refit |
 | `IGC_CRITERION` | `loo` | `waic` is cheaper; `none` skips it |
@@ -588,18 +608,20 @@ new commits. Naming a package on the command line force-reinstalls it:
 ./hpc install all        # force-reinstall everything
 ```
 
-**New fits use cogmod 0.3.4 (`dev`), decided 2026-10-02.** It changes the
-priors of every model with a smooth. Install it only when no array has tasks
-pending: push, then install, then submit. `AGENT.md` §2 has the reasons and
-the guards.
+**New fits use cogmod 0.3.5 (`dev`), decided 2026-10-12** (0.3.4 from
+2026-10-02). It changes the priors of every model: `poutlier`'s everywhere, and
+the DDM's `boundary` and `bias` slopes. Install it only when no array has tasks
+pending, and only once cogmod's 0.3.5 is pushed to `dev`: push, then install,
+then submit. `AGENT.md` §2 has the reasons and the guards.
 
 This runs through `srun` on a compute node rather than compiling on the login
 node, and prints the resulting versions plus the cogmod ref and commit SHA at
 the end.
 
-**The fits require cogmod >= 0.3.4** (`IGC_COGMOD_MIN`, default `0.3.4`; it
-was 0.3.3 until 2026-10-02). 0.3.3 fixed the LNR's non-finite tail gradient and
-the init jitter (`AGENT.md` §4.5), and 0.3.4 changed the smooth priors
+**The fits require cogmod >= 0.3.5** (`IGC_COGMOD_MIN`, default `0.3.5`; it
+was 0.3.3 until 2026-10-02 and 0.3.4 until 2026-10-12). 0.3.3 fixed the LNR's
+non-finite tail gradient and the init jitter (`AGENT.md` §4.5), 0.3.4 changed
+the smooth priors, and 0.3.5 the outlier and DDM threshold priors
 (`AGENT.md` §2). `install_pkgs.R` fails if the installed version is below the
 floor, and `fit_model.R` refuses to start. Each new shard records its cogmod as
 `m$cogmod`, and `combine_model.R` refuses shards whose versions differ.
@@ -639,13 +661,18 @@ belt and braces.
 | `fit.slurm` | array job for the above |
 | `combine_model.R` | merges one model's shards, adds `loo`, keeps them |
 | `combine.slurm` | job for the above |
-| `predictions.R` | everything the model comparison computes from a fit — **shared with `1_modelcomparison.qmd`** |
+| `predictions.R` | everything the model comparison computes from a fit — **shared with `2_modelcomparison.qmd`** |
 | `predict_model.R` | runs `predictions.R` on one combined model (`./hpc predict`) |
 | `predict.slurm` | job for the above |
+| `priors.R` | priors against posteriors of a fit — what `1_models.qmd` shows |
+| `prior_check.R` | runs `priors.R` over every combined fit (`./hpc priors`), writing `models/priors/` |
+| `priors.slurm` | job for the above (one job, `short`) |
+| `lnr_modes/` | per-chain diagnostic of `gam_lnr_ebbinghaus` (2026-10-12): drifting chains, not LBA-style modes |
 | `AGENT.md` | the measurements and the traps — read before changing settings |
 | `keep_stored_basis.R` | makes the laptop's brms 2.23 predict the cluster's 2.21.0 fits correctly (`AGENT.md` §3.9) |
 | `cogmod_lba_modes_issue.md` | why the full-data `gam_lba` split into two modes, and the options |
 | `cogmod_lba_priors_inits.md` | the cogmod defaults to fix before re-running `gam_lba` (drift-smooth priors, starting values), with the model written out in full |
+| `cogmod_priors_review.md` | the cogmod default priors to change before the refit, from `1_models.qmd` (2026-10-12) |
 | `lba_modes/` | the laptop scripts behind it (they read the combined fit; nothing is refitted) |
 | `hpc.local` | **gitignored** — this machine's account settings, e.g. `IGC_HPC_USER=oc236` |
 | `server.md` | **gitignored** — local notes on this project's cluster dirs |

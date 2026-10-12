@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=192G
+#SBATCH --mem=320G
 #SBATCH --partition=general
 #SBATCH --output=combine_%j.out
 #SBATCH --error=combine_%j.err
@@ -17,9 +17,14 @@
 # each at 4,000 draws). Measured peaks for 4-shard (4,000-draw) combines:
 # 100-106 GiB for the 5-6-parameter models, 122 GiB for gam_lnr6, which was
 # OOM-killed at 128G on 2026-09-29 (job 11417254) and finished at 192G
-# (11417275). Hence 192G (AGENT.md 4.8). Only 4 CPUs: more cores do not speed
-# it up (4.8), and a slimmer request dispatches sooner. No --time is set, so
-# the job takes general's 8 h maximum; loo over 4,000 draws takes 11-18 min.
+# (11417275). Hence 192G (AGENT.md 4.8). From 2026-10-09 fits carry 1,000 draws
+# per chain, i.e. 8,000 per model, which doubles every one of those matrices:
+# expect ~210 GiB for the 5-6-parameter models and ~245 GiB for gam_lnr6 and
+# gam_lba. Hence 320G. A 4,000-draw fit still fits in --mem=192G, which
+# dispatches sooner:  ./hpc combine <model> --mem=192G
+# Only 4 CPUs: more cores do not speed it up (4.8), and a slimmer request
+# dispatches sooner. No --time is set, so the job takes general's 8 h maximum;
+# loo over 4,000 draws takes 11-18 min.
 # See the note in fit.slurm about the command-line overrides.
 
 PROJECT_DIR="${IGC_USERS_DIR:-$SLURM_SUBMIT_DIR}"

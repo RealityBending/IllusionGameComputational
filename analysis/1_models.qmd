@@ -1,0 +1,270 @@
+---
+title: "IllusionComputationalModel - Models"
+editor: source
+editor_options:
+  chunk_output_type: console
+format:
+  html:
+    code-fold: true
+    self-contained: false
+    toc: true
+execute:
+  cache: false
+---
+
+## Loading
+
+```{r}
+#| warning: false
+#| error: false
+
+library(tidyverse)
+library(patchwork)
+
+# Everything here comes from server/priors.R, run on the cluster over every
+# combined fit (`./hpc priors`, then `./hpc pull priors`): one small file per
+# fit in models/priors/, so this script never loads a fit.
+
+# path <- "C:/Users/olive/Documents/"
+path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
+prior_path <- paste0(path, "priors/")
+
+igc_priors_version <- "1"
+
+# Model and illusion from the file name, <model>[_<illusion lowercase>]_<Illusion>.rds
+model_labels <- c(gam_lnr = "LNR", gam_lnr6 = "LNR-6", gam_ddm4 = "DDM-4", gam_ddm5 = "DDM-5",
+                  gam_rdm = "RDM", gam_rdm5 = "RDM-5", gam_lba = "LBA")
+model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#212121", "DDM-4" = "#FB8C00", "DDM-5" = "#6D4C41",
+                  "RDM" = "#43A047", "RDM-5" = "#1B5E20", "LBA" = "#8E24AA")
+illusions <- c("MullerLyer", "VerticalHorizontal", "Ebbinghaus")
+
+files <- list.files(prior_path, pattern = "\\.rds$", full.names = TRUE)
+checks <- lapply(files, readRDS)
+names(checks) <- sub("\\.rds$", "", basename(files))
+stale <- vapply(checks, \(x) !identical(x$meta$version, igc_priors_version), logical(1))
+if (any(stale)) warning("Made by another version of priors.R, re-run `./hpc priors`: ",
+                        paste(names(checks)[stale], collapse = ", "))
+
+info <- map(checks, "meta") |>
+  map(\(m) tibble(Name = m$name, Family = m$family, cogmod = m$cogmod, brms = m$brms,
+                  Draws = m$ndraws, Chains = m$nchains, lprior_maxdiff = m$lprior_maxdiff,
+                  lprior_offset = m$lprior_offset, Formula = m$formula)) |>
+  list_rbind() |>
+  mutate(
+    Illusion = str_extract(Name, paste(illusions, collapse = "|")),
+    Model = model_labels[str_extract(Name, "^gam_[a-z]+[0-9]*")],
+    Model = factor(Model, levels = model_labels),
+    Illusion = factor(Illusion, levels = illusions)
+  ) |>
+  arrange(Illusion, Model)
+
+# One row per parameter per fit. Label: "<dpar> · <what>", with the smooth
+# coefficient or SD number.
+params <- map(checks, \(x) mutate(x$table, Name = x$meta$name)) |>
+  list_rbind() |>
+  left_join(select(info, Name, Model, Illusion, cogmod), by = "Name") |>
+  mutate(
+    Term = case_when(
+      Class == "Intercept" ~ "Intercept",
+      Class == "b" ~ paste0("slope ", str_extract(Coef, "[0-9]+$")),
+      Class == "sds" ~ paste0("smooth SD ", str_extract(Coef, "[0-9]+$")),
+      Class == "sd" ~ "participant SD"
+    ),
+    Label = paste0(Dpar, " · ", Term),
+    Class = factor(Class, levels = c("Intercept", "b", "sds", "sd"),
+                   labels = c("Intercept", "Smooth slope (bs)", "Smooth SD (sds)", "Participant SD"))
+  )
+```
+
+## Model Specification
+
+All the models share one structure: every free parameter of the decision
+process gets a tensor-product smooth `t2(Illusion_Difference, Illusion_Strength)`
+plus a random intercept per participant, and the outlier proportion `poutlier`
+gets a random intercept only. They differ in the process (the family) and in
+which of its parameters are free.
+
+```{r}
+info |>
+  transmute(Illusion, Model, Family, cogmod, brms, Chains, Draws,
+            "lprior check" = ifelse(lprior_maxdiff < 1e-3, "ok", sprintf("off by %.2g", lprior_maxdiff))) |>
+  tinytable::tt()
+```
+
+The *lprior check* column confirms that the priors below are the ones each fit
+was actually sampled with: their log densities, summed at every draw, reproduce
+the `lprior` Stan stored (up to a constant, see `server/priors.R`).
+
+::: {.callout-note collapse="true"}
+## Formulas
+
+The formula of each model, from its first fit (the same across illusions).
+
+```{r}
+#| results: asis
+
+info |>
+  distinct(Model, .keep_all = TRUE) |>
+  arrange(Model) |>
+  pwalk(\(Model, Formula, Family, ...) cat("**", as.character(Model), "** (`", Family, "`)\n\n```\n",
+                                           Formula, "\n```\n\n", sep = ""))
+```
+:::
+
+## Priors
+
+The priors as brms resolved them for each parameter. Most fits so far were made
+with cogmod 0.3.3 or older; cogmod 0.3.4 (the version every new fit uses) sets
+the smooth SD priors per smooth from its basis, so that they are `exponential(1)`
+in link units, and the slope priors of each distributional parameter in its own
+link units. Where a class has different priors on its coefficients, they are
+listed in order.
+
+```{r}
+prior_table <- function(ill) {
+  params |>
+    filter(Illusion == ill) |>
+    mutate(Prior = str_remove_all(Prior, " ")) |>
+    summarise(Prior = paste(unique(Prior), collapse = " / "), .by = c(Model, cogmod, Dpar, Class)) |>
+    mutate(Column = paste0(Model, " (", cogmod, ")")) |>
+    arrange(Model) |>
+    select(-Model, -cogmod) |>
+    pivot_wider(names_from = Column, values_from = Prior, values_fill = "") |>
+    arrange(Dpar, Class) |>
+    rename(Parameter = Dpar) |>
+    tinytable::tt()
+}
+```
+
+::: {.panel-tabset}
+
+### Muller-Lyer
+
+```{r}
+prior_table("MullerLyer")
+```
+
+### Vertical-Horizontal
+
+```{r}
+prior_table("VerticalHorizontal")
+```
+
+### Ebbinghaus
+
+```{r}
+prior_table("Ebbinghaus")
+```
+
+:::
+
+## Priors vs. Posteriors
+
+Where each posterior falls within its own prior. The x axis is the prior's CDF,
+so every parameter sits on the same 0-1 scale whatever its prior. The point is
+the posterior median and the bar its 90% interval. A point in the red bands
+(beyond the prior's 1st or 99th percentile) is a **prior-data conflict**: the
+prior is pulling against the data, and is a candidate for widening or
+re-centring. A hollow point is one the data barely narrowed (contraction under
+0.1), so the prior, not the data, sets its value. A cross marks R-hat above
+1.05: that posterior is unreliable, so its position says little.
+
+| Flag | Rule |
+|---|---|
+| conflict | posterior median beyond the prior's 1st or 99th percentile |
+| tail | beyond the 5th or 95th percentile |
+| weak data | contraction, 1 - var(posterior) / var(prior), below 0.1 |
+| flat prior | no prior at all (brms's improper default): not in the plot, nothing to compare with |
+
+```{r}
+plot_prior_quantiles <- function(ill) {
+  d <- params |>
+    filter(Illusion == ill, !is.na(PQ_Median)) |>
+    mutate(Label = fct_rev(fct_inorder(Label)),
+           Weak = Contraction < 0.1, Unreliable = Rhat > 1.05)
+  d |>
+    ggplot(aes(y = Label, x = PQ_Median)) +
+    annotate("rect", xmin = -Inf, xmax = 0.01, ymin = -Inf, ymax = Inf, fill = "#EF9A9A", alpha = 0.5) +
+    annotate("rect", xmin = 0.99, xmax = Inf, ymin = -Inf, ymax = Inf, fill = "#EF9A9A", alpha = 0.5) +
+    annotate("rect", xmin = 0.01, xmax = 0.05, ymin = -Inf, ymax = Inf, fill = "#FFE082", alpha = 0.4) +
+    annotate("rect", xmin = 0.95, xmax = 0.99, ymin = -Inf, ymax = Inf, fill = "#FFE082", alpha = 0.4) +
+    geom_vline(xintercept = 0.5, linetype = "dotted", color = "grey50") +
+    geom_errorbar(aes(xmin = PQ_Q05, xmax = PQ_Q95, color = Class), width = 0) +
+    geom_point(aes(color = Class, shape = Weak), size = 1.8, fill = "white") +
+    geom_point(data = filter(d, Unreliable), shape = 4, size = 2.6, color = "black") +
+    scale_shape_manual(values = c(`FALSE` = 16, `TRUE` = 21), labels = c("no", "yes"),
+                       name = "Weak data") +
+    scale_color_manual(values = c("Intercept" = "#E53935", "Smooth slope (bs)" = "#1E88E5",
+                                  "Smooth SD (sds)" = "#8E24AA", "Participant SD" = "#43A047")) +
+    scale_x_continuous(breaks = c(0, 0.25, 0.5, 0.75, 1), limits = c(0, 1)) +
+    facet_wrap(~ paste0(Model, " (cogmod ", cogmod, ")"), scales = "free_y", ncol = 4) +
+    labs(x = "Prior quantile of the posterior", y = NULL, color = NULL) +
+    theme_minimal() +
+    theme(strip.text = element_text(face = "bold"), legend.position = "top",
+          panel.grid.minor = element_blank(), axis.text.y = element_text(size = 7))
+}
+
+flag_table <- function(ill) {
+  d <- params |>
+    filter(Illusion == ill, Flag != "") |>
+    arrange(Model, factor(Flag, levels = c("flat prior", "conflict", "tail", "weak data")), Label) |>
+    transmute(Model, Parameter = Label, Prior,
+              Posterior = sprintf("%.2f [%.2f, %.2f]", Post_Median, Post_Q05, Post_Q95),
+              "Prior quantile" = ifelse(is.na(PQ_Median), "", sprintf("%.3f", PQ_Median)),
+              Contraction = ifelse(is.na(Contraction), "", sprintf("%.2f", Contraction)),
+              "R-hat" = sprintf("%.2f", Rhat), Flag)
+  if (nrow(d) == 0) return(cat("No flagged parameter.\n"))
+  fill <- c("flat prior" = "#CE93D8", conflict = "#EF9A9A", tail = "#FFE082", "weak data" = "#E0E0E0")[d$Flag]
+  out <- tinytable::tt(d)
+  for (i in seq_len(nrow(d))) out <- tinytable::style_tt(out, i = i, j = ncol(d), background = fill[i])
+  out
+}
+```
+
+::: {.panel-tabset}
+
+### Muller-Lyer
+
+```{r}
+#| fig-width: 16
+#| fig-height: 22
+
+plot_prior_quantiles("MullerLyer")
+flag_table("MullerLyer")
+```
+
+### Vertical-Horizontal
+
+```{r}
+#| fig-width: 16
+#| fig-height: 22
+
+plot_prior_quantiles("VerticalHorizontal")
+flag_table("VerticalHorizontal")
+```
+
+### Ebbinghaus
+
+```{r}
+#| fig-width: 16
+#| fig-height: 16
+
+plot_prior_quantiles("Ebbinghaus")
+flag_table("Ebbinghaus")
+```
+
+:::
+
+### Summary across fits
+
+How often each kind of parameter is flagged, over every fit.
+
+```{r}
+params |>
+  summarise(Parameters = n(),
+            Conflict = sum(Flag == "conflict"), Tail = sum(Flag == "tail"),
+            "Weak data" = sum(Flag == "weak data"), "Flat prior" = sum(Flag == "flat prior"),
+            .by = c(Class, cogmod)) |>
+  arrange(cogmod, Class) |>
+  tinytable::tt()
+```

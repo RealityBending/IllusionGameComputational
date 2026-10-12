@@ -1,6 +1,6 @@
 """Generate Muller-Lyer illustrations for the axes of the parameter heatmaps.
 
-The heatmaps in `analysis/1_modelcomparison.qmd` are drawn over the raw units of
+The heatmaps in `analysis/2_modelcomparison.qmd` are drawn over the raw units of
 the Muller-Lyer stimulus space: illusion strength (x) from -49 to 49 degrees of
 fin tilt, and task difficulty (y) from 0.04 to 0.46 of relative line length.
 Those are the observed bounds of the data, and the ones `restore_units()` in the
