@@ -984,6 +984,13 @@ Points worth keeping:
 - **Their prediction files mix modes.** `gam_lnr6` and `gam_rdm5` are plotted
   in `2_modelcomparison.qmd`, and their curves and `loo` average over every
   cluster. Treat them as unreliable until refitted.
+- **Exception: `gam_rdm5_ebbinghaus` (cogmod 0.3.4, combined 2026-10-13)
+  converged.** All 8 chains sit within 20 lp__ units of each other (SD ~115),
+  with population Rhat 1.010, lp__ Rhat 1.007, minimum bulk ESS 761 and 0.02%
+  divergent. Its `loo` is ~3,000 elpd above RDM's on the same illusion. So the
+  split is not universal to a free `sigmabias`. Whether that comes from 0.3.4
+  (the ML and VH `gam_rdm5` fits are 0.3.3) or from the illusion is open:
+  `gam_lnr6_ebbinghaus` (0.3.4, still fitting) is the next data point.
 - **This is a result in itself**, to report in the paper. On this data, with
   trial-level smooths on every parameter, the start-point range cannot be
   identified by any racing family. Freeing it turns a well-behaved model
@@ -1403,9 +1410,9 @@ queue is limited to that, with the rest to be submitted as slots free up:
 | `gam_ddm5_ebbinghaus` | done: 11423966 (task 4) + refit 11430275 (tasks 1-3, failed saves), combined and predicted 2026-10-09 |
 | `gam_ddm4_ebbinghaus` | done: 11423962, combined and predicted 2026-10-07 (second combine, 11462276; the first failed at save) |
 | `gam_rdm_ebbinghaus` | done: 11423963 + refit 11430274 (tasks 1 and 4, failed saves), combined and predicted 2026-10-09 |
-| `gam_rdm5_ebbinghaus` | submitted 2026-10-09 on `long` (zen5), job 11553382 |
-| `gam_lnr6_ebbinghaus` | submitted 2026-10-09 on `long` (zen5), job 11553384; the slowest, 2-3.5 days a shard |
-| `gam_lnr_ebbinghaus` | refit on 0.3.4 submitted 2026-10-09 on `sussexneuro` (zen5), job 11553388. The broken 0.3.3 shards were renamed `..._<n>_20261002.rds`; the old combined fit and predictions are still under the plain name until the new combine replaces them |
+| `gam_rdm5_ebbinghaus` | fitted: 11553382 (all 4 shards done 2026-10-12, 2-3.3 days each); combined (11595462, `--mem=192G`, 500 draws a chain, 30 min) and predicted (11595463) 2026-10-13. **Converged** (4.10) |
+| `gam_lnr6_ebbinghaus` | submitted 2026-10-09 on `long` (zen5), job 11553384; the slowest. Shards 2 and 3 done 2026-10-13 (3.4-3.5 days); 1 and 4 still running at 3.75 days |
+| `gam_lnr_ebbinghaus` | refit on 0.3.4: 11553388 on `sussexneuro` (zen5), combined 2026-10-12 (11594085), still not converged (Rhat ~3). Predicted anyway on 2026-10-13 (11595464), but left out of `2_modelcomparison.qmd`. The 0.3.3 shards, combined fit and predictions are under `..._20261002` |
 
 Submit the two to-do ones as an array finishes, with
 `./hpc fit <model> --constraint=amd_zen5`. Do not reinstall cogmod while any

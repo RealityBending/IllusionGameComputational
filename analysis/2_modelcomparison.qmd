@@ -119,15 +119,19 @@ models <- list(
     "LNR-6" = "gam_lnr6_verticalhorizontal_VerticalHorizontal",  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
     "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal",
     "DDM-5" = "gam_ddm5_verticalhorizontal_VerticalHorizontal",
-    "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal"
+    "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal",
+    "RDM-5" = "gam_rdm5_verticalhorizontal_VerticalHorizontal"  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
   ),
   Ebbinghaus = c(
     # "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the cogmod 0.3.4
-    # refit (11553388, combined 2026-10-12) still has every chain drifting, Rhat
-    # ~3 (server/lnr_modes/). Not predicted; the 0.3.3 predictions are *_20261002.
+    # refit (11553388, combined 2026-10-12) still has every chain drifting:
+    # population Rhat 6.6, lp__ 5.2 (server/lnr_modes/). Predicted 2026-10-13 all
+    # the same; the 0.3.3 predictions are *_20261002.
+    "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # still fitting (11553384): skipped until predicted
     "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
     "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",
-    "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus"
+    "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus",
+    "RDM-5" = "gam_rdm5_ebbinghaus_Ebbinghaus"  # converged, unlike the other two (cogmod 0.3.4; server/AGENT.md 4.10)
   )
 )
 
@@ -1268,6 +1272,11 @@ layout <- matrix(c(
 
 # One element of preds_curves, i.e. one illusion
 plot_best_model <- function(preds_curves, model = "LNR") {
+  # A model left out of an illusion's list (not converged, still fitting) has
+  # no curves there
+  if (!model %in% preds_curves$Model) {
+    return(cat(model, "is not among this illusion's models.\n"))
+  }
   preds_curves |>
     filter(Model == model) |>
     mutate(Illusion_Difference = as.factor(round(Illusion_Difference, 5))) |>
