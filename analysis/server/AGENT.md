@@ -990,7 +990,8 @@ Points worth keeping:
   divergent. Its `loo` is ~3,000 elpd above RDM's on the same illusion. So the
   split is not universal to a free `sigmabias`. Whether that comes from 0.3.4
   (the ML and VH `gam_rdm5` fits are 0.3.3) or from the illusion is open:
-  `gam_lnr6_ebbinghaus` (0.3.4, still fitting) is the next data point.
+  `gam_lnr6_ebbinghaus` (0.3.4) does not answer it: it failed earlier, in
+  adaptation, like `gam_lnr_ebbinghaus` (C below).
 - **This is a result in itself**, to report in the paper. On this data, with
   trial-level smooths on every parameter, the start-point range cannot be
   identified by any racing family. Freeing it turns a well-behaved model
@@ -1496,7 +1497,7 @@ queue is limited to that, with the rest to be submitted as slots free up:
 | `gam_ddm4_ebbinghaus` | done: 11423962, combined and predicted 2026-10-07 (second combine, 11462276; the first failed at save) |
 | `gam_rdm_ebbinghaus` | done: 11423963 + refit 11430274 (tasks 1 and 4, failed saves), combined and predicted 2026-10-09 |
 | `gam_rdm5_ebbinghaus` | fitted: 11553382 (all 4 shards done 2026-10-12, 2-3.3 days each); combined (11595462, `--mem=192G`, 500 draws a chain, 30 min) and predicted (11595463) 2026-10-13. **Converged** (4.10) |
-| `gam_lnr6_ebbinghaus` | 11553384 on `long` (zen5): shards 2 and 3 done 2026-10-13 (3.4-3.5 days), 1 and 4 at 4 days. **Not converged**: the `gam_lnr_ebbinghaus` adaptation failure (4.10 C), step sizes 1e-4 to 9e-6, Rhat 3.05. Not combined; superseded by the 4.11 refit |
+| `gam_lnr6_ebbinghaus` | 11553384 on `long` (zen5): all 4 shards done 2026-10-13 (3.4-3.9 days). **Not converged**: the `gam_lnr_ebbinghaus` adaptation failure (4.10 C), step sizes 1e-4 to 9e-6, Rhat 3.05, one chain frozen (shard 4 chain 2, lp__ SD 3.9). Combined anyway (11596092, 320G, 18 min), predicted (11596093) and priors (11596094) 2026-10-13, and in `2_modelcomparison.qmd` flagged NOT CONVERGED like the ML and VH LNR-6. Superseded by the 4.11 refit |
 | `gam_lnr_ebbinghaus` | refit on 0.3.4: 11553388 on `sussexneuro` (zen5), combined 2026-10-12 (11594085), still not converged (Rhat ~3). Predicted anyway on 2026-10-13 (11595464), but left out of `2_modelcomparison.qmd`. The 0.3.3 shards, combined fit and predictions are under `..._20261002` |
 
 Submit the two to-do ones as an array finishes, with

@@ -40,7 +40,7 @@ source(if (dir.exists("server")) "server/predictions.R" else "analysis/server/pr
 #| error: false
 
 # path <- "C:/Users/olive/Documents/"
-path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
+path <- if (dir.exists("models")) "models/" else "analysis/models/"
 
 pred_path <- paste0(path, "predictions/")
 
@@ -127,7 +127,7 @@ models <- list(
     # refit (11553388, combined 2026-10-12) still has every chain drifting:
     # population Rhat 6.6, lp__ 5.2 (server/lnr_modes/). Predicted 2026-10-13 all
     # the same; the 0.3.3 predictions are *_20261002.
-    "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # still fitting (11553384): skipped until predicted
+    "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the gam_lnr_ebbinghaus adaptation failure, Rhat 3.05 (server/AGENT.md 4.10 C); 11553384, combined 2026-10-13
     "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
     "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",
     "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus",

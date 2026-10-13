@@ -26,7 +26,7 @@ library(patchwork)
 # fit in models/priors/, so this script never loads a fit.
 
 # path <- "C:/Users/olive/Documents/"
-path <- "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/models/"
+path <- if (dir.exists("models")) "models/" else "analysis/models/"
 prior_path <- paste0(path, "priors/")
 
 igc_priors_version <- "1"

@@ -93,7 +93,7 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_rdm5_ebbinghaus | 11553382 | 1-3 | rtx-01 | zen5 (`--constraint`) | done, converged (AGENT.md 4.10) | 47.4 / 59.6 / 64.0 h |
 | gam_rdm5_ebbinghaus | 11553382 | 4 | rtx-00 | zen5 (`--constraint`) | done | 79.4 h |
 | gam_lnr6_ebbinghaus | 11553384 | 2, 3 | rtx-02 | zen5 (`--constraint`) | done, **adaptation failed** (step 1e-4 to 5e-4, Rhat 3.05) | 84.5 / 82.0 h |
-| gam_lnr6_ebbinghaus | 11553384 | 1, 4 | rtx-02 | zen5 (`--constraint`) | running at 95 h on 2026-10-13, same failure (step 8e-4 to 9e-6) | |
+| gam_lnr6_ebbinghaus | 11553384 | 1, 4 | rtx-02 | zen5 (`--constraint`) | done 2026-10-13, same failure (step 8e-4 to 9e-6, Rhat 3.04-3.05) | 92.8 / 92.8 h (sacct) |
 | gam_lnr_ebbinghaus | 11553388 | 1-4 (refit on cogmod 0.3.4) | rtx-00 | zen5 (`--constraint` on sussexneuro) | done, **adaptation failed** in all 8 chains (step 1.4e-4 to 5.7e-4, Rhat 3.04) | 61.9 / 40.7 / 35.0 / 41.6 h |
 
 ## What it says so far (updated 2026-09-26)
