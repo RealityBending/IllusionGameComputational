@@ -120,6 +120,16 @@ shared by every project on the account — and why each piece is what it is:
 
   The order above applies, with one step in front: cogmod's 0.3.5 has to be
   committed and pushed to `dev` before `./hpc install cogmod` can install it.
+
+  **Installed on `dmm56` on 2026-10-13: 0.3.5 at `eb4c6a3`** ("LNR inits",
+  the `dev` head that day). Besides the priors above, it carries the LBAs'
+  density and gradient fixes and starts the LNR's error accumulator slower
+  (`nuone = 0` against `mu = 0.7`). Nothing was pending. The one job running
+  on the account, a cogmod `stanli` benchmark that read cogmod from the same
+  library, was cancelled first at the user's request. Until then `./hpc
+  install` passed a floor of 0.3.4 to `install_pkgs.R` whatever the file
+  said, so its final check could not catch a stale 0.3.4. It passes 0.3.5
+  now.
 - Keep `precompile.R`'s `cpp_options` identical to `stan_model_args` in
   `fit_model.R`, or a different precompiled-header variant is keyed and the
   race comes back ([hub](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#precompiled-header)).
@@ -145,9 +155,19 @@ the lab hub on 2026-09-22; the numbers are kept so older references resolve.
 Needed for resumability (see 5.2), but a shard left on disk is reused even if
 the formula or data changed. Mitigations, in order:
 
-- `combine_model.R` deletes shards once they are safely combined
+- **`fit_model.R` reuses a shard only if it belongs to this run** (since
+  2026-10-13). It must have a cogmod stamp at or above the floor, and the
+  run's warmup and draw count. Anything else stops the task in its first
+  minutes ("is from another run"). It does not refit over the shard, which
+  may be the only copy. A different formula or dataset under the same cogmod
+  and run length still gets through, so the next point stands.
+- **`./hpc archive`** before a new generation of fits moves every shard and
+  combined, prediction and priors file into `models/old_<date>/`, out of
+  reach of every script (README → "Starting a new generation of fits").
+  `dmm56`'s pre-refit generation is in `models/old_20261013/`.
 - `IGC_FILE_REFIT=always ./hpc fit <model>` forces a clean refit
-- delete by hand: `./hpc sh "rm -f <models_dir>/*.rds"`
+- `combine_model.R` no longer deletes shards after combining (since
+  2026-09-20, 4.8). `IGC_DELETE_SHARDS=1` brings that back.
 
 Probe and test runs **must** use a separate `IGC_MODELS_DIR` so their output can
 never be mistaken for production shards. Since 2026-09-18 `./hpc push` also
@@ -315,14 +335,18 @@ than 2.23.0, and it is still in brms master (2.23.2) as of that date.
 
 ### 4.1 Dataset
 
+The 2026-10-12 data (block exclusion on facilitating-trial errors), which the
+2026-10-13 refit uses; the data of every earlier fit in brackets. The
+measurements in this file were made on the earlier data, which is why they
+quote 323,981 rows.
+
 | | value |
 | --- | --- |
-| total rows | 963,885 |
-| total participants | 2,221 |
-| MullerLyer rows (what is actually fitted) | 323,981 |
-| MullerLyer participants | 2,215 |
-| VerticalHorizontal rows / participants (`*_verticalhorizontal` models) | 319,760 / 2,200 |
-| Ebbinghaus rows / participants | 320,144 / 2,204 |
+| total rows | 962,180 (963,885) |
+| total participants | 2,220 (2,221) |
+| MullerLyer rows / participants | 324,580 / 2,217 (323,981 / 2,215) |
+| VerticalHorizontal rows / participants (`*_verticalhorizontal` models) | 321,113 / 2,202 (319,760 / 2,200) |
+| Ebbinghaus rows / participants | 316,487 / 2,181 (320,144 / 2,204) |
 
 `fit_model.R` defaults to **all** participants since 2026-09-18 (it used to
 default to 30, which risked a production submission silently fitting the test
@@ -1325,7 +1349,7 @@ defaults *are* this configuration, so the production run is two bare commands:
 | setting | value | why |
 | --- | --- | --- |
 | partition | `long`, `--time=8-00:00:00` | `long`'s actual max (3.7) — 12-20 h per chain was the projection (4.4.1), but three `gam_lnr` shards measured 42.7-44 h on 2026-09-20, so request the ceiling rather than the guess; `--time` doesn't affect dispatch here (4.2's CPU cap does) |
-| participants | `IGC_NPARTICIPANTS=all` (default) | 2,215 participants, 323,981 rows |
+| participants | `IGC_NPARTICIPANTS=all` (default) | MullerLyer: 2,217 participants, 324,580 rows since 2026-10-12 (2,215 and 323,981 before; 4.1) |
 | warmup | `IGC_WARMUP=1500` (1000 until 2026-10-13) | 300 provably does not adapt at full data (4.4.1). 1000 did for every model except the two Ebbinghaus LNR fits, whose chains were still drifting through the sampling phase (4.10 C). The 2026-10-13 refit of everything runs 1500, the most the slowest models afford inside `long`'s 8 days: a warmup iteration costs 0.75-1.5x a sampling one, and 2000 would put the slowest LNR-6 / RDM-5 chains at 6.8-7.9 days (4.11) |
 | draws | `IGC_SAMPLES=1000` (500 until 2026-10-09) | 8 chains x 1,000 = 8,000 draws per model. At 500, `b_ndt_Intercept` had a bulk ESS of only 53-310, and the per-participant solutions never switched; the longer run is the test of whether they ever do (4.10). It costs about a third more wall time: a `gam_lnr` shard goes from 43 h to about 57 h, and DDM-5 from a projected 2.5-5.2 days to 3.3-6.9, still inside `long`'s 8 days. It doubles the combine's memory, hence `combine.slurm`'s 320G (4.8). A task reads the default when it starts, so do not push a change to it while an array has pending tasks; `combine_model.R` refuses shards of different lengths |
 | array | `--array=1-4` per model | 4 x 16 = 64 CPUs per model against `long`'s 140-CPU per-user cap, so 8 of the 12 production tasks run at once and the rest start as they finish (`--time` is per task, so pending costs nothing) |
@@ -1507,7 +1531,66 @@ array has pending tasks (2).
 **Superseded 2026-10-13:** every model on every illusion is refitted on
 cogmod 0.3.5, the 2026-10-12 data and 1500 + 1000 (4.11). The fits above are
 the pre-refit generation; `combine_model.R` keeps the two apart by the
-`m$cogmod` stamp and the draw count.
+`m$cogmod` stamp and the draw count. They are now in `models/old_20261013/`
+(3.6).
+
+### 6.5 The 2026-10-13 refit: who runs what, and in what order
+
+All 21 fits (the registry minus `gam_ddm7`) are refitted on cogmod 0.3.5
+(`eb4c6a3`), the 2026-10-12 data and 1500 warmup + 1000 draws (4.11).
+Preparation on `dmm56`, 2026-10-13: the old generation moved to
+`models/old_20261013/` (3.6), cogmod installed (2), and a 30-participant
+smoke test of each of the seven families on `short`
+(`smoke_refit_20261013/`). All seven compiled, started without an init
+rejection, and saved: 4-17 min each, divergences 0 except LNR at 2% (warmup
+300). The laptop's fits were deleted the same day. The four that existed only
+there are in `old_20261013/laptop_only/`.
+
+**The order follows what each fit can tell us, and how soon.**
+
+- **`dmm56`'s `long`: the fast family, fastest first** (LNR, DDM-4, DDM-5, RDM:
+  1.2-2.5 days per shard, 4.11). A problem with the new harness then shows up
+  in 1-2 days rather than a week. `gam_lnr_verticalhorizontal`, the fastest
+  fit in the registry, also tests the chain end to end: fit, combine, predict
+  and priors on 0.3.5 and the new data.
+- **`gam_lnr_ebbinghaus` in the first wave**, although it is the slowest of the
+  fast family. It is the one failure that a longer warmup targets (4.10 C,
+  open question 5), and `./hpc progress` shows its step sizes once warmup ends,
+  after ~1.5 days.
+- **`gam_rdm5` (MullerLyer) at once, on `sussexneuro`.** It is the cheapest of
+  the `sigmabias` models and the cleanest test of 4.10 B's open point: its
+  MullerLyer fit split on 0.3.3, and the Ebbinghaus one converged on 0.3.4.
+  If the full formula splits again, the simplified variants come next, and
+  they are another week. So this test should not wait behind the fast family.
+- **The other eight slow fits go to the two colleagues**: LBA x 3 plus
+  RDM-5 Ebbinghaus to one, LNR-6 x 3 plus RDM-5 VerticalHorizontal to the
+  other. Each submits all four at once. Their `long` cap runs two models at a
+  time, so the second pair starts as the first finishes, ~10-12 days in all.
+  The fourth model costs them no wall time: without it, half their slots
+  would idle in the second wave. They need about four check-ins.
+  Instructions: `refit_colleagues.md`.
+- **zen5 is the binding resource, not the quotas.** Every long fit is pinned
+  to the three rtx nodes (384 CPUs, shared with other users), because the
+  slow family only fits inside 8 days there. With `dmm56` at 192 CPUs and
+  two colleagues at 128 each, the demand exceeds the pool. Expect
+  `PENDING (Resources)` on whichever account submits last.
+
+| model | where | job | state |
+| --- | --- | --- | --- |
+| `gam_lnr_verticalhorizontal` | `dmm56` `long`, zen5 | 11596772 | running since 2026-10-13 18:58 (rtx-00) |
+| `gam_lnr_ebbinghaus` | `dmm56` `long`, zen5 | 11596773 | running since 2026-10-13 18:58 (rtx-00, rtx-02) |
+| `gam_rdm5` | `dmm56` `sussexneuro`, zen5 | 11596782 | running since 2026-10-13 18:59 (rtx-02) |
+| `gam_ddm4_ebbinghaus` | `dmm56` `long`, zen5 | 11596774 | pending behind the first two (`QOSMaxCpuPerUserLimit`) |
+| `gam_ddm4_verticalhorizontal` | `dmm56` `long`, zen5 | 11596775 | pending |
+| `gam_ddm5_verticalhorizontal`, `gam_lnr`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5`, `gam_ddm4`, `gam_rdm_verticalhorizontal`, `gam_rdm` | `dmm56` `long` (or `sussexneuro` once `gam_rdm5` is done) | — | to submit in this order once the first `REPORT` lines are clean |
+| `gam_lba`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A | — | instructions written |
+| `gam_lnr6`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B | — | instructions written |
+
+Update the table as things move, and add a `node_history.md` row for every
+shard that finishes. The colleagues send each model's combined fit,
+prediction file, priors file and `./hpc log` output. Upload the fit to
+`dmm56`'s `models/combined/` (md5-checked) so that `./hpc priors` and
+`mixing_participants.R` see every model in one place.
 
 ---
 
@@ -1557,7 +1640,8 @@ machinery removed (2026-09-18); `verylong` — not worth it.
 
 | file | role |
 | --- | --- |
-| `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/queue/log/ls/pull/cancel/sh |
+| `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/predict/priors/archive/progress/queue/log/ls/pull/cancel/sh |
+| `refit_colleagues.md` | step-by-step for a colleague's account in the 2026-10-13 refit (6.5) |
 | `install_pkgs.R` | builds the project R library (`./hpc install`); enforces cogmod >= 0.3.5 (`IGC_COGMOD_MIN`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model, read by everything else |

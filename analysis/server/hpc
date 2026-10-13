@@ -16,6 +16,14 @@
 #   ./hpc priors [model|all]    priors against posteriors of every combined
 #                               fit (or one model's), for 1_models.qmd; one job
 #                               (IGC_PRIORS_FORCE=1 redoes up-to-date ones)
+#   ./hpc archive [label]       move every fit (shards, combined/, predictions/,
+#                               priors/) into models/old_<label>/, default
+#                               today's date, so a refit can neither reuse nor
+#                               overwrite them; refuses while igc_ jobs exist
+#   ./hpc progress <model|all>  each running shard: iterations per chain, and
+#                               once warmup is over, each chain's step size
+#                               and lp__ level so far (a comma-separated list
+#                               works too)
 #   ./hpc queue                 squeue for this user
 #   ./hpc log [jobid|model]     tail the newest .out/.err in scratch
 #   ./hpc ls                    list fitted models on the cluster
@@ -196,7 +204,7 @@ cmd_install() {
       module load \"${R_MODULE}\"
       export IGC_R_LIBS=\"${R_LIBS_DIR}\"
       export IGC_COGMOD_REF=\"${COGMOD_REF}\"
-      export IGC_COGMOD_MIN=\"${IGC_COGMOD_MIN:-0.3.4}\"
+      export IGC_COGMOD_MIN=\"${IGC_COGMOD_MIN:-0.3.5}\"
       export IGC_FORCE=\"${forced}\"
       Rscript install_pkgs.R
     '"
@@ -292,6 +300,99 @@ cmd_priors() {
   remote "mkdir -p '${SCRATCH_DIR}' && cd '${USERS_DIR}' && sbatch       --chdir='${USERS_DIR}'       --job-name='igc_priors_${want}'       --output='${SCRATCH_DIR}/priors_${want}_%j.out'       --error='${SCRATCH_DIR}/priors_${want}_%j.err'       --mail-user='${MAIL_USER}'       --export=ALL,IGC_MODEL='${want}',IGC_MODELS_DIR='${MODELS_DIR}',IGC_R_MODULE='${R_MODULE}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_EB_MODULES='${EB_MODULES}'${force}       $* priors.slurm"
 }
 
+# Move one generation of fits out of the way of the next. fit_model.R reuses
+# a shard that already exists (file_refit = "never"), so a refit with the old
+# shards still in models/ would adopt them rather than fit anything. Every
+# script reads models/, models/combined/ and so on non-recursively, so a
+# subdirectory is out of their reach. Nothing is deleted.
+cmd_archive() {
+  require_link
+  local label="${1:-$(date +%Y%m%d)}"
+  local dest="${MODELS_DIR}/old_${label}"
+  info "moving the fits in ${MODELS_DIR} into ${dest}/"
+  remote "
+    cd '${MODELS_DIR}' 2>/dev/null || { echo '  no models directory: nothing to archive'; exit 0; }
+    # A fit still running would write its old-generation shard into the new one.
+    if squeue -h -u '${HPC_USER}' -o '%j' | grep -q '^igc_'; then
+      echo '  refusing: igc_ jobs are queued or running (./hpc queue)' >&2; exit 1
+    fi
+    if [ -e '${dest}' ]; then echo '  refusing: ${dest} already exists' >&2; exit 1; fi
+    mkdir -p '${dest}' || exit 1
+    n=0
+    for f in *.rds; do
+      [ -e \"\$f\" ] || continue
+      mv -n \"\$f\" '${dest}/' && n=\$((n + 1))
+    done
+    echo \"    \$n shards\"
+    for d in combined predictions priors stan_csv; do
+      [ -d \"\$d\" ] || continue
+      if [ -n \"\$(ls -A \"\$d\")\" ]; then
+        echo \"    \$d/: \$(ls \"\$d\" | wc -l) entries\"
+        mv \"\$d\" '${dest}/' && mkdir \"\$d\"
+      fi
+    done
+    du -sh '${dest}'
+    echo '  left in ${MODELS_DIR}:'; ls -la"
+}
+
+# Where a running fit stands, days before its REPORT line. During warmup only
+# the .out says anything: cmdstanr's "Chain N Iteration: i / n" lines. Once a
+# chain has finished warmup, its CmdStan CSV in models/stan_csv/ holds the
+# adapted step size and every draw so far. That is enough to see the two
+# failures of AGENT.md 4.10 early: a frozen chain (step size far below its
+# siblings') and chains in separate modes (lp__ levels hundreds apart, where
+# chains in one mode differ by a fraction of their own sd).
+cmd_progress() {
+  local models
+  models="$(resolve_models "${1:-}")"
+  require_link
+  # A quoted heredoc fed to bash -s, so awk's $ fields need no escaping.
+  remote "bash -s -- '${MODELS_DIR}' '${SCRATCH_DIR}' '${HPC_USER}' ${models}" <<'EOF'
+models_dir=$1; scratch=$2; user=$3; shift 3
+secs() { awk -F'[-:]' '{ s = 0; for (i = 1; i <= NF; i++) s = s * (i == NF - 2 && NF == 4 ? 24 : 60) + $i; print s }'; }
+for m in "$@"; do
+  echo "== $m"
+  jobs=$(squeue -h -u "$user" -n "igc_fit_$m" -o '%F' | sort -u)
+  [ -n "$jobs" ] || { echo "   no fit job queued or running"; continue; }
+  for j in $jobs; do
+    squeue -h -r -j "$j" -o '%K|%T|%M|%N|%r' | sort -n | while IFS='|' read -r t state elapsed node reason; do
+      if [ "$state" != RUNNING ]; then echo "   shard $t: $state ($reason)"; continue; fi
+      out="$scratch/fit_${m}_${j}_${t}.out"
+      # "chain 1 900/2500  chain 2 1000/2500  |900|2500": the slowest chain sets the ETA
+      its=$(grep -o 'Chain [0-9]* Iteration: *[0-9]* / [0-9]*' "$out" 2>/dev/null |
+            awk '{ it[$2] = $4; n = $6 } END { lo = n; for (c in it) { printf "chain %s %s/%s  ", c, it[c], n; if (it[c] < lo) lo = it[c] }; if (n) print "|" lo "|" n }')
+      done_it=$(echo "$its" | awk -F'|' 'NF == 3 { print $2 }'); total=$(echo "$its" | awk -F'|' 'NF == 3 { print $3 }')
+      eta=""
+      # Not from iteration 1, which is printed after the compile and data load.
+      if [ -n "$done_it" ] && [ "$done_it" -ge 100 ]; then
+        s=$(echo "$elapsed" | secs)
+        eta=$(awk -v s="$s" -v d="$done_it" -v n="$total" 'BEGIN { t = s * (n - d) / d
+          if (t >= 86400) printf "~%.1f days to go", t / 86400; else printf "~%.1f h to go", t / 3600 }')
+      fi
+      [ -n "$its" ] || its="no iteration line yet"
+      echo "   shard $t on $node, running $elapsed: ${its%%|*}${eta}"
+      for csv in "$models_dir"/stan_csv/"$m"_[A-Z]*_"$t"_"$j"/*.csv; do
+        [ -e "$csv" ] || continue
+        step=$(grep -m1 '^# Step size' "$csv" | sed 's/.*= *//')
+        [ -n "$step" ] || continue # still in warmup
+        chain=$(basename "$csv" .csv | awk -F- '{ print $(NF - 1) }')
+        grep -v '^#' "$csv" | tail -n +2 | cut -d, -f1,4,6 |
+          awk -F, -v s="$step" -v c="$chain" '
+            { n++; lp[n] = $1; td += $2; dv += $3 }
+            END {
+              if (!n) { printf "     chain %s: step %s, no draws yet\n", c, s; exit }
+              for (i = 1; i <= n; i++) mu += lp[i] / n
+              for (i = 1; i <= n; i++) v += (lp[i] - mu)^2
+              printf "     chain %s: step %s, %d draws, lp__ %.0f (sd %.0f), treedepth %.1f, %d divergent\n",
+                c, s, n, mu, sqrt(v / (n > 1 ? n - 1 : 1)), td / n, dv
+            }'
+      done
+    done
+  done
+done
+EOF
+}
+
 cmd_queue() {
   require_link
   remote "squeue -u '${HPC_USER}' -o '%.10i %.12P %.28j %.8T %.12M %.12L %R'"
@@ -364,11 +465,13 @@ case "${1:-}" in
   combine)    shift; cmd_combine "$@" ;;
   predict)    shift; cmd_predict "$@" ;;
   priors)     shift; cmd_priors "$@" ;;
+  archive)    shift; cmd_archive "$@" ;;
+  progress)   shift; cmd_progress "$@" ;;
   queue)      shift; cmd_queue "$@" ;;
   log)        shift; cmd_log "$@" ;;
   ls)         shift; cmd_ls "$@" ;;
   pull)       shift; cmd_pull "$@" ;;
   cancel)     shift; cmd_cancel "$@" ;;
   sh)         shift; cmd_sh "$@" ;;
-  *) sed -n '2,33p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,41p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
 esac

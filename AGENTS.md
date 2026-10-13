@@ -53,11 +53,16 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
 - **Not every model in the registry should be submitted.** `gam_ddm7` is known
   not to be viable **at full data** (README → "`gam_ddm7`: do not submit it at full data",
   and `AGENT.md` §4.7). It is viable on a subsample — roughly 200 participants
-  — and that run is worth doing; what is ruled out is the full 2,215. Check the
-  README's "Who runs what" table before launching anything.
+  — and that run is worth doing; what is ruled out is the full 2,215. Check
+  who runs what (`analysis/server/AGENT.md` §6.5 for the 2026-10-13 refit,
+  and `./hpc queue`) before launching anything.
 - **Never hard-code an account or a path.** Everything is an `IGC_*` variable
   with a default (see README → Paths). A second cluster account sets its own in
   `analysis/server/hpc.local`, which is gitignored.
+- **A new generation of fits starts with `./hpc archive`**, which moves every
+  existing fit into `models/old_<date>/`. A leftover shard from another
+  cogmod or run length now stops a fit rather than being reused, but the same
+  run length on changed data would still be adopted.
 - **Test runs get their own `IGC_MODELS_DIR`.** Fits use
   `file_refit = "never"`, so a leftover 30-participant test shard in the
   production directory is silently adopted by a production run.

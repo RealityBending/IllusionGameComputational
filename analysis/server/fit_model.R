@@ -50,9 +50,9 @@ dir.create(models_dir, recursive = TRUE, showWarnings = FALSE)
 
 # "never" makes a resubmitted array skip shards whose .rds already exists, so a
 # job killed at the wall resumes instead of restarting. The catch is that a
-# stale shard is reused silently even if the formula or data changed -- so
-# combine_model.R deletes shards once they are combined, and you can force a
-# clean refit with:  IGC_FILE_REFIT=always ./hpc fit <model>
+# stale shard is reused silently even if the formula or data changed -- so a
+# shard from another cogmod or run length stops the job (see "Reuse" below),
+# and you can force a clean refit with:  IGC_FILE_REFIT=always ./hpc fit <model>
 # This script does the reuse and the save itself (see "Save" below), so brms's
 # third value, "on_change", is not supported.
 file_refit <- Sys.getenv("IGC_FILE_REFIT", unset = "never")
@@ -225,7 +225,23 @@ if (file_refit == "never" && file.exists(shard_file)) {
     cat("existing shard unreadable (", conditionMessage(e), "); refitting\n")
     NULL
   })
-  if (!is.null(m)) cat("reusing existing shard", shard_file, "\n")
+}
+
+# Only a shard of this very run is reused. One from an older generation (below
+# the cogmod floor, or another warmup or draw count) would otherwise be adopted
+# as if it had just been fitted. Stop rather than refit over it, since it may
+# be the only copy. Added for the 2026-10-13 refit (./hpc archive).
+if (!is.null(m)) {
+  old_cogmod <- if (is.null(m$cogmod$version)) "unrecorded" else m$cogmod$version
+  old_run <- c(m$fit@sim$warmup, m$fit@sim$iter)
+  if (old_cogmod == "unrecorded" || package_version(old_cogmod) < cogmod_min ||
+      !isTRUE(all(old_run == c(warmup, iter)))) {
+    stop(shard_file, " is from another run (cogmod ", old_cogmod, ", ", old_run[1],
+         " warmup + ", old_run[2] - old_run[1], " draws; this run wants cogmod >= ",
+         cogmod_min, ", ", warmup, " + ", iter - warmup, "). Move it aside ",
+         "(./hpc archive) or refit over it (IGC_FILE_REFIT=always).", call. = FALSE)
+  }
+  cat("reusing existing shard", shard_file, "\n")
 }
 
 csv_dir <- file.path(models_dir, "stan_csv",

@@ -68,18 +68,29 @@ be submitted by accident. `models/`, `tests/` and the logs are untouched.
 Report status the hub's way ([`jobs.md#status-reports`](https://github.com/RealityBending/Lab/blob/main/hpc/jobs.md#status-reports)):
 running since when, a per-shard table of each chain's iterations, an ETA
 against that model's warmup + samples, and a warning if a shard risks the
-wall. This driver has no `progress` command yet, so:
+wall:
 
 ```bash
-./hpc queue                # one line per array task: STATE, TIME, TIME_LEFT, reason if PENDING
-./hpc sh "grep -h 'Iteration\|REPORT' \$IGC_SCRATCH_DIR/fit_<model>_*.out | tail -40"
+./hpc queue                          # one line per array task: STATE, TIME, TIME_LEFT, reason if PENDING
+./hpc progress gam_lnr               # per shard: each chain's iterations, ETA; after warmup, step size and lp__
+./hpc progress gam_lnr,gam_lnr6      # several at once, one SSH connection
 ```
 
+`progress` reads the `.out` logs for the iteration counts (cmdstanr prints one
+line per chain every 100 iterations) and, once a chain is past warmup, its
+CmdStan CSV in `models/stan_csv/`, which holds the adapted step size and every
+draw so far. That shows the two failures of `AGENT.md` §4.10 well before the
+shard ends: a frozen chain has a step size orders of magnitude below its
+siblings', and chains in separate modes have `lp__` levels hundreds apart
+where chains in one mode differ by a fraction of their own sd. The ETA is
+elapsed time scaled by the slowest chain's iterations, so it is rough: a
+warmup iteration costs 0.75-1.5x a sampling one (§4.11).
+
 The `REPORT ...` line is printed once at the end of a shard (see `AGENT.md`
-§6.1 for what to expect in it). Seeing only `Iteration: 1 / 1500` for hours is
-normal here: at full data the warmup alone costs about 20 h (LNR) to 3.5
-days (LNR-6) on a zen5 node (`AGENT.md` §4.11). Trust `TIME` in `./hpc queue`
-over the absence of a fresh line.
+§6.1 for what to expect in it). Seeing only `Iteration: 1 / 2500` for hours is
+normal here: at 100 iterations per line and 40-230 s per iteration, a line
+comes every 1-6 h. Trust `TIME` in `./hpc queue` over the absence of a fresh
+line.
 
 Extra arguments to `fit` and `combine` are passed to `sbatch`, so a smoke test
 is:
@@ -96,8 +107,36 @@ use anyway.
 
 Always give a test run its **own `IGC_MODELS_DIR`**. Shards are named
 `<model>_<illusion>_<shard>.rds` and `file_refit = "never"` means a shard that
-already exists is silently kept — a 30-participant test shard left in the
-production directory would be adopted by the production run.
+already exists is kept — a 30-participant test shard left in the production
+directory would be adopted by the production run. Since 2026-10-13 a shard is
+reused only if it has the run's cogmod (at least the floor) and its warmup and
+draw count. Any other shard stops the task with "is from another run", so a
+mismatch fails loudly instead of slipping through. A test shard made with the
+production settings would still pass.
+
+## Starting a new generation of fits: `./hpc archive`
+
+Before refitting models that already have shards (a new cogmod, new data, a new
+run length), move the old generation aside:
+
+```bash
+./hpc archive              # -> models/old_<YYYYMMDD>/ (today); or ./hpc archive <label>
+```
+
+It moves every shard, `combined/`, `predictions/`, `priors/` and any leftover
+`stan_csv/` into `models/old_<label>/` and recreates the empty directories.
+Nothing is deleted. Every script reads `models/` non-recursively, so the old
+fits are out of reach of `fit`, `combine`, `predict`, `priors`, `ls` and
+`pull`, and they cannot be reused or overwritten. It refuses while any `igc_`
+job is queued or running (an old fit finishing afterwards would land in the new
+generation), and if the target exists. To get an old fit back, `./hpc sh` a
+`cp`. To pull one, `./hpc pull 'old_20261013/combined/<name>.rds'`.
+
+Done on `dmm56` on 2026-10-13: `models/old_20261013/` holds the 68 shards,
+22 combined fits, 19 prediction and 20 priors files of the pre-refit
+generation (25 GB). It also holds `laptop_only/`, four superseded fits that
+existed only on the laptop (md5-verified), uploaded before the laptop copies
+were deleted.
 
 ## The production runs
 
@@ -377,13 +416,15 @@ it before anyone submits it. Write each entry out in full: generating them in a
 loop would hide them from `./hpc`, which reads model names straight out of the
 file.
 
-Nothing else changes, because the three illusions are the same size:
+Nothing else changes, because the three illusions are the same size. Rows
+and participants of the data since 2026-10-12 (block exclusion on
+facilitating-trial errors), with the fits before it in brackets:
 
 | illusion | rows | participants | `restore_units()` bounds (difference, strength) |
 | --- | --- | --- | --- |
-| MullerLyer | 323,981 | 2,215 | 0.04-0.46, ±49 |
-| VerticalHorizontal | 319,760 | 2,200 | 0.03-0.30, ±66.5 |
-| Ebbinghaus | 320,144 | 2,204 | 0.05-0.70, ±2.03 |
+| MullerLyer | 324,580 (323,981) | 2,217 (2,215) | 0.04-0.46, ±49 |
+| VerticalHorizontal | 321,113 (319,760) | 2,202 (2,200) | 0.03-0.30, ±66.5 |
+| Ebbinghaus | 316,487 (320,144) | 2,181 (2,204) | 0.05-0.70, ±2.03 |
 
 - **Settings and timings carry over.** Each model's production defaults apply
   as they are, and so does what it was measured to cost on MullerLyer (e.g.
@@ -471,6 +512,10 @@ A second account is no longer the *only* way to get a second allowance:
 `long`'s (`AGENT.md` §4.2.1; rules in the hub's `artemis.md#sussexneuro`). The
 two stack, so the fastest arrangement is a colleague on `long` plus a
 `--partition=sussexneuro` job here.
+
+**For the 2026-10-13 refit, `refit_colleagues.md` is the step-by-step to send
+a colleague**: update, `./hpc archive`, cogmod 0.3.5, smoke test, submit, and
+what to send back. What follows is the one-time setup of a fresh account.
 
 Their setup, once:
 
@@ -614,7 +659,9 @@ new commits. Naming a package on the command line force-reinstalls it:
 2026-10-02). It changes the priors of every model: `poutlier`'s everywhere, and
 the DDM's `boundary` and `bias` slopes. Install it only when no array has tasks
 pending, and only once cogmod's 0.3.5 is pushed to `dev`: push, then install,
-then submit. `AGENT.md` §2 has the reasons and the guards.
+then submit. `AGENT.md` §2 has the reasons and the guards. **Installed on
+`dmm56` on 2026-10-13** (`eb4c6a3`); a second account installs its own
+(`refit_colleagues.md`).
 
 This runs through `srun` on a compute node rather than compiling on the login
 node, and prints the resulting versions plus the cogmod ref and commit SHA at
@@ -655,7 +702,7 @@ belt and braces.
 
 | file | role |
 | --- | --- |
-| `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/predict/queue/log/ls/pull/cancel/sh |
+| `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/predict/priors/archive/progress/queue/log/ls/pull/cancel/sh |
 | `install_pkgs.R` | builds the project R library (`./hpc install`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model |
@@ -674,6 +721,7 @@ belt and braces.
 | `keep_stored_basis.R` | makes the laptop's brms 2.23 predict the cluster's 2.21.0 fits correctly (`AGENT.md` §3.9) |
 | `cogmod_lba_modes_issue.md` | why the full-data `gam_lba` split into two modes, and the options |
 | `cogmod_lba_priors_inits.md` | the cogmod defaults to fix before re-running `gam_lba` (drift-smooth priors, starting values), with the model written out in full |
+| `refit_colleagues.md` | the instructions sent to the two colleagues fitting the slow models of the 2026-10-13 refit on their own accounts |
 | `cogmod_priors_review.md` | the cogmod default priors to change before the refit, from `1_models.qmd` (2026-10-12) |
 | `lba_modes/` | the laptop scripts behind it (they read the combined fit; nothing is refitted) |
 | `hpc.local` | **gitignored** — this machine's account settings, e.g. `IGC_HPC_USER=oc236` |
