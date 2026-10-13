@@ -12,7 +12,7 @@
 # which is all these fits contain -- not gp() terms.
 #
 #   source("server/keep_stored_basis.R")
-#   m <- keep_stored_basis(readRDS("models/gam_lnr6_MullerLyer.rds"))
+#   m <- keep_stored_basis(readRDS("models/gam_lnr6_mullerlyer_MullerLyer.rds"))
 #
 # The cluster (./hpc predict) and a local brms 2.21.0 remain the first
 # choices; run_predictions() refuses a patched fit on purpose.

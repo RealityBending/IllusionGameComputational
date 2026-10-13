@@ -48,10 +48,15 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
 ## Ground rules for this repo
 
 - **One job fits one model.** `analysis/server/models.R` is the single
-  definition of what a model is — adding one is a single entry there and
-  nothing else. Do not hard-code a formula into a fitting script.
-- **Not every model in the registry should be submitted.** `gam_ddm7` is known
-  not to be viable **at full data** (README → "`gam_ddm7`: do not submit it at full data",
+  definition of what a model is — one formula per family in `igc_formulas`,
+  one registry entry per family and illusion — and nothing else. Do not
+  hard-code a formula into a fitting script.
+- **Model names are `<family>_<illusion>`, MullerLyer included**
+  (`gam_lnr_mullerlyer`, since 2026-10-13). Notes, logs and archived fits from
+  before then call the MullerLyer models by the bare family name (`gam_lnr`).
+- **Not every model in the registry should be submitted.**
+  `gam_ddm7_mullerlyer` is known not to be viable **at full data**
+  (README → "`gam_ddm7`: do not submit it at full data",
   and `AGENT.md` §4.7). It is viable on a subsample — roughly 200 participants
   — and that run is worth doing; what is ruled out is the full 2,215. Check
   who runs what (`analysis/server/AGENT.md` §6.5 for the 2026-10-13 refit,

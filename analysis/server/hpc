@@ -244,8 +244,8 @@ submit_per_model() {
   models="$(resolve_models "$want")"
   require_link
   # Forward run-shaping vars when the caller sets them, e.g.
-  #   IGC_NPARTICIPANTS=30 IGC_WARMUP=300 ./hpc fit gam_lnr
-  #   IGC_CRITERION=waic IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_lnr
+  #   IGC_NPARTICIPANTS=30 IGC_WARMUP=300 ./hpc fit gam_lnr_mullerlyer
+  #   IGC_CRITERION=waic IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_lnr_mullerlyer
   local extra="" v val
   for v in IGC_NPARTICIPANTS IGC_WARMUP IGC_SAMPLES IGC_CHAINS IGC_COGMOD_MIN \
            IGC_CRITERION IGC_CRITERION_NDRAWS IGC_DELETE_SHARDS; do

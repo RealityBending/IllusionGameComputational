@@ -105,13 +105,13 @@ load_predictions <- function(name) {
 # heatmaps. Adding an illusion takes an entry here and a tab in each section.
 models <- list(
   MullerLyer = c(
-    "LNR" = "gam_lnr_MullerLyer",
-    "LNR-6" = "gam_lnr6_MullerLyer",  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
-    "DDM-4" = "gam_ddm4_MullerLyer",
-    "DDM-5" = "gam_ddm5_MullerLyer",
-    "RDM" = "gam_rdm_MullerLyer",
-    "RDM-5" = "gam_rdm5_MullerLyer"  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
-    # "LBA" = "gam_lba_MullerLyer"  # NOT CONVERGED (2026-10-01): its chains sit
+    "LNR" = "gam_lnr_mullerlyer_MullerLyer",
+    "LNR-6" = "gam_lnr6_mullerlyer_MullerLyer",  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
+    "DDM-4" = "gam_ddm4_mullerlyer_MullerLyer",
+    "DDM-5" = "gam_ddm5_mullerlyer_MullerLyer",
+    "RDM" = "gam_rdm_mullerlyer_MullerLyer",
+    "RDM-5" = "gam_rdm5_mullerlyer_MullerLyer"  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
+    # "LBA" = "gam_lba_mullerlyer_MullerLyer"  # NOT CONVERGED (2026-10-01): its chains sit
     # in two modes, max Rhat 13.8 (server/AGENT.md 4.9). No predictions made.
   ),
   VerticalHorizontal = c(
@@ -176,9 +176,9 @@ model_fill <- function(labels) {
 # # Generate 'df' by running the make_models.R script start
 # warmstart <- rbind(
 #   cogmod::cogmod_warmstart(gam_ddm4_muller, data = df)$table |> 
-#     mutate(Model = "gam_ddm4_MullerLyer"),
+#     mutate(Model = "gam_ddm4_mullerlyer_MullerLyer"),
 #   cogmod::cogmod_warmstart(gam_lnr_muller, data = df)$table |> 
-#     mutate(Model = "gam_lnr_MullerLyer")
+#     mutate(Model = "gam_lnr_mullerlyer_MullerLyer")
 # )
 # 
 # write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")

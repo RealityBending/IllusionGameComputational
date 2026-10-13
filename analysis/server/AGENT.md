@@ -24,6 +24,13 @@ nothing to do with warm starts or with Stan's warmup), `./hpc submit make` ->
 `./hpc fit <model>`. `models.R` is new: the registry every one of them reads.
 The warm-start machinery was deleted, per the 2026-09-17 decision to run cold.
 
+**Renamed on 2026-10-13: the MullerLyer models carry `_mullerlyer`** like the
+other illusions (`gam_lnr` -> `gam_lnr_mullerlyer`, fit file
+`gam_lnr_mullerlyer_MullerLyer.rds`). The formulas moved to `igc_formulas` in
+`models.R`, keyed by the old bare names, and are unchanged. Everything in this
+file written before that date uses the old names: read `gam_lnr` there as
+"the LNR on MullerLyer" (or the LNR family, as the context says).
+
 ---
 
 ## 1. Quick start
@@ -35,8 +42,8 @@ cd analysis/server
 ./hpc install                       # once: build the project R library
 ./hpc precompile                    # once per toolchain change: build the CmdStan PCH
 ./hpc push
-./hpc fit gam_lnr                   # one array job per model
-./hpc queue ; ./hpc log gam_lnr
+./hpc fit gam_lnr_mullerlyer                   # one array job per model
+./hpc queue ; ./hpc log gam_lnr_mullerlyer
 ```
 
 ---
@@ -374,7 +381,7 @@ fitted alongside the `long` arrays at no cost to them, which is what
 `gam_ddm5` does as of 2026-09-22 (see 6):
 
 ```bash
-./hpc fit gam_ddm5 --partition=sussexneuro
+./hpc fit gam_ddm5_mullerlyer --partition=sussexneuro
 ```
 
 Its 60-day wall is 8 usable days for us (Artemis's checkpoint request; Stan
@@ -1341,9 +1348,9 @@ defaults *are* this configuration, so the production run is two bare commands:
 
 ```bash
 ./hpc push
-./hpc fit gam_lnr
-./hpc fit gam_lnr6
-./hpc fit gam_ddm4
+./hpc fit gam_lnr_mullerlyer
+./hpc fit gam_lnr6_mullerlyer
+./hpc fit gam_ddm4_mullerlyer
 ```
 
 | setting | value | why |
@@ -1536,7 +1543,7 @@ the pre-refit generation; `combine_model.R` keeps the two apart by the
 
 ### 6.5 The 2026-10-13 refit: who runs what, and in what order
 
-All 21 fits (the registry minus `gam_ddm7`) are refitted on cogmod 0.3.5
+All 21 fits (the registry minus `gam_ddm7_mullerlyer`) are refitted on cogmod 0.3.5
 (`eb4c6a3`), the 2026-10-12 data and 1500 warmup + 1000 draws (4.11).
 Preparation on `dmm56`, 2026-10-13: the old generation moved to
 `models/old_20261013/` (3.6), cogmod installed (2), and a 30-participant
@@ -1557,7 +1564,7 @@ there are in `old_20261013/laptop_only/`.
   fast family. It is the one failure that a longer warmup targets (4.10 C,
   open question 5), and `./hpc progress` shows its step sizes once warmup ends,
   after ~1.5 days.
-- **`gam_rdm5` (MullerLyer) at once, on `sussexneuro`.** It is the cheapest of
+- **`gam_rdm5_mullerlyer` at once, on `sussexneuro`.** It is the cheapest of
   the `sigmabias` models and the cleanest test of 4.10 B's open point: its
   MullerLyer fit split on 0.3.3, and the Ebbinghaus one converged on 0.3.4.
   If the full formula splits again, the simplified variants come next, and
@@ -1579,12 +1586,12 @@ there are in `old_20261013/laptop_only/`.
 | --- | --- | --- | --- |
 | `gam_lnr_verticalhorizontal` | `dmm56` `long`, zen5 | 11596772 | running since 2026-10-13 18:58 (rtx-00) |
 | `gam_lnr_ebbinghaus` | `dmm56` `long`, zen5 | 11596773 | running since 2026-10-13 18:58 (rtx-00, rtx-02) |
-| `gam_rdm5` | `dmm56` `sussexneuro`, zen5 | 11596782 | running since 2026-10-13 18:59 (rtx-02) |
+| `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11596823 | running since 2026-10-13 20:20 (rtx-02). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
 | `gam_ddm4_ebbinghaus` | `dmm56` `long`, zen5 | 11596774 | pending behind the first two (`QOSMaxCpuPerUserLimit`) |
 | `gam_ddm4_verticalhorizontal` | `dmm56` `long`, zen5 | 11596775 | pending |
-| `gam_ddm5_verticalhorizontal`, `gam_lnr`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5`, `gam_ddm4`, `gam_rdm_verticalhorizontal`, `gam_rdm` | `dmm56` `long` (or `sussexneuro` once `gam_rdm5` is done) | — | to submit in this order once the first `REPORT` lines are clean |
-| `gam_lba`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A | — | instructions written |
-| `gam_lnr6`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B | — | instructions written |
+| `gam_ddm5_verticalhorizontal`, `gam_lnr_mullerlyer`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer`, `gam_ddm4_mullerlyer`, `gam_rdm_verticalhorizontal`, `gam_rdm_mullerlyer` | `dmm56` `long` (or `sussexneuro` once `gam_rdm5_mullerlyer` is done) | — | to submit in this order once the first `REPORT` lines are clean |
+| `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A | — | instructions written |
+| `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B | — | instructions written |
 
 Update the table as things move, and add a `node_history.md` row for every
 shard that finishes. The colleagues send each model's combined fit,

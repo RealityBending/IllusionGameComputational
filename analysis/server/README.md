@@ -49,13 +49,13 @@ cd analysis/server
 ./hpc check                # confirms VPN + SSH are good
 ./hpc push                 # copy *.R and *.slurm to the cluster (CRLF -> LF)
 ./hpc models               # what can be fitted
-./hpc fit gam_lnr          # submit one array job for one model
+./hpc fit gam_lnr_mullerlyer          # submit one array job for one model
 ./hpc queue                # what's running
-./hpc log gam_lnr          # tail that model's newest .out/.err
+./hpc log gam_lnr_mullerlyer          # tail that model's newest .out/.err
 ./hpc ls                   # fitted .rds on the cluster
-./hpc combine gam_lnr      # merge its shards and add loo (shards are kept)
+./hpc combine gam_lnr_mullerlyer      # merge its shards and add loo (shards are kept)
 ./hpc pull                 # bring combined fits into analysis/models/
-./hpc predict gam_lnr      # posterior predictions of the combined fit
+./hpc predict gam_lnr_mullerlyer      # posterior predictions of the combined fit
 ./hpc pull predictions     # -> analysis/models/predictions/
 ```
 
@@ -72,8 +72,8 @@ wall:
 
 ```bash
 ./hpc queue                          # one line per array task: STATE, TIME, TIME_LEFT, reason if PENDING
-./hpc progress gam_lnr               # per shard: each chain's iterations, ETA; after warmup, step size and lp__
-./hpc progress gam_lnr,gam_lnr6      # several at once, one SSH connection
+./hpc progress gam_lnr_mullerlyer               # per shard: each chain's iterations, ETA; after warmup, step size and lp__
+./hpc progress gam_lnr_mullerlyer,gam_lnr6_mullerlyer      # several at once, one SSH connection
 ```
 
 `progress` reads the `.out` logs for the iteration counts (cmdstanr prints one
@@ -98,7 +98,7 @@ is:
 ```bash
 IGC_MODELS_DIR=/mnt/lustre/users/psych/dmm56/IGComputational/smoke \
 IGC_NPARTICIPANTS=30 IGC_WARMUP=300 IGC_SAMPLES=100 \
-  ./hpc fit gam_lnr --array=1-2 --partition=short --cpus-per-task=8 --mem=16G
+  ./hpc fit gam_lnr_mullerlyer --array=1-2 --partition=short --cpus-per-task=8 --mem=16G
 ```
 
 `--partition=short` is the only wall-clock setting needed: with no `--time`,
@@ -147,9 +147,9 @@ Settings below are the ones measured in `AGENT.md` §4. Full data, cold starts,
 ./hpc push
 ./hpc install cogmod      # only if cogmod moved
 ./hpc precompile          # only after a toolchain change
-./hpc fit gam_lnr
-./hpc fit gam_lnr6
-./hpc fit gam_ddm4
+./hpc fit gam_lnr_mullerlyer
+./hpc fit gam_lnr6_mullerlyer
+./hpc fit gam_ddm4_mullerlyer
 ```
 
 The defaults in `fit.slurm` are that production configuration: `--array=1-4`,
@@ -170,9 +170,9 @@ count against it.
 When they are done:
 
 ```bash
-./hpc combine gam_lnr
-./hpc combine gam_lnr6
-./hpc combine gam_ddm4
+./hpc combine gam_lnr_mullerlyer
+./hpc combine gam_lnr6_mullerlyer
+./hpc combine gam_ddm4_mullerlyer
 ./hpc pull                # combined/*.rds -> analysis/models/
 ```
 
@@ -193,9 +193,9 @@ what 500 draws cost, so subsampling trades real precision for almost no time.
 Override per run when a model actually overruns — not pre-emptively:
 
 ```bash
-IGC_CRITERION=waic ./hpc combine gam_ddm7          # cheaper criterion
-IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_ddm7   # or fewer draws
-IGC_CRITERION=none ./hpc combine gam_ddm7          # merge only
+IGC_CRITERION=waic ./hpc combine gam_ddm7_mullerlyer          # cheaper criterion
+IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_ddm7_mullerlyer   # or fewer draws
+IGC_CRITERION=none ./hpc combine gam_ddm7_mullerlyer          # merge only
 ```
 
 Keeping shards reopens the trap that deleting them used to close: `file_refit =
@@ -219,8 +219,8 @@ share. On the cluster:
 
 ```bash
 ./hpc push                                  # predictions.R is shared with the qmd: push after editing it
-./hpc predict gam_lnr                       # one job per model, reads combined/<model>_<illusion>.rds
-./hpc predict gam_lnr --dependency=afterok:<combine job id>   # or queue it behind its combine
+./hpc predict gam_lnr_mullerlyer                       # one job per model, reads combined/<model>_<illusion>.rds
+./hpc predict gam_lnr_mullerlyer --dependency=afterok:<combine job id>   # or queue it behind its combine
 ./hpc pull predictions                      # predictions/*.rds -> analysis/models/predictions/
 ./hpc pull 'predictions/gam_rdm_*.rds'      # just some: still lands in predictions/, never next to the fit
 ```
@@ -291,7 +291,7 @@ in `predictions.R`, and are stored in each file's `$meta`. Override one per run
 by its name in capitals:
 
 ```bash
-IGC_PRED_CURVES_ITERATIONS=2000 IGC_PRED_PPC_NDRAWS=1000 ./hpc predict gam_lnr
+IGC_PRED_CURVES_ITERATIONS=2000 IGC_PRED_PPC_NDRAWS=1000 ./hpc predict gam_lnr_mullerlyer
 ```
 
 The job needs `modelbased`, which `install_pkgs.R` has installed only since
@@ -317,15 +317,28 @@ size changed is redone, `IGC_PRIORS_FORCE=1` redoes them all.
 
 ## Models
 
-`models.R` holds one entry per model: the illusion it is fitted to and a
-function returning the brms formula. It is the only place a model is defined —
-`fit_model.R` fits the one named by `IGC_MODEL`, `combine_model.R` merges the
+`models.R` is the only place a model is defined. It holds two lists:
+
+- `igc_formulas`: one brms formula per model family, keyed by the family name
+  below (`gam_lnr`, `gam_lba`, ...).
+- `igc_models`: the registry, with one entry per family and illusion, named
+  `<family>_<illusion in lower case>`: `gam_lnr_mullerlyer`,
+  `gam_lnr_verticalhorizontal`, `gam_lnr_ebbinghaus`. Each entry gives the
+  illusion and points at its family's formula.
+
+`fit_model.R` fits the entry named by `IGC_MODEL`, `combine_model.R` merges the
 same one, and `./hpc` reads the *names* straight out of the file (which is why
-the declaration lines must stay in the form `  <name> = list(`).
+the declaration lines must stay in the form `  <name> = list(`). `./hpc models`
+lists all 22.
 
-Every model is fitted to **MullerLyer** unless its row says otherwise.
+**Renamed on 2026-10-13.** The MullerLyer models used to be the bare family
+name (`gam_lnr`, `gam_lba`, ...). They now carry `_mullerlyer` like every
+other illusion. Older notes and job logs here, and the fits in
+`models/old_20261013/`, use the old names: the old `gam_lnr_MullerLyer.rds` is
+the new `gam_lnr_mullerlyer_MullerLyer.rds`. The formulas did not change
+(checked entry by entry against the old registry).
 
-| model | family | distributional parameters with a 2-D smooth | fixed | |
+| family | cogmod family | distributional parameters with a 2-D smooth | fixed | |
 | --- | --- | --- | --- | --- |
 | `gam_lnr` | `cogmod_lnr()` | drift, `nuone`, `sigmazero`, `sigmaone`, `ndt` | `sigmabias = 0` |
 | `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal fits not converged: chains in separate `sigmabias` modes** (`AGENT.md` §4.10) |
@@ -335,8 +348,6 @@ Every model is fitted to **MullerLyer** unless its row says otherwise.
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
 | `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal fits not converged: chains in separate `sigmabias` modes** (`AGENT.md` §4.10) |
 | `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **not converged: two modes, max Rhat 13.8, so no predictions. The 0.3.4 re-run (2026-10-07) replicated the split, and VerticalHorizontal splits too** (`AGENT.md` §4.9, §4.10, `cogmod_lba_modes_issue.md`) |
-| `gam_lnr_verticalhorizontal` | `cogmod_lnr()` | as `gam_lnr` | `sigmabias = 0` | fitted to **VerticalHorizontal**; see [Running models on other illusions](#running-models-on-other-illusions) |
-| `gam_ddm4_verticalhorizontal` | `cogmod_ddm()` | as `gam_ddm4` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 | fitted to **VerticalHorizontal** |
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =
 c("cr", "cr")) + (1 | Participant)`; `poutlier` is `1 + (1 | Participant)`.
@@ -397,24 +408,21 @@ answers it live.
 
 ## Running models on other illusions
 
-Every model above is fitted to MullerLyer. Running the same model on
-VerticalHorizontal or Ebbinghaus takes one more entry in `models.R`, named
-`<model>_<illusion in lower case>`. The entry borrows the MullerLyer model's
-formula instead of copying it, so the two cannot drift apart:
+Every family except DDM-7 has an entry for each of the three illusions (DDM-7
+only for MullerLyer). An entry points at its family's formula instead of
+copying it, so the illusions cannot drift apart:
 
 ```r
   gam_lnr_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_lnr$formula()
+    formula = igc_formulas$gam_lnr
   ),
 ```
 
-There are two so far: `gam_lnr_verticalhorizontal` (added 2026-09-24) and
-`gam_ddm4_verticalhorizontal` (added 2026-09-27). To add another, copy it, change
-the model in both the name and `igc_models$<model>`, set `illusion`, and commit
-it before anyone submits it. Write each entry out in full: generating them in a
-loop would hide them from `./hpc`, which reads model names straight out of the
-file.
+A new family is one formula in `igc_formulas` plus one such entry per
+illusion; a new illusion is one entry per family. Commit it before anyone
+submits it. Write each entry out in full: generating them in a loop would hide
+them from `./hpc`, which reads model names straight out of the file.
 
 Nothing else changes, because the three illusions are the same size. Rows
 and participants of the data since 2026-10-12 (block exclusion on
@@ -433,10 +441,11 @@ facilitating-trial errors), with the fits before it in brackets:
   more viable at full data on another illusion than on MullerLyer.
 - **The notebooks already handle all three.** The bounds above are the ones
   `restore_units()` in the `.qmd` files uses, and they match the data.
-- **Files cannot collide.** The name has to differ from the MullerLyer model's,
-  so shards repeat the illusion,
-  `gam_lnr_verticalhorizontal_VerticalHorizontal_<n>.rds`. They cannot be
-  confused with `gam_lnr_MullerLyer_<n>.rds`, even in the same directory.
+- **Files cannot collide.** Shard and fit names add the illusion to the model
+  name, `gam_lnr_verticalhorizontal_VerticalHorizontal_<n>.rds` and
+  `gam_lnr_mullerlyer_MullerLyer_<n>.rds`, so no two models share a file
+  name. The old bare-name files (`gam_lnr_MullerLyer_<n>.rds`, before
+  2026-10-13) cannot be confused with the new ones either.
 
 ### Fitting one
 
@@ -462,7 +471,7 @@ cd analysis/server
 IGC_MODELS_DIR=/mnt/lustre/users/<group>/<user>/IGComputational/smoke_$MODEL \
 IGC_NPARTICIPANTS=30 IGC_WARMUP=300 IGC_SAMPLES=100 \
   ./hpc fit $MODEL --array=1 --partition=short --cpus-per-task=8 --mem=16G
-./hpc log $MODEL                   # want "SUCCESSFUL" and a REPORT line; gam_lnr took 6-11 min
+./hpc log $MODEL                   # want "SUCCESSFUL" and a REPORT line; gam_lnr_mullerlyer took 6-11 min
 
 # 2. production: 4 shards x 2 chains on long, 64 CPUs of the 140-CPU cap
 ./hpc fit $MODEL
@@ -541,9 +550,9 @@ thing to agree on is who runs what:
 
 ```bash
 # one account
-./hpc fit gam_lnr ; ./hpc fit gam_lnr6 ; ./hpc fit gam_ddm4
+./hpc fit gam_lnr_mullerlyer ; ./hpc fit gam_lnr6_mullerlyer ; ./hpc fit gam_ddm4_mullerlyer
 # the other
-./hpc fit gam_rdm ; ./hpc fit gam_rdm5 ; ./hpc fit gam_lba
+./hpc fit gam_rdm_mullerlyer ; ./hpc fit gam_rdm5_mullerlyer ; ./hpc fit gam_lba_mullerlyer
 ```
 
 Three jobs x 4 tasks x 16 CPUs is 192 against the 140-CPU cap, so the third
@@ -624,7 +633,7 @@ this project:
   shipped with `--time=2-00:00:00` and real shards then measured 42.7-44 h
   (`AGENT.md` §3.7).
 - **`sussexneuro`** runs a further model alongside the `long` arrays on a
-  separate quota (`AGENT.md` §4.2.1), e.g. `./hpc fit gam_rdm
+  separate quota (`AGENT.md` §4.2.1), e.g. `./hpc fit gam_rdm_mullerlyer
   --partition=sussexneuro`. Its 256 CPUs are a group pool — look before
   sizing (hub `artemis.md#sussexneuro`).
 - Check where you stand: `./hpc sh "squeue --Format=JobID,State,Reason,PriorityLong,Partition -u dmm56"`.

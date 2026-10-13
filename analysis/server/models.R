@@ -7,13 +7,24 @@
 #
 #     <name> = list(
 #
-# at two-space indent, one per model. `./hpc models` prints what it found.
+# at two-space indent, one per model, and use that form for nothing else.
+# `./hpc models` prints what it found.
 #
-# Each entry:
-#   illusion  the Illusion_Type the model is fitted to
-#   formula   a function returning the brms bf(). A function rather than the
-#             object so that sourcing this file costs nothing and only the
-#             model actually being fitted is built.
+# Two lists:
+#   igc_formulas  one brms bf() per model family, as a function so that
+#                 sourcing this file costs nothing and only the model actually
+#                 being fitted is built.
+#   igc_models    the registry: one entry per family x illusion, named
+#                 <family>_<illusion in lower case>, e.g. gam_lnr_mullerlyer.
+#                 Each entry is
+#                   illusion  the Illusion_Type the model is fitted to
+#                   formula   the family's function from igc_formulas
+#
+# Until 2026-10-13 the MullerLyer models were named after the bare family
+# (gam_lnr, gam_lba, ...) and held the formulas, which the other illusions
+# borrowed. Older notes, job logs and the fits in models/old_20261013/ use
+# those names: gam_lnr_MullerLyer.rds there is gam_lnr_mullerlyer_MullerLyer.rds
+# here.
 
 # Every distributional parameter gets the same 2-D tensor smooth of illusion
 # difference x illusion strength, plus a participant intercept. Built from a
@@ -34,27 +45,24 @@ igc_t2 <- function(lhs) {
 igc_rt <- function() igc_t2("RT | dec(Error)")
 
 
-igc_models <- list(
+igc_formulas <- list(
 
   # LNR ---------------------------------------------------------------------
   # sigmabias = 0 is the plain LNR. Omitting it does not error: it silently
   # becomes a freely estimated start-point range. Watch for this class of bug
   # whenever cogmod adds a distributional parameter.
-  gam_lnr = list(
-    illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("nuone"),
-        igc_t2("sigmazero"),
-        igc_t2("sigmaone"),
-        sigmabias = 0,
-        igc_t2("ndt"),
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_lnr()
-      )
-    }
-  ),
+  gam_lnr = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("nuone"),
+      igc_t2("sigmazero"),
+      igc_t2("sigmaone"),
+      sigmabias = 0,
+      igc_t2("ndt"),
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_lnr()
+    )
+  },
 
   # LNR-6 -------------------------------------------------------------------
   # The LNR above plus a freely estimated sigmabias -- the between-trial
@@ -65,62 +73,53 @@ igc_models <- list(
   # sigmabias > 0 cogmod takes the erfc-based ldiff_Phi path for the tails
   # rather than the single-tail shortcut, which cogmod 0.3.3 measured at about
   # 15% dearer per gradient (and 20% cheaper for the sigmabias = 0 case).
-  gam_lnr6 = list(
-    illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("nuone"),
-        igc_t2("sigmazero"),
-        igc_t2("sigmaone"),
-        igc_t2("sigmabias"),
-        igc_t2("ndt"),
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_lnr()
-      )
-    }
-  ),
+  gam_lnr6 = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("nuone"),
+      igc_t2("sigmazero"),
+      igc_t2("sigmaone"),
+      igc_t2("sigmabias"),
+      igc_t2("ndt"),
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_lnr()
+    )
+  },
 
   # DDM-4 -------------------------------------------------------------------
   # The four-parameter DDM: drift, boundary, bias, ndt. The three between-trial
   # variabilities are fixed at 0.
-  gam_ddm4 = list(
-    illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("boundary"),
-        igc_t2("bias"),
-        igc_t2("ndt"),
-        sigmadrift = 0,
-        sigmabias = 0,
-        sigmandt = 0,
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_ddm()
-      )
-    }
-  ),
+  gam_ddm4 = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("boundary"),
+      igc_t2("bias"),
+      igc_t2("ndt"),
+      sigmadrift = 0,
+      sigmabias = 0,
+      sigmandt = 0,
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_ddm()
+    )
+  },
 
   # DDM-5 -------------------------------------------------------------------
   # DDM-4 plus between-trial drift variability, itself smoothed. One more 2-D
   # smooth than the others, so expect it to be the straggler; give it its own
   # --time if it is ever submitted.
-  gam_ddm5 = list(
-    illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("boundary"),
-        igc_t2("bias"),
-        igc_t2("ndt"),
-        igc_t2("sigmadrift"),
-        sigmabias = 0,
-        sigmandt = 0,
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_ddm()
-      )
-    }
-  ),
+  gam_ddm5 = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("boundary"),
+      igc_t2("bias"),
+      igc_t2("ndt"),
+      igc_t2("sigmadrift"),
+      sigmabias = 0,
+      sigmandt = 0,
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_ddm()
+    )
+  },
 
   # DDM-7 -------------------------------------------------------------------
   # The full DDM: nothing fixed. Every one of cogmod_ddm()'s seven parameters
@@ -145,22 +144,19 @@ igc_models <- list(
   # participants -- about 2.7-4.7 days per chain at 200, with 1 chain x 16
   # threads and its own IGC_MODELS_DIR. The real fix is a fixed-node quadrature
   # rule in cogmod; see AGENT.md 4.7.1.
-  gam_ddm7 = list(
-    illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("boundary"),
-        igc_t2("bias"),
-        igc_t2("ndt"),
-        igc_t2("sigmadrift"),
-        igc_t2("sigmabias"),
-        igc_t2("sigmandt"),
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_ddm()
-      )
-    }
-  ),
+  gam_ddm7 = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("boundary"),
+      igc_t2("bias"),
+      igc_t2("ndt"),
+      igc_t2("sigmadrift"),
+      igc_t2("sigmabias"),
+      igc_t2("sigmandt"),
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_ddm()
+    )
+  },
 
   # RDM ---------------------------------------------------------------------
   # Racing diffusion: two Wald accumulators, one per response. mu is the drift
@@ -173,20 +169,17 @@ igc_models <- list(
   # gradient exact, where every normal tail previously went through
   # std_normal_lcdf()'s approximate partials; in a race those partials *are*
   # the gradient of the drifts.
-  gam_rdm = list(
-    illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("driftone"),
-        igc_t2("boundary"),
-        igc_t2("ndt"),
-        sigmabias = 0,
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_rdm()
-      )
-    }
-  ),
+  gam_rdm = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("driftone"),
+      igc_t2("boundary"),
+      igc_t2("ndt"),
+      sigmabias = 0,
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_rdm()
+    )
+  },
 
   # RDM-5 -------------------------------------------------------------------
   # The RDM with the start-point range freed and smoothed like everything else,
@@ -197,20 +190,17 @@ igc_models <- list(
   # Unlike the LBA, the RDM needs no scaling constraint -- its diffusion
   # coefficient is fixed internally -- so freeing sigmabias here does not open
   # the ridge that freeing sigmazero would in gam_lba.
-  gam_rdm5 = list(
-    illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("driftone"),
-        igc_t2("sigmabias"),
-        igc_t2("boundary"),
-        igc_t2("ndt"),
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_rdm()
-      )
-    }
-  ),
+  gam_rdm5 = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("driftone"),
+      igc_t2("sigmabias"),
+      igc_t2("boundary"),
+      igc_t2("ndt"),
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_rdm()
+    )
+  },
 
   # LBA ---------------------------------------------------------------------
   # Linear ballistic accumulator, two accumulators (cogmod_lba2). Note this is
@@ -229,114 +219,153 @@ igc_models <- list(
   # NOT CONVERGED at full data (MullerLyer, 2026-10-01): the chains split into
   # two modes that differ in the error accumulator and in how individual
   # differences divide between drift and boundary. Max Rhat is 13.8. See
-  # AGENT.md 4.9 before refitting it, or its _verticalhorizontal / _ebbinghaus
-  # siblings.
-  gam_lba = list(
+  # AGENT.md 4.9 before refitting it on any illusion.
+  gam_lba = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("driftone"),
+      igc_t2("sigmaone"),
+      igc_t2("sigmabias"),
+      igc_t2("boundary"),
+      igc_t2("ndt"),
+      sigmazero = 1,
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_lba2()
+    )
+  }
+)
+
+
+# Registry -----------------------------------------------------------------
+# One entry per family x illusion, named <family>_<illusion in lower case>.
+# Shard and fit names add the illusion again, e.g.
+# gam_lnr_mullerlyer_MullerLyer_<n>.rds, as they always have.
+#
+# Write each entry out in full rather than generating them in a loop: ./hpc
+# finds models by reading their declaration lines out of this file.
+#
+# The three illusions are about the same size (2026-10-12 data: MullerLyer
+# 324,580 rows and 2,217 participants, VerticalHorizontal 321,113 and 2,202,
+# Ebbinghaus 316,487 and 2,181), so each model's production settings and
+# timings carry over between them.
+
+igc_models <- list(
+
+  # MullerLyer ----------------------------------------------------------------
+
+  gam_lnr_mullerlyer = list(
     illusion = "MullerLyer",
-    formula = function() {
-      brms::bf(
-        igc_rt(),
-        igc_t2("driftone"),
-        igc_t2("sigmaone"),
-        igc_t2("sigmabias"),
-        igc_t2("boundary"),
-        igc_t2("ndt"),
-        sigmazero = 1,
-        poutlier ~ 1 + (1 | Participant),
-        family = cogmod::cogmod_lba2()
-      )
-    }
+    formula = igc_formulas$gam_lnr
   ),
 
-  # Other illusions ---------------------------------------------------------
-  # Everything above is fitted to MullerLyer. The same model on another
-  # illusion is its own entry, named <model>_<illusion in lower case>, which
-  # borrows the MullerLyer model's formula rather than copying it, so the two
-  # cannot drift apart. That works because the body only runs when the job
-  # calls spec$formula(), by which point igc_models exists.
-  #
-  # Write each entry out in full rather than generating them in a loop: ./hpc
-  # finds models by reading their declaration lines out of this file.
-  #
-  # The name has to differ from the MullerLyer model's, since ./hpc and
-  # IGC_MODEL look models up by name alone, so shard names repeat the illusion:
-  # gam_lnr_verticalhorizontal_VerticalHorizontal_<n>.rds.
-  #
-  # The three illusions are the same size (MullerLyer 323,981 rows and 2,215
-  # participants, VerticalHorizontal 319,760 and 2,200, Ebbinghaus 320,144 and
-  # 2,204), so each model's production settings and timings carry over as
-  # they are.
+  gam_lnr6_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_lnr6
+  ),
+
+  gam_ddm4_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_ddm4
+  ),
+
+  gam_ddm5_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_ddm5
+  ),
+
+  # Not at full data: see igc_formulas$gam_ddm7.
+  gam_ddm7_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_ddm7
+  ),
+
+  gam_rdm_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_rdm
+  ),
+
+  gam_rdm5_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_rdm5
+  ),
+
+  gam_lba_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_lba
+  ),
+
+  # VerticalHorizontal --------------------------------------------------------
 
   gam_lnr_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_lnr$formula()
+    formula = igc_formulas$gam_lnr
   ),
 
   gam_ddm4_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_ddm4$formula()
+    formula = igc_formulas$gam_ddm4
   ),
 
   gam_lnr6_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_lnr6$formula()
+    formula = igc_formulas$gam_lnr6
   ),
 
   gam_ddm5_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_ddm5$formula()
+    formula = igc_formulas$gam_ddm5
   ),
 
   gam_rdm_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_rdm$formula()
+    formula = igc_formulas$gam_rdm
   ),
 
   gam_rdm5_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_rdm5$formula()
+    formula = igc_formulas$gam_rdm5
   ),
 
   gam_lba_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
-    formula = function() igc_models$gam_lba$formula()
+    formula = igc_formulas$gam_lba
   ),
 
-  # Ebbinghaus: nothing fitted to it yet (2026-09-28), so smoke-test one of
-  # these before submitting the lot (submit_remaining.sh does).
+  # Ebbinghaus ----------------------------------------------------------------
+
   gam_lnr_ebbinghaus = list(
     illusion = "Ebbinghaus",
-    formula = function() igc_models$gam_lnr$formula()
+    formula = igc_formulas$gam_lnr
   ),
 
   gam_lnr6_ebbinghaus = list(
     illusion = "Ebbinghaus",
-    formula = function() igc_models$gam_lnr6$formula()
+    formula = igc_formulas$gam_lnr6
   ),
 
   gam_ddm4_ebbinghaus = list(
     illusion = "Ebbinghaus",
-    formula = function() igc_models$gam_ddm4$formula()
+    formula = igc_formulas$gam_ddm4
   ),
 
   gam_ddm5_ebbinghaus = list(
     illusion = "Ebbinghaus",
-    formula = function() igc_models$gam_ddm5$formula()
+    formula = igc_formulas$gam_ddm5
   ),
 
   gam_rdm_ebbinghaus = list(
     illusion = "Ebbinghaus",
-    formula = function() igc_models$gam_rdm$formula()
+    formula = igc_formulas$gam_rdm
   ),
 
   gam_rdm5_ebbinghaus = list(
     illusion = "Ebbinghaus",
-    formula = function() igc_models$gam_rdm5$formula()
+    formula = igc_formulas$gam_rdm5
   ),
 
   gam_lba_ebbinghaus = list(
     illusion = "Ebbinghaus",
-    formula = function() igc_models$gam_lba$formula()
+    formula = igc_formulas$gam_lba
   )
 )
 

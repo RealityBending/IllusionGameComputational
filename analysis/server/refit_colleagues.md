@@ -2,7 +2,7 @@
 
 Every model is being refitted under a new setup, and you are taking some of the
 slowest ones on your own account. These need little attention: about four
-check-ins over roughly two weeks.
+check-ins over 10-12 days.
 
 What changed since the last fits:
 
@@ -22,8 +22,14 @@ and `README.md` in the same folder is the full reference.
 
 | | models, in submission order | per shard on a zen5 node |
 | --- | --- | --- |
-| A | `gam_lba`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | LBA ~4.3 days (up to ~5.1), RDM-5 ~4.3 (up to ~5.7) |
-| B | `gam_lnr6`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | LNR-6 3.5-5.5 days (up to ~6.6), RDM-5 ~3.9 (up to ~4.8) |
+| A | `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | LBA ~4.3 days (up to ~5.1), RDM-5 ~4.3 (up to ~5.7) |
+| B | `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | LNR-6 3.5-5.5 days (up to ~6.6), RDM-5 ~3.9 (up to ~4.8) |
+
+Model names are the ones in `models.R`: `<family>_<illusion>`, e.g.
+`gam_lba_mullerlyer`. The MullerLyer models were plain `gam_lba`, `gam_lnr6`,
+... until 2026-10-13, so your old fits and logs use those names. `./hpc fit`
+rejects a name it does not know. The fit files add the illusion again:
+`gam_lba_mullerlyer_MullerLyer.rds`, `gam_lba_ebbinghaus_Ebbinghaus.rds`.
 
 Dom's message tells you which row is yours. Each model is 4 shards (array
 tasks) of 2 chains on 16 CPUs. Your account can run 8 tasks at once on
@@ -32,6 +38,11 @@ models run together, and the other two start as their shards finish. That
 makes about **10-12 days** for all four, or longer if the zen5 nodes are busy.
 Submit all four at once anyway: waiting tasks start by themselves and cost
 nothing.
+
+That is longer than `long`'s 8-day limit, and that is fine: the limit applies
+to **each shard separately**, counted from the moment that shard starts, and
+time spent waiting does not count. No shard should need more than ~6.6 days.
+The 10-12 days come from two consecutive waves of shards.
 
 ## 1. Update (5 minutes)
 
@@ -85,11 +96,11 @@ your cluster user name (and `psych` with your group, if that differs).
 ```bash
 IGC_MODELS_DIR=/mnt/lustre/users/psych/<you>/IGComputational/smoke_refit \
 IGC_NPARTICIPANTS=30 IGC_WARMUP=300 IGC_SAMPLES=100 \
-  ./hpc fit gam_lba,gam_rdm5 --array=1 --partition=short --cpus-per-task=8 --mem=16G
+  ./hpc fit gam_lba_mullerlyer,gam_rdm5_mullerlyer --array=1 --partition=short --cpus-per-task=8 --mem=16G
 ```
 
-B: the same with `gam_lnr6,gam_rdm5`. Then, with each job number `sbatch`
-printed:
+B: the same with `gam_lnr6_mullerlyer,gam_rdm5_mullerlyer`. Then, with each
+job number `sbatch` printed:
 
 ```bash
 ./hpc log <job number>
@@ -105,13 +116,13 @@ Tell Dom rather than working around it.
 A:
 
 ```bash
-./hpc fit gam_lba,gam_lba_ebbinghaus,gam_lba_verticalhorizontal,gam_rdm5_ebbinghaus --constraint=amd_zen5
+./hpc fit gam_lba_mullerlyer,gam_lba_ebbinghaus,gam_lba_verticalhorizontal,gam_rdm5_ebbinghaus --constraint=amd_zen5
 ```
 
 B:
 
 ```bash
-./hpc fit gam_lnr6,gam_lnr6_ebbinghaus,gam_rdm5_verticalhorizontal,gam_lnr6_verticalhorizontal --constraint=amd_zen5
+./hpc fit gam_lnr6_mullerlyer,gam_lnr6_ebbinghaus,gam_rdm5_verticalhorizontal,gam_lnr6_verticalhorizontal --constraint=amd_zen5
 ```
 
 The order is the order they start in: the slowest first.
@@ -134,7 +145,7 @@ normal:
 ## 6. While they run (optional)
 
 ```bash
-./hpc progress gam_lba,gam_lba_ebbinghaus,gam_lba_verticalhorizontal,gam_rdm5_ebbinghaus
+./hpc progress gam_lba_mullerlyer,gam_lba_ebbinghaus,gam_lba_verticalhorizontal,gam_rdm5_ebbinghaus
 ```
 
 (B: your four models instead.) This shows, for every running shard, how far
@@ -146,10 +157,10 @@ end.
 
 If a task disappears from `./hpc queue` much earlier than expected, look at
 `./hpc log <job number>`. A failed task ends with `status 1`. Resubmit only
-that shard, e.g. shard 3 of `gam_lba`:
+that shard, e.g. shard 3 of `gam_lba_mullerlyer`:
 
 ```bash
-./hpc fit gam_lba --array=3 --constraint=amd_zen5
+./hpc fit gam_lba_mullerlyer --array=3 --constraint=amd_zen5
 ```
 
 Finished shards are never refitted. Tell Dom either way.
@@ -159,9 +170,9 @@ Finished shards are never refitted. Tell Dom either way.
 The model has no task left in `./hpc queue`. For each model:
 
 ```bash
-./hpc combine gam_lba                              # prints a job number, ~1 h, 320 GB of memory
-./hpc predict gam_lba --dependency=afterok:<that job number>
-./hpc priors gam_lba --dependency=afterok:<that job number>
+./hpc combine gam_lba_mullerlyer    # prints a job number; ~1 h, 320 GB of memory
+./hpc predict gam_lba_mullerlyer --dependency=afterok:<that job number>
+./hpc priors gam_lba_mullerlyer --dependency=afterok:<that job number>
 ```
 
 You can do all four models in one go once the last one is done. When the
