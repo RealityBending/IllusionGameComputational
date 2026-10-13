@@ -77,8 +77,9 @@ wall. This driver has no `progress` command yet, so:
 
 The `REPORT ...` line is printed once at the end of a shard (see `AGENT.md`
 §6.1 for what to expect in it). Seeing only `Iteration: 1 / 1500` for hours is
-normal here: at full data warmup 1000 alone costs 12-17 h (`AGENT.md` §4.4.1,
-§7 Q1). Trust `TIME` in `./hpc queue` over the absence of a fresh line.
+normal here: at full data the warmup alone costs about 20 h (LNR) to 3.5
+days (LNR-6) on a zen5 node (`AGENT.md` §4.11). Trust `TIME` in `./hpc queue`
+over the absence of a fresh line.
 
 Extra arguments to `fit` and `combine` are passed to `sbatch`, so a smoke test
 is:
@@ -115,9 +116,10 @@ Settings below are the ones measured in `AGENT.md` §4. Full data, cold starts,
 The defaults in `fit.slurm` are that production configuration: `--array=1-4`,
 `--cpus-per-task=16`, `--mem=32G`, `--partition=long` and no `--time` (so each
 task gets `long`'s 8-day maximum), with `IGC_NPARTICIPANTS=all`,
-`IGC_WARMUP=1000`, `IGC_SAMPLES=1000` and `IGC_CHAINS=2`. That is 4 shards x 2
+`IGC_WARMUP=1500`, `IGC_SAMPLES=1000` and `IGC_CHAINS=2`. That is 4 shards x 2
 chains x 1,000 = **8,000 draws per model**. The draws were 500 until
-2026-10-09; fits made before then have 4,000 (AGENT.md 4.10). Push a change to
+2026-10-09 (fits made before then have 4,000) and the warmup 1,000 until
+2026-10-13; `AGENT.md` §4.11 has the measured cost per model. Push a change to
 the run length only when no array has pending tasks: a task reads the default
 when it starts. `combine_model.R` refuses shards of different lengths.
 
@@ -509,7 +511,7 @@ at all.
 Both of those three smoke-tested clean at 30 participants (`AGENT.md` §4.7):
 `gam_rdm` is the best-behaved model in the registry, and `gam_lba`'s 6%
 divergences at warmup 300 are the one number to check in its production
-`REPORT`, where warmup 1000 is expected to clear them.
+`REPORT`, where the production warmup is expected to clear them.
 
 A model that only one of you fits still has to be **defined in the shared
 `models.R` and committed**, or `./hpc fit` will reject the name. That is the
@@ -539,7 +541,7 @@ the script default.
 | variable | default | purpose |
 | --- | --- | --- |
 | `IGC_NPARTICIPANTS` | `all` | subset size for tests, e.g. `30` |
-| `IGC_WARMUP` | `1000` | warmup iterations |
+| `IGC_WARMUP` | `1500` | warmup iterations (1000 until 2026-10-13) |
 | `IGC_SAMPLES` | `1000` | post-warmup draws per chain (500 until 2026-10-09) |
 | `IGC_CHAINS` | `2` | chains per array task; threads per chain is `cpus / chains` |
 | `IGC_FILE_REFIT` | `never` | `always` forces a clean refit |

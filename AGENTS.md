@@ -6,7 +6,7 @@ illusion task, fitted with brms + cmdstanr and the
 
 ## Model fitting runs on a cluster, not here
 
-Fits take 12-20 hours per chain on 324k rows and are run on **Artemis**, the
+Fits take one to six days per shard on 324k rows and are run on **Artemis**, the
 University of Sussex HPC. Do not try to fit them locally.
 
 Cluster-level instructions (access, storage, partitions and quotas, the R/Stan

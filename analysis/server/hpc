@@ -63,9 +63,9 @@ R_MODULE="${IGC_R_MODULE:-CmdStanR/0.7.1-foss-2023a-R-4.3.2}"
 EB_MODULES="${IGC_EB_MODULES:-/mnt/shared/easybuild/modules/all}"
 R_LIBS_DIR="${IGC_R_LIBS:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cluster_R_libs/x86_64-pc-linux-gnu-library/4.3}"
 
-# Which cogmod the cluster library tracks. 'dev', which is 0.3.4: new fits use
-# it (decision 2026-10-02, AGENT.md 2), and fit_model.R refuses anything below
-# IGC_COGMOD_MIN (default 0.3.4).
+# Which cogmod the cluster library tracks. 'dev', which is 0.3.5: new fits use
+# it (decision 2026-10-12, AGENT.md 2), and fit_model.R refuses anything below
+# IGC_COGMOD_MIN (default 0.3.5).
 COGMOD_REF="${IGC_COGMOD_REF:-dev}"
 
 # Passed through to fit_model.R. Default "never" resumes a killed array by

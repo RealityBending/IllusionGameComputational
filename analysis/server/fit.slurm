@@ -11,9 +11,10 @@
 #SBATCH --mail-type=END,FAIL
 
 # One array task = one shard of one model (IGC_MODEL) = 2 chains x 8 threads.
-# Sizing (measured, see AGENT.md 4.3/4.4): ~6.5 GB and 12-20 h per chain at
-# full data. 4 tasks x 16 CPUs per model lets two models run at once under
-# long's 140-CPU per-user cap.
+# Sizing (measured, see AGENT.md 4.3/4.11): ~6.5 GB per chain, and 1-2.5 days
+# per shard for LNR/DDM/RDM and 4-6.5 days for LNR-6/RDM-5/LBA at full data
+# (1500 warmup + 1000 draws, zen5 nodes). 4 tasks x 16 CPUs per model lets two
+# models run at once under long's 140-CPU per-user cap.
 #
 # --job-name/--array/--output/--error/--mail-user/--chdir and the IGC_*
 # variables are all overridden on the sbatch command line by `./hpc fit`, so

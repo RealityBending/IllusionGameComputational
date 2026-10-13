@@ -996,8 +996,13 @@ Points worth keeping:
   identified by any racing family. Freeing it turns a well-behaved model
   (RDM: 0 participants above Rhat 1.05) into a multimodal one.
 
-Options, not yet decided (each is a new `models.R` entry, never an edit to an
-existing model):
+**Decision (user, 2026-10-13): first refit the full formula as it is**, with
+every other model, under the new harness (cogmod 0.3.5, the 2026-10-12 data,
+1500 warmup + 1000 draws, 4.11). Only if the split replicates there is a
+simplified variant fitted, as a new `models.R` entry, and the failure of the
+full formula is then reported in the paper as a finding in its own right
+(the Discussion points below). The options for that case (each a new
+`models.R` entry, never an edit to an existing model):
 
 1. **A simpler formula: `sigmabias ~ 1 + (1 | Participant)`**, so no smooth on
    the start-point range. Its smooth and participant terms are where the
@@ -1059,7 +1064,17 @@ This is a sampler failure, not a mode, and a restart of that shard fixes it.
   against about 8e-3, lp__ -94,600 below the other chains, lp__ SD 42 against
   about 120.
 - `gam_lnr_ebbinghaus` on 0.3.3: step sizes down to 1e-8, and lp__ 40,000-82,000 below
-  the others in two chains. It is already being refitted on 0.3.4 (6.4).
+  the others in two chains. Its 0.3.4 refit failed the same way (next item).
+- **The 0.3.4 refit of `gam_lnr_ebbinghaus` (11553388) failed in all 8
+  chains, and so did `gam_lnr6_ebbinghaus` (11553384)**: adapted step sizes
+  1e-4 to 6e-4 (one chain 9e-6), treedepth 10 on every draw, max Rhat 3.0,
+  and each chain drifting monotonically through its 500 sampling draws in the
+  scale parameters (`lnr_modes/lnr_ebb_chains.R`). That is neither a mode
+  split nor a single frozen chain: a warmup that never reached the typical
+  set, in both LNR models on this illusion, while `gam_rdm5_ebbinghaus`
+  converged on the same data. The 1500-warmup refit (4.11) is the test of
+  whether more warmup is enough; if not, reparametrise rather than lengthen
+  again.
 
 Restarting `gam_lnr6` MullerLyer's shard 4 alone is not worth the compute while
 the model is in group B. `combine_model.R` now prints one line per chain (step
@@ -1070,6 +1085,76 @@ differ by about 0.3 SD. A mode at the same lp__ (`gam_lnr6` ML chain 3, or
 `gam_lnr6` VH) shows only in the parameters, so the check cannot see it.
 Tested on `gam_lnr6` ML: it finds chain 7 as frozen and chain 1 (8.5 SDs) as
 off.
+
+### 4.11 Run length for the refit: 1500 warmup + 1000 draws (2026-10-13)
+
+Every model is refitted on cogmod 0.3.5 and the 2026-10-12 data (blocks
+excluded on facilitating-trial errors). The run length was sized from what
+the finished shards measured, not from the 4.4.1 projections. Each `.out`
+carries CmdStan's own split (`REPORT time per chain`: the `$chains` rows,
+below the `$total NA` line that a short grep stops at), so the cost of a
+warmup iteration and of a sampling iteration is known separately for every
+shard. On zen5 nodes, 2 chains x 8 threads, 1000 + 500, seconds per
+iteration, median [slowest chain]:
+
+| model | warmup s/it | sampling s/it | chain wall at 1000 + 500 |
+| --- | --- | --- | --- |
+| LNR ML / VH / Ebb | 57 / 42 / 90 [77 / 58 / 156] | 54 / 34 / 76 [66 / 42 / 137] | 24 / 17 / 35 h |
+| DDM-4 ML / VH / Ebb | 70 / 55 / 53 [87 / 70 / 115] | 83 / 39 / 35 [104 / 55 / 39] | 31 / 21 / 20 h |
+| DDM-5 ML / VH / Ebb | 84 / 56 / 61 [93 / 60 / 85] | 59 / 43 / 70 [61 / 59 / 74] | 31 / 22 / 27 h |
+| RDM VH / Ebb | 67 / 59 [76 / 80] | 88 / 66 [108 / 96] | 30 / 27 h |
+| RDM-5 VH / Ebb | 120 / 129 [156 / 178] | 158 / 174 [181 / 223] | 56 / 61 h |
+| LNR-6 ML / VH / Ebb | 180 / 137 / 202 [234 / 156 / 221] | 148 / 100 / 164 [208 / 112 / 175] | 72 / 51 / 79 h |
+| LBA (colleague's account, 4.9) | ~144 [180] | ~144 [158] | 60 h |
+
+Three things follow:
+
+- **A warmup iteration costs 0.75-1.5x a sampling one**, so wall time is
+  close to proportional to warmup + draws. The 4.4.1 picture of a short,
+  expensive transient followed by cheap iterations does not hold at full
+  data: most models sit at treedepth 9-10 throughout.
+- **The registry splits into a fast family (LNR, DDM-4, DDM-5, RDM: 35-100
+  s/it) and a slow one (LNR-6, RDM-5, LBA: 100-235 s/it)**, which are also
+  the converged and the mode-splitting models (4.10).
+- **Non-zen5 nodes are 2-4x slower** (a40-11 ran DDM-5 at 250-420 s/it), so
+  the projections below assume `--constraint=amd_zen5`.
+
+Projected wall per shard in days, median chain and slowest chain seen
+(+0.1 day for compile, data and save):
+
+| model | 1000+1000 median | 1000+1000 slowest | **1500+1000 median** | **1500+1000 slowest** | 2000+1000 median | 2000+1000 slowest |
+| --- | --- | --- | --- | --- | --- | --- |
+| LNR, DDM-4, DDM-5, RDM | 1.0-2.0 | 1.3-3.5 | 1.2-2.5 | 1.6-4.4 | 1.5-3.1 | 1.9-5.3 |
+| RDM-5 | 3.3-3.6 | 4.7 | 4.0-4.4 | 5.8 | 4.7-5.1 | 6.8 |
+| LNR-6 | 2.8-4.3 | 5.2 | 3.6-5.5 | 6.6 | 4.4-6.7 | 7.9 |
+| LBA | 3.4 | 4.0 | 4.3 | 5.1 | 5.1 | 6.1 |
+
+**Decision (user, 2026-10-13): warmup 1500, 1000 draws, for every model.**
+
+- 2000 warmup puts the slowest LNR-6 and RDM-5 chains at 6.8-7.9 days against
+  `long`'s 8. A shard that hits the wall is lost outright: there is no
+  checkpoint, and `file_refit = "never"` only reuses finished shards. The two
+  `gam_lnr6_ebbinghaus` shards still running on 2026-10-13 had taken 95 h for
+  1500 iterations. If 2000 is ever wanted, run it on `sussexneuro` (60 days).
+- 1500 draws instead of 1000 would need about 480G for the combine (4.8),
+  which only the highmem nodes have.
+- The whole refit is about 4,000 CPU-days at 1500 + 1000 (3,200 at 1000 +
+  1000, 4,750 at 2000 + 1000), the nine slow fits being 63% of it: 28 days of
+  wall on `long`'s 140 CPUs alone, roughly 2-3 weeks with `sussexneuro`
+  alongside.
+
+What the extra warmup can and cannot do. The converged models were stationary
+from their first draw (4.10 A), so for them the gain is the draws. The
+mode-split models will not be joined by any run length (4.10 B); the decision
+there is to give the full `sigmabias` formula one more go under the new
+harness before any simplified variant. The one failure a longer warmup
+directly targets is the Ebbinghaus LNR pair (4.10 C): chains that still drift
+through the whole sampling phase, i.e. a warmup 1000 that never reached the
+typical set. If 1500 does not fix that, the answer is a reparametrisation,
+not more hours.
+
+The per-chain seconds come straight from the `fit_*.out` files in scratch;
+one grep over their `$chains` rows reproduces the tables.
 
 ---
 
@@ -1240,7 +1325,7 @@ defaults *are* this configuration, so the production run is two bare commands:
 | --- | --- | --- |
 | partition | `long`, `--time=8-00:00:00` | `long`'s actual max (3.7) — 12-20 h per chain was the projection (4.4.1), but three `gam_lnr` shards measured 42.7-44 h on 2026-09-20, so request the ceiling rather than the guess; `--time` doesn't affect dispatch here (4.2's CPU cap does) |
 | participants | `IGC_NPARTICIPANTS=all` (default) | 2,215 participants, 323,981 rows |
-| warmup | `IGC_WARMUP=1000` | the only value shown to adapt at full data; 300 provably does not (4.4.1) |
+| warmup | `IGC_WARMUP=1500` (1000 until 2026-10-13) | 300 provably does not adapt at full data (4.4.1). 1000 did for every model except the two Ebbinghaus LNR fits, whose chains were still drifting through the sampling phase (4.10 C). The 2026-10-13 refit of everything runs 1500, the most the slowest models afford inside `long`'s 8 days: a warmup iteration costs 0.75-1.5x a sampling one, and 2000 would put the slowest LNR-6 / RDM-5 chains at 6.8-7.9 days (4.11) |
 | draws | `IGC_SAMPLES=1000` (500 until 2026-10-09) | 8 chains x 1,000 = 8,000 draws per model. At 500, `b_ndt_Intercept` had a bulk ESS of only 53-310, and the per-participant solutions never switched; the longer run is the test of whether they ever do (4.10). It costs about a third more wall time: a `gam_lnr` shard goes from 43 h to about 57 h, and DDM-5 from a projected 2.5-5.2 days to 3.3-6.9, still inside `long`'s 8 days. It doubles the combine's memory, hence `combine.slurm`'s 320G (4.8). A task reads the default when it starts, so do not push a change to it while an array has pending tasks; `combine_model.R` refuses shards of different lengths |
 | array | `--array=1-4` per model | 4 x 16 = 64 CPUs per model against `long`'s 140-CPU per-user cap, so 8 of the 12 production tasks run at once and the rest start as they finish (`--time` is per task, so pending costs nothing) |
 | chains | `IGC_CHAINS=2`, 8 threads each | threading scales nearly linearly, so more chains per task buys nothing; one chain per task risks the whole task on one init (4.5) |
@@ -1411,16 +1496,17 @@ queue is limited to that, with the rest to be submitted as slots free up:
 | `gam_ddm4_ebbinghaus` | done: 11423962, combined and predicted 2026-10-07 (second combine, 11462276; the first failed at save) |
 | `gam_rdm_ebbinghaus` | done: 11423963 + refit 11430274 (tasks 1 and 4, failed saves), combined and predicted 2026-10-09 |
 | `gam_rdm5_ebbinghaus` | fitted: 11553382 (all 4 shards done 2026-10-12, 2-3.3 days each); combined (11595462, `--mem=192G`, 500 draws a chain, 30 min) and predicted (11595463) 2026-10-13. **Converged** (4.10) |
-| `gam_lnr6_ebbinghaus` | submitted 2026-10-09 on `long` (zen5), job 11553384; the slowest. Shards 2 and 3 done 2026-10-13 (3.4-3.5 days); 1 and 4 still running at 3.75 days |
+| `gam_lnr6_ebbinghaus` | 11553384 on `long` (zen5): shards 2 and 3 done 2026-10-13 (3.4-3.5 days), 1 and 4 at 4 days. **Not converged**: the `gam_lnr_ebbinghaus` adaptation failure (4.10 C), step sizes 1e-4 to 9e-6, Rhat 3.05. Not combined; superseded by the 4.11 refit |
 | `gam_lnr_ebbinghaus` | refit on 0.3.4: 11553388 on `sussexneuro` (zen5), combined 2026-10-12 (11594085), still not converged (Rhat ~3). Predicted anyway on 2026-10-13 (11595464), but left out of `2_modelcomparison.qmd`. The 0.3.3 shards, combined fit and predictions are under `..._20261002` |
 
 Submit the two to-do ones as an array finishes, with
 `./hpc fit <model> --constraint=amd_zen5`. Do not reinstall cogmod while any
 array has pending tasks (2).
 
-Once every model is fitted, the older fits (all of Muller-Lyer and
-Vertical-Horizontal, and `gam_lnr_ebbinghaus`, which are cogmod 0.3.3) are to
-be refitted on 0.3.4, slowly, alongside the work on the full pipeline.
+**Superseded 2026-10-13:** every model on every illusion is refitted on
+cogmod 0.3.5, the 2026-10-12 data and 1500 + 1000 (4.11). The fits above are
+the pre-refit generation; `combine_model.R` keeps the two apart by the
+`m$cogmod` stamp and the draw count.
 
 ---
 
@@ -1434,7 +1520,13 @@ be refitted on 0.3.4, slowly, alongside the work on the full pipeline.
    100, i.e. >40 s per warmup iteration, so warmup 1000 costs 12-17 h. That is
    consistent with the 12-20 h per chain projected in 4.4.1 and comfortably
    inside the 2-day `--time`, but it is also what rules out the 8 h partition
-   for full data (6.3).
+   for full data (6.3). *Answered (4.11):* warmup 1000 adapted every model
+   except the Ebbinghaus LNR pair, and costs 10-56 h per chain depending on
+   the model.
+5. **Does warmup 1500 clear the Ebbinghaus LNR drift?** (4.10 C, 4.11) Both
+   LNR models on that illusion ended warmup 1000 with step sizes ~1e-4 and
+   chains still moving. If 1500 does not fix it, reparametrise rather than
+   lengthen again.
 2. **Does cogmod 0.3.3 hold at production scale?** (4.5) The init rejections
    and their root cause are understood and fixed, and a 30-participant smoke
    test on 2026-09-18 started all four chains cleanly, but the failure rate

@@ -60,12 +60,20 @@ if (!file_refit %in% c("never", "always")) {
   stop("IGC_FILE_REFIT must be 'never' or 'always', not '", file_refit, "'", call. = FALSE)
 }
 
-# 1,000 draws per chain since 2026-10-09 (500 before). Warmup stays at 1,000:
-# every chain was stationary from its first draw, so a longer warmup buys
-# nothing, while more draws give the per-participant solutions more chances to
-# switch and lift the low ESS on the ndt intercept (AGENT.md 4.10, 6).
-# combine_model.R refuses to merge shards with different draw counts.
-warmup <- as.integer(Sys.getenv("IGC_WARMUP", unset = "1000"))
+# Warmup 1,500 + 1,000 draws per chain since 2026-10-13 (1,000 + 500 until
+# 2026-10-09, then 1,000 + 1,000). The draws: at 500, b_ndt_Intercept had a
+# bulk ESS of 53-310 and the per-participant solutions never switched
+# (AGENT.md 4.10). The warmup: on Ebbinghaus both LNR models were still
+# drifting through their sampling phase after warmup 1,000 (step size ~1e-4,
+# AGENT.md 4.10 C), and a longer warmup is the cheapest thing to try before
+# reparametrising; for the converged models it buys nothing measurable. 1,500
+# is the most the slowest models afford inside long's 8-day wall: a warmup
+# iteration costs 0.75-1.5x a sampling one, and at 1,500 + 1,000 the slowest
+# LNR-6 / RDM-5 chains measured so far project to 5.8-6.6 days, at 2,000 +
+# 1,000 to 6.8-7.9 (AGENT.md 4.11). A shard that hits the wall is lost.
+# combine_model.R refuses to merge shards of different lengths, so do not push
+# a change to these while an array has pending tasks.
+warmup <- as.integer(Sys.getenv("IGC_WARMUP", unset = "1500"))
 iter <- warmup + as.integer(Sys.getenv("IGC_SAMPLES", unset = "1000"))
 
 cat(sprintf(

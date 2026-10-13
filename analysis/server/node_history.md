@@ -6,8 +6,11 @@ measured a 2-3x per-gradient difference between an idle zen5 node and a loaded
 zen3 one on a 120-participant fit. This file tracks the same question at
 production scale. **Add a row whenever a shard finishes or is cancelled.**
 
-All rows: full data (2,215 participants, MullerLyer), warmup 1000 +
-500 samples, 2 chains x 8 threads per shard, cold start. "Wall" is the
+All rows up to 2026-10-13: full data, warmup 1000 + 500 samples, 2 chains x 8
+threads per shard, cold start; rows from the 2026-10-13 refit onwards are
+1500 + 1000 (AGENT.md 4.11) and say so. Each `.out` also records every chain's
+warmup and sampling seconds (`REPORT time per chain`), which is where the
+per-model costs in AGENT.md 4.11 come from. "Wall" is the
 `REPORT` line's wall time for the shard (both chains run in parallel). For a
 shard that did not finish, it is how far it got and after how long.
 
@@ -56,19 +59,22 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_ddm4_verticalhorizontal | 11414141 | 2 | rtx-01 | zen5 (`--constraint`) | done | 17.8 h |
 | gam_ddm4_verticalhorizontal | 11414141 | 3 | rtx-01 | zen5 (`--constraint`) | done | 21.4 h |
 | gam_ddm4_verticalhorizontal | 11414141 | 4 | rtx-01 | zen5 (`--constraint`) | done | 20.1 h |
-| gam_lnr6_verticalhorizontal | 11415945 | 1 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-28 | |
-| gam_lnr6_verticalhorizontal | 11415945 | 2 | rtx-01 | zen5 (`--constraint`) | running, started 2026-09-28 | |
-| gam_lnr6_verticalhorizontal | 11415945 | 3 | rtx-01 | zen5 (`--constraint`) | running, started 2026-09-28 | |
-| gam_lnr6_verticalhorizontal | 11415945 | 4 | rtx-02 | zen5 (`--constraint`) | running, started 2026-09-28 | |
+| gam_lnr6_verticalhorizontal | 11415945 | 1 | rtx-00 | zen5 (`--constraint`) | done | 41.5 h |
+| gam_lnr6_verticalhorizontal | 11415945 | 2 | rtx-01 | zen5 (`--constraint`) | done | 54.2 h |
+| gam_lnr6_verticalhorizontal | 11415945 | 3 | rtx-01 | zen5 (`--constraint`) | done | 48.6 h |
+| gam_lnr6_verticalhorizontal | 11415945 | 4 | rtx-02 | zen5 (`--constraint`) | done | 57.0 h |
 | gam_ddm5_verticalhorizontal | 11415949 | 1 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 23.9 h |
 | gam_ddm5_verticalhorizontal | 11415949 | 2 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 23.8 h |
 | gam_ddm5_verticalhorizontal | 11415949 | 3 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 22.1 h |
 | gam_ddm5_verticalhorizontal | 11415949 | 4 | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 23.4 h |
-| gam_rdm_verticalhorizontal | 11417276 | 1 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-29 | |
-| gam_rdm_verticalhorizontal | 11417276 | 2 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-29 | |
-| gam_rdm_verticalhorizontal | 11417276 | 3 | rtx-00 | zen5 (`--constraint`) | running, started 2026-09-29 | |
-| gam_rdm_verticalhorizontal | 11417276 | 4 | rtx-02 | zen5 (`--constraint`) | running, started 2026-09-29 | |
-| gam_lnr6 | 11417300 | 6 (refit, `IGC_FILE_REFIT=always`) | rtx-02 | zen5 (`--constraint` on sussexneuro) | running, started 2026-09-29 | |
+| gam_rdm_verticalhorizontal | 11417276 | 1 | rtx-00 | zen5 (`--constraint`) | done | 31.3 h |
+| gam_rdm_verticalhorizontal | 11417276 | 2 | rtx-00 | zen5 (`--constraint`) | done | 29.9 h |
+| gam_rdm_verticalhorizontal | 11417276 | 3 | rtx-00 | zen5 (`--constraint`) | done | 30.1 h |
+| gam_rdm_verticalhorizontal | 11417276 | 4 | rtx-02 | zen5 (`--constraint`) | done | 35.5 h |
+| gam_lnr6 | 11417300 | 6 (refit, `IGC_FILE_REFIT=always`) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done, both chains healthy (step 0.005-0.008) | 76.7 h |
+| gam_lnr_ebbinghaus | 11419150 | 1 | rtx-02 | zen5 (`--constraint`) | done, **adaptation failed** (step 1e-8 to 3e-5, Rhat 3.05; cogmod 0.3.3) | 35.9 h |
+| gam_lnr_ebbinghaus | 11419150 | 2-4 | rtx-01 | zen5 (`--constraint`) | done, **adaptation failed** (step 5e-5 to 1e-3) | 32.3 / 36.5 / 32.0 h |
+| gam_rdm5_verticalhorizontal | 11419122 | 1-4 | rtx-00 | zen5 (`--constraint`) | done | 65.6 / 66.7 / 64.6 / 41.1 h |
 | gam_ddm4_ebbinghaus | 11423962 | 1 | rtx-00 | zen5 | done | 20.8 h (sacct) |
 | gam_ddm4_ebbinghaus | 11423962 | 2 | rtx-01 | zen5 | done | 18.7 h (sacct) |
 | gam_ddm4_ebbinghaus | 11423962 | 3 | rtx-00 | zen5 | done | 19.5 h (sacct) |
@@ -84,9 +90,11 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_rdm_ebbinghaus | 11430274 | 1 (refit of a failed save) | rtx-00 | zen5 (`--constraint`) | done | 25.3 h (sacct) |
 | gam_rdm_ebbinghaus | 11430274 | 4 (refit of a failed save) | rtx-02 | zen5 (`--constraint`) | done | 30.3 h (sacct) |
 | gam_ddm5_ebbinghaus | 11430275 | 1-3 (refit of the failed saves) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done | 27.9 / 24.2 / 26.4 h (sacct) |
-| gam_rdm5_ebbinghaus | 11553382 | 1-4 | | zen5 (`--constraint`) | submitted 2026-10-09 | |
-| gam_lnr6_ebbinghaus | 11553384 | 1-4 | | zen5 (`--constraint`) | submitted 2026-10-09 | |
-| gam_lnr_ebbinghaus | 11553388 | 1-4 (refit on cogmod 0.3.4) | rtx-00 | zen5 (`--constraint` on sussexneuro) | running 2026-10-09 | |
+| gam_rdm5_ebbinghaus | 11553382 | 1-3 | rtx-01 | zen5 (`--constraint`) | done, converged (AGENT.md 4.10) | 47.4 / 59.6 / 64.0 h |
+| gam_rdm5_ebbinghaus | 11553382 | 4 | rtx-00 | zen5 (`--constraint`) | done | 79.4 h |
+| gam_lnr6_ebbinghaus | 11553384 | 2, 3 | rtx-02 | zen5 (`--constraint`) | done, **adaptation failed** (step 1e-4 to 5e-4, Rhat 3.05) | 84.5 / 82.0 h |
+| gam_lnr6_ebbinghaus | 11553384 | 1, 4 | rtx-02 | zen5 (`--constraint`) | running at 95 h on 2026-10-13, same failure (step 8e-4 to 9e-6) | |
+| gam_lnr_ebbinghaus | 11553388 | 1-4 (refit on cogmod 0.3.4) | rtx-00 | zen5 (`--constraint` on sussexneuro) | done, **adaptation failed** in all 8 chains (step 1.4e-4 to 5.7e-4, Rhat 3.04) | 61.9 / 40.7 / 35.0 / 41.6 h |
 
 ## What it says so far (updated 2026-09-26)
 
