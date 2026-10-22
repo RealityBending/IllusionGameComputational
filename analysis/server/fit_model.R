@@ -29,6 +29,27 @@ if (utils::packageVersion("cogmod") < cogmod_min) {
        "Run  ./hpc install cogmod", call. = FALSE)
 }
 
+# Backend. "cmdstanr" is production. "stanli" (2026-10-17, a speed test on
+# gam_lnr_mullerlyer) samples the same program -- brms's Stan code and data,
+# reduce_sum included -- in stanli, which interprets it over precompiled Stan
+# Math kernels (cogmod's benchmarks/stanli/README.md: exact, and 0.53-0.75x
+# cmdstanr's wall time on simulated multilevel race models, stanli 0.21.0).
+# Its shards have the production names, so ./hpc gives them their own
+# IGC_MODELS_DIR (models_stanli/).
+backend <- Sys.getenv("IGC_BACKEND", unset = "cmdstanr")
+if (!backend %in% c("cmdstanr", "stanli")) {
+  stop("IGC_BACKEND must be 'cmdstanr' or 'stanli', not '", backend, "'", call. = FALSE)
+}
+if (backend == "stanli") {
+  # stanli alone from its own library. That library also holds brms 2.23.1,
+  # which must not shadow the production brms 2.21.0: both arms have to
+  # sample the program the same brms writes.
+  loadNamespace("stanli", lib.loc = Sys.getenv("IGC_STANLI_LIB"))
+  if (!stanli::stanli_thread_safe()) {
+    stop("this stanli runtime has no thread support", call. = FALSE)
+  }
+}
+
 source("models.R")
 
 spec <- igc_model(Sys.getenv("IGC_MODEL", unset = ""))
@@ -77,10 +98,14 @@ warmup <- as.integer(Sys.getenv("IGC_WARMUP", unset = "1500"))
 iter <- warmup + as.integer(Sys.getenv("IGC_SAMPLES", unset = "1000"))
 
 cat(sprintf(
-  "config: model=%s illusion=%s shard=%d warmup=%d samples=%d chains=%d threads/chain=%g refit=%s\n",
+  "config: model=%s illusion=%s shard=%d warmup=%d samples=%d chains=%d threads/chain=%g refit=%s backend=%s\n",
   spec$name, spec$illusion, task_id, warmup, iter - warmup,
-  chains_per_task, threads_per_chain, file_refit
+  chains_per_task, threads_per_chain, file_refit, backend
 ))
+if (backend == "stanli") {
+  cat("stanli", format(utils::packageVersion("stanli")), "from", find.package("stanli"),
+      "- brms", format(utils::packageVersion("brms")), "from", find.package("brms"), "\n")
+}
 
 
 # Data --------------------------------------------------------------------
@@ -181,6 +206,10 @@ report_fit <- function(m, name, wall_min) {
     cat("REPORT time per chain (s):\n")
     print(md$time)
   }
+  if (!is.null(m$stanli$elapsed)) {
+    cat("REPORT time per chain (s), stanli:\n")
+    print(m$stanli$elapsed)
+  }
   if (!is.null(md$step_size)) {
     cat("REPORT adapted step sizes:", format(unlist(md$step_size), digits = 3), "\n")
   }
@@ -230,15 +259,23 @@ if (file_refit == "never" && file.exists(shard_file)) {
 # Only a shard of this very run is reused. One from an older generation (below
 # the cogmod floor, or another warmup or draw count) would otherwise be adopted
 # as if it had just been fitted. Stop rather than refit over it, since it may
-# be the only copy. Added for the 2026-10-13 refit (./hpc archive).
+# be the only copy. Added for the 2026-10-13 refit (./hpc archive). The
+# sampler counts too: a stanli shard is stamped with its version (0.21.0 for
+# the LNR test, 0.22.2 from the RDM-5 test on), and a resumed array must not
+# mix two.
 if (!is.null(m)) {
   old_cogmod <- if (is.null(m$cogmod$version)) "unrecorded" else m$cogmod$version
   old_run <- c(m$fit@sim$warmup, m$fit@sim$iter)
+  old_sampler <- if (is.null(m$stanli$version)) "cmdstanr" else paste("stanli", m$stanli$version)
+  this_sampler <- if (backend == "stanli") {
+    paste("stanli", format(utils::packageVersion("stanli")))
+  } else "cmdstanr"
   if (old_cogmod == "unrecorded" || package_version(old_cogmod) < cogmod_min ||
-      !isTRUE(all(old_run == c(warmup, iter)))) {
+      !isTRUE(all(old_run == c(warmup, iter))) || old_sampler != this_sampler) {
     stop(shard_file, " is from another run (cogmod ", old_cogmod, ", ", old_run[1],
-         " warmup + ", old_run[2] - old_run[1], " draws; this run wants cogmod >= ",
-         cogmod_min, ", ", warmup, " + ", iter - warmup, "). Move it aside ",
+         " warmup + ", old_run[2] - old_run[1], " draws, ", old_sampler,
+         "; this run wants cogmod >= ", cogmod_min, ", ", warmup, " + ", iter - warmup,
+         ", ", this_sampler, "). Move it aside ",
          "(./hpc archive) or refit over it (IGC_FILE_REFIT=always).", call. = FALSE)
   }
   cat("reusing existing shard", shard_file, "\n")
@@ -248,6 +285,72 @@ csv_dir <- file.path(models_dir, "stan_csv",
                      paste0(shard_name, "_", Sys.getenv("SLURM_ARRAY_JOB_ID", unset = "local")))
 
 t0 <- Sys.time()
+if (is.null(m) && backend == "stanli") {
+  dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
+  # brm() up to the point where it would compile: the program, data and
+  # threading (reduce_sum, grainsize) the cmdstanr arm samples.
+  m <- brm(f,
+    data = data,
+    prior = priors,
+    stanvars = cogmod_stanvars(f),
+    backend = "cmdstanr",
+    warmup = warmup,
+    iter = iter,
+    chains = chains_per_task,
+    threads = threading(threads_per_chain),
+    empty = TRUE
+  )
+  sm <- stanli::stanli_model(
+    code = as.character(brms::stancode(m)),
+    data = lapply(unclass(brms::standata(m)), identity),
+    threads_per_chain = threads_per_chain
+  )
+  # The same cogmod_inits() as the cmdstanr arm, one row per chain on the
+  # unconstrained scale; partial = TRUE draws anything they leave out in
+  # (-2, 2), as CmdStan does.
+  inits <- cogmod_inits(f, data)
+  init_u <- do.call(rbind, lapply(seq_len(chains_per_task), function(i) {
+    stanli::unconstrain(sm, inits(i), partial = TRUE)
+  }))
+  # brm() leaves cmdstanr's seed random; stanli's default is 1 for every shard.
+  seed <- sample.int(.Machine$integer.max, 1)
+  cat("stanli seed", seed, "\n")
+  sfit <- stanli::sample_model(sm,
+    chains = chains_per_task,
+    parallel_chains = chains_per_task,
+    threads_per_chain = threads_per_chain,
+    seed = seed,
+    warmup = warmup,
+    samples = iter - warmup,
+    init = init_u,
+    refresh = 100
+  )
+  # Whether the threading took: brms's reduce_sum kept as a reduction, or
+  # refused and run serially.
+  cat("stanli reduce_sum retained:", format(sfit$model$reduce_sum_count),
+      " fallbacks:", format(sfit$model$reduce_sum_fallbacks), "\n")
+  # Without `exclude` the shard keeps the z_ / zs_ latents brm() leaves out
+  # (the smoke test: 621 parameters against cmdstanr's 336). Names the
+  # program does not have are ignored. as_stanfit() returns stanli's own
+  # subclass of stanfit, which readRDS() can only restore where stanli is
+  # installed. A plain stanfit has the same slots and reads anywhere,
+  # the laptop included.
+  sf <- methods::as(stanli::as_stanfit(sfit, exclude = brms:::exclude_pars(m)),
+                    "stanfit", strict = TRUE)
+  # stanli writes no CSVs: the draws are kept here until the shard is saved.
+  saveRDS(sf, file.path(csv_dir, "stanfit.rds"))
+  m$fit <- sf
+  m <- brms:::rename_pars(m) # what brm() does after sampling
+  m$stanli <- list(version = format(utils::packageVersion("stanli")), seed = seed,
+                   elapsed = stanli::get_elapsed_time(sfit))
+  rm(sfit, sf)
+
+  sha <- utils::packageDescription("cogmod")$RemoteSha
+  m$cogmod <- list(version = format(utils::packageVersion("cogmod")),
+                   sha = if (is.null(sha)) NA_character_ else sha)
+  save_shard(m, shard_file, keep_dir = csv_dir)
+  unlink(csv_dir, recursive = TRUE)
+}
 if (is.null(m)) {
   dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
   m <- brm(f,

@@ -22,6 +22,11 @@
 # expect ~210 GiB for the 5-6-parameter models and ~245 GiB for gam_lnr6 and
 # gam_lba. Hence 320G. A 4,000-draw fit still fits in --mem=192G, which
 # dispatches sooner:  ./hpc combine <model> --mem=192G
+# At 8,000 draws combine_model.R computes log_lik() in two blocks of 4,000
+# draws and PSIS row by row, because one dense draws x rows matrix over 2^31
+# cells fails in Matrix and in loo.matrix() (2026-10-18/19, AGENT.md 4.8).
+# Those DDM-4 combines peaked at 139-142 GB before loo, well under the
+# projection above.
 # Only 4 CPUs: more cores do not speed it up (4.8), and a slimmer request
 # dispatches sooner. No --time is set, so the job takes general's 8 h maximum;
 # loo over 4,000 draws takes 11-18 min.

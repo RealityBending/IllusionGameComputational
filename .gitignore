@@ -49,6 +49,7 @@ po/*~
 rsconnect/
 
 analysis/models/*
+analysis/models_stanli/
 analysis/bayesflow/posterior_summaries.csv
 analysis/server/server.md
 analysis/server/hpc.local

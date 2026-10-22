@@ -762,7 +762,49 @@ is 3.6 GB at 1500 draws and 7.2 GB at 3000.
 peaks below scale linearly with draws, which gives ~210 GiB for the
 5-6-parameter models and ~245 GiB for `gam_lnr6` / `gam_lba`. This is a
 projection: measure the first 8,000-draw combine. A 4,000-draw combine still
-fits in `--mem=192G`.
+fits in `--mem=192G`. **The first 8,000-draw combine failed before memory
+mattered** (2026-10-18, 6.5): `log_lik()` over all draws asks `Matrix` for one
+dense draws x rows block, and 8,000 x 321,113 exceeds its 2^31-cell limit.
+
+**Since 2026-10-19 `combine_model.R` computes `loo` in blocks of draws**
+when one block would not fit: equal blocks under the limit (two of 4,000 at
+8,000 draws), stacked in draw order into one base R matrix, then what
+`add_criterion(m, "loo")` does in brms 2.21.0: `r_eff` from the chains,
+loo, and the response hash and model name stored with it. It uses two brms
+internals for that (`r_eff_log_lik()`, `hash_response()`). Chosen over
+`pointwise = TRUE`, which gives the same answer but rebuilds every
+parameter's linear predictor one row at a time, twice over for `r_eff`. brms
+calls that "usually considerably slower", it was never timed at 321k rows,
+and the combine has `general`'s 8 h. The memory pointwise saves is not
+needed.
+
+**The 2^31 limit is in loo too.** The first version passed the stacked
+matrix to `loo::loo()`. Both DDM-4 combines (11608068-9) got through
+`log_lik()` and `r_eff` and then segfaulted after ~40 min ("memory not
+mapped") in `loo.matrix()`, which builds a draws x rows matrix of PSIS log
+weights through `vapply()`. R 4.3.2 cannot do that above 2^31 cells. Peak
+memory was 139-142 GB of the 320G. PSIS-LOO handles each row on its own,
+so the matrix now goes through loo's function interface,
+`loo::loo(function(data_i, draws) draws[, data_i$i], data, draws)`. That runs
+the same per-row `importance_sampling.matrix()` and `pointwise_loo_calcs()`
+and never builds the weights matrix.
+
+Tested against `add_criterion()` on two smoke fits
+(`tests/loo_blocks_20261019/`), with `IGC_LOO_BLOCK` forcing blocks that cut
+across chains: DDM-4 200 draws in 2 blocks, LNR 4 chains x 200 in 6 blocks of
+134. Both versions (`loo.matrix()`: 11608046-7; function interface:
+11608469-70; `add_criterion()`: 11608051-2) matched it: estimates, pointwise
+values, Pareto k, response hash and model name bit-identical, n_eff equal to
+2e-15, and `brms::loo_compare()` read both. `waic` and a subsampled
+criterion are not split and stop with a message above the limit. A synthetic
+8,000 x 270,000 matrix (2.16e9 cells, job 11608468) went through the function
+interface in 2.6 min on 4 cores.
+
+**Measured at 8,000 draws** (2026-10-19, `general`, 4 CPUs, 320G): the two
+DDM-4 combines took 30.8 min (Ebbinghaus, 316,487 rows, 11608478) and
+41.7 min (VerticalHorizontal, 321,113 rows, 11608477) for `log_lik()` and loo,
+with a peak of 149 and 138 GB. That is about half the projection above, so a
+7-parameter model should also fit in 320G.
 
 **Memory: 192G since 2026-09-29, not 128G.** The 128G was set from the 45 GB of
 a `waic`-at-1,500-draws combine. With `loo` over every draw of four shards, the
@@ -1584,20 +1626,188 @@ there are in `old_20261013/laptop_only/`.
 
 | model | where | job | state |
 | --- | --- | --- | --- |
-| `gam_lnr_verticalhorizontal` | `dmm56` `long`, zen5 | 11596772 | running since 2026-10-13 18:58 (rtx-00) |
-| `gam_lnr_ebbinghaus` | `dmm56` `long`, zen5 | 11596773 | running since 2026-10-13 18:58 (rtx-00, rtx-02) |
-| `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11596823 | running since 2026-10-13 20:20 (rtx-02). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
-| `gam_ddm4_ebbinghaus` | `dmm56` `long`, zen5 | 11596774 | pending behind the first two (`QOSMaxCpuPerUserLimit`) |
-| `gam_ddm4_verticalhorizontal` | `dmm56` `long`, zen5 | 11596775 | pending |
-| `gam_ddm5_verticalhorizontal`, `gam_lnr_mullerlyer`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer`, `gam_ddm4_mullerlyer`, `gam_rdm_verticalhorizontal`, `gam_rdm_mullerlyer` | `dmm56` `long` (or `sussexneuro` once `gam_rdm5_mullerlyer` is done) | — | to submit in this order once the first `REPORT` lines are clean |
-| `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A | — | instructions written |
-| `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B | — | instructions written |
+| `gam_lnr_verticalhorizontal` | `dmm56` `long`, zen5 | 11596772 | **lost**: `CANCELLED by 0` (root) 2026-10-14 08:39 after 13.7 h, no reason in the logs, nothing saved. To resubmit |
+| `gam_lnr_ebbinghaus` | `dmm56` `long`, zen5 | 11596773 | **lost**, as above. To resubmit |
+| `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11612026 (cmdstanr), 11612031 (stanli 0.22.2) | **resubmitted 2026-10-20** as both arms of the second stanli test (6.7). The cmdstanr arm is the production fit. Lost before: 11596823, cancelled by root after 12.3 h (its CSVs are still in `models/stan_csv/*_11596823`). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
+| `gam_ddm4_ebbinghaus` | `dmm56` `long`, zen5 | 11596774 | **fitted**: all 4 shards done by 2026-10-19 12:51 (`REPORT`), 43.2 h on rtx-01, 60.5-67.2 h on rtx-02, 72.3 h on rtx-00. Step 0.012-0.018, divergent 0-0.4%, max Rhat 1.83 per shard, except shard 1 (rtx-00): one chain at step 0.0124 ran at tree depth 9 (mean n_leapfrog 382 against 255), max Rhat 1.95. **Combined** 2026-10-19 (11608478, loo in blocks, 4.8): all 8 chains in one mode (`lp__` within 18 of the median, sd ~105), that chain included. elpd_loo -33,419 (SE 825), p_loo 10,921, 915 rows (0.3%) with Pareto k > 0.7. **Predicted** (11609939, 0.9 min, 25 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 0 conflicts, 4 low-tail flags, all smooth `sds` (`boundary` 1, `ndt` 1-3, posterior medians 0.17-0.26), the known CDF artefact of the `exponential(~0.085)` prior on flat smooths |
+| `gam_ddm4_verticalhorizontal` | `dmm56` `long`, zen5 | 11596775 | **fitted**: all 4 shards done 2026-10-18 06:31-07:45 on rtx-01, 41.9-43.2 h each (`REPORT`). Clean by 6.1: step 0.016-0.019 in all 8 chains, n_leapfrog 254, divergent 0-0.5%, no init rejections, max Rhat 1.83 per shard (the expected participant-level band). Combine 11606712 (2026-10-18) **failed** after 43 s in `add_criterion("loo")`: `Cholmod error 'problem too large'`. The chain table printed first: all 8 chains in one mode (`lp__` -20940 to -20964, sd ~105), none frozen. The failure is 8,000 draws x 321,113 rows = 2.57e9 cells, above the 2^31 that `Matrix` can allocate as one dense matrix when brms builds the participant-level predictor. Every 8,000-draw combine at full data will hit it (the ceiling is ~6,600 draws at 324k rows). The 4,000-draw combines of the old generation were 1.3e9. Seen 2026-10-19. The block-wise rerun (11608068) then segfaulted in `loo.matrix()`, the same limit in loo (4.8). **Combined** 2026-10-19 (11608477): elpd_loo -11,994 (SE 830), p_loo 12,089, 1,167 rows (0.4%) with Pareto k > 0.7. **Predicted** (11609938, 0.8 min, 23 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 6 low-tail flags and 1 conflict, all smooth `sds` (`boundary` 1/3, `bias` 1/3, `ndt` 1-3, posterior medians 0.08-0.36). The conflict is `sds_ndt` 3 at 0.08 (prior quantile 0.007), the same flat-smooth artefact one step further out. Nothing on `mu`, `boundary`, `bias` or `poutlier` is flagged |
+| `gam_lnr_mullerlyer` | `dmm56` `sussexneuro`, zen5 | see 6.6 | the cmdstanr arm of the stanli speed test (6.6), a production fit |
+| `gam_lnr_mullerlyer`, stanli | `dmm56` `sussexneuro`, zen5 | see 6.6 | the stanli arm (6.6), in `models_stanli/` |
+| `gam_ddm4_mullerlyer` | `dmm56` `long`, zen5 | 11615774 (cmdstanr), 11615777 (stanli 0.22.2) | **submitted 2026-10-22** as both arms of the third stanli test (6.8). The cmdstanr arm is the production fit. They fill `long`'s 8 tasks, so `gam_lnr_verticalhorizontal` and `gam_lnr_ebbinghaus` wait for them |
+| `gam_ddm5_verticalhorizontal`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer`, `gam_rdm_verticalhorizontal`, `gam_rdm_mullerlyer` | `dmm56` `long` (or `sussexneuro`) | — | to submit in this order once the first `REPORT` lines are clean; whether in cmdstanr or stanli depends on 6.6-6.8 |
+| `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A (`oc236`) | 11596852 (LBA VH), 11596853 (RDM-5 Ebb), 11602751-2 | 2026-10-20 08:50: LBA VerticalHorizontal shards 1-2 done (2026-10-19 18:10 / 22:07, 77.6 / 81.6 h on rtx-01), shards 3-4 still running. RDM-5 Ebbinghaus all 4 running (3.8 days in, rtx-00). LBA MullerLyer shards 1-2 running since 2026-10-19 ~18:10 / ~22:07 (rtx-01), 3-4 pending, and LBA Ebbinghaus pending (`QOSMaxCpuPerUserLimit`). 2026-10-19 13:00: RDM-5 Ebbinghaus and LBA VerticalHorizontal running since 2026-10-16 12:33 (3.0 days in, rtx-00/01), LBA MullerLyer and Ebbinghaus pending (`QOSMaxCpuPerUserLimit`, i.e. behind oc236's own cap) |
+| `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B (`asf25`) | 11601935-8 | 2026-10-20 08:50: still unchanged, nothing finished; LNR-6 MullerLyer 3.8 days in, LNR-6 VH and RDM-5 VH pending. 2026-10-19 13:00: unchanged, LNR-6 MullerLyer (rtx-02) and Ebbinghaus running, the rest pending. 2026-10-18 08:00: LNR-6 MullerLyer running since 2026-10-16 ~13:00. LNR-6 Ebbinghaus shards 1-2 since then, shard 3 since ~18:40, shard 4 only since 2026-10-18 06:31 (rtx-01), so that model ends ~1.7 days after its siblings. RDM-5 VH and LNR-6 VH pending (`QOSMaxCpuPerUserLimit`) |
 
 Update the table as things move, and add a `node_history.md` row for every
 shard that finishes. The colleagues send each model's combined fit,
 prediction file, priors file and `./hpc log` output. Upload the fit to
 `dmm56`'s `models/combined/` (md5-checked) so that `./hpc priors` and
 `mixing_participants.R` see every model in one place.
+
+### 6.6 stanli against cmdstanr on `gam_lnr_mullerlyer` (2026-10-17)
+
+**The question: is stanli faster at full data?** If it is, the remaining fits
+move to it. cogmod's `benchmarks/stanli/README.md` (stanli 0.21.0) measured
+0.53-0.75x cmdstanr's wall time on simulated multilevel race models, with the
+DDM-4 still at 1.11x. Those were 10 participants x 100 trials, 4 chains on 4
+whole cores and no threads within a chain. Two things it did not test decide
+our case. One is `reduce_sum` threading. The other is our N: its cost per
+trial grew with N (0.50x to 0.80x CmdStan from 1,000 to 10,000 trials), and
+here it is 2,202 participants and ~320,000 trials.
+
+**Design: the same fit twice, only the sampler differs.** Both arms use the
+same model, data, priors and `cogmod_inits()`, with 4 shards x 2 chains x 8
+threads and 1500 + 1000. Both run on `sussexneuro`, pinned to zen5, submitted
+minutes apart. `IGC_BACKEND=stanli` (`fit_model.R`, "Backend") builds the
+program that the production brms 2.21.0 writes, through `brm(empty = TRUE)`.
+It samples that program in stanli 0.21.0, loaded alone from the stanli
+benchmark's library (`cogmod_stanli/R_libs`, which also holds a brms 2.23.1
+that must not load). The draws come back through `as_stanfit(exclude =
+brms:::exclude_pars(m))` and `rename_pars()`, as `brm()` does after sampling.
+The shards go in `models_stanli/`, under jobs and logs named
+`igc_fit_gam_lnr_mullerlyer_stanli`. Every `./hpc` command takes
+`IGC_BACKEND=stanli`.
+
+**Smoke test** (`smoke_stanli_20261017/`: 30 participants, 300 + 200, `short`,
+general VMs): both arms ran, ~5.5 min per shard. stanli kept brms's
+`reduce_sum` as a threaded reduction (`retained: 1`, no fallback). Without
+`exclude` the stanli shard carried the `z_`/`zs_` latents (621 parameters
+against 336); with it, 336 in both. VM timings are noise.
+
+| arm | job | notes |
+| --- | --- | --- |
+| cmdstanr | 11603736 | a production fit, in `models/` |
+| stanli | 11603743 | `models_stanli/`; `--mem=64G`, since its memory at full data is unmeasured |
+| combine test, stanli smoke shards | 11603747, 11603750 | 11603747 failed: `as_stanfit()` returns a `stanli_stanfit`, stanli's subclass of `stanfit`, and `readRDS()` cannot restore it without stanli. That would also break predictions and the laptop's qmds. Now `fit_model.R` saves a plain `stanfit` (`as(..., "stanfit", strict = TRUE)`: same slots; rhat, `combine_models()`, WAIC and `posterior_predict()` work on it without stanli). `combine_model.R` converts the old class on read, and 11603750 passed. The shards of 11603743 started before the fix, so they will be the old class until combined |
+
+**What to compare** once both finish:
+- wall time per shard, and each chain's warmup and sampling time (the
+  `REPORT` lines);
+- ms per leapfrog (sampling time / leapfrogs) and ESS per hour on the
+  combined fits;
+- whether the two posteriors agree.
+
+**Caveats:**
+- `--cpus-per-task=16` is 8 cores x 2 hardware threads. The README's "Two
+  chains per core" found that SMT costs stanli more than CmdStan. If stanli
+  loses narrowly, try `--hint=nomultithread` before ruling it out.
+- The nodes are shared with other users, and there are only 4 shards per
+  arm.
+
+Both arms started at 12:27, all 8 shards at once on rtx-00 and rtx-02. By
+~12:50 every chain was sampling. Memory per task (2 chains) at the start of
+warmup: stanli 10.2-10.6 GB, cmdstanr 7.2-8.2 GB.
+
+**Node placement confounds the comparison.** All four cmdstanr shards are on
+rtx-02, while stanli has shards 1-2 on rtx-02 and 3-4 on rtx-00. On
+2026-10-18 at 08:00 (19.5 h in), every chain on rtx-02 was at 300-400 / 2500
+in either arm, and stanli's two rtx-00 shards were at 600. So rtx-02 is the
+slow node so far, and the backends are level on it. Compare shards on the
+same node, and divide the `REPORT` times by leapfrogs.
+
+Progress: `./hpc progress gam_lnr_mullerlyer` and `IGC_BACKEND=stanli ./hpc
+progress gam_lnr_mullerlyer`. stanli writes no CSVs, so its progress shows
+iterations but no step sizes. `IGC_BACKEND=stanli ./hpc pull` copies into
+`analysis/models_stanli/` (gitignored), never into `analysis/models/`.
+
+2026-10-20 08:45 (68 h in): stanli shards 1 (rtx-02, 64.8 h) and 4 (rtx-00,
+64.0 h) done. No cmdstanr shard was done yet: on rtx-02 they were at
+1500-2200 / 2500. cmdstanr shard 1 sampled at tree depth 10, the others at 9.
+
+**Combining this run needs the 0.21.0 library.** Since 2026-10-20 `./hpc`
+points `IGC_STANLI_LIB` at 0.22.2 (6.7). These shards are the old
+`stanli_stanfit` class, and they are stamped 0.21.0, so combine them with
+`IGC_BACKEND=stanli IGC_STANLI_LIB=/mnt/lustre/users/psych/dmm56/cogmod_stanli/R_libs ./hpc combine gam_lnr_mullerlyer`.
+
+### 6.7 stanli 0.22.2 against cmdstanr on `gam_rdm5_mullerlyer` (2026-10-20)
+
+**The second sampler test, on a slow-family model.** The user asked for it on
+2026-10-20. It is the same design as 6.6: the same model, data, priors and
+inits, 4 shards x 2 chains x 8 threads, and 1500 + 1000. Both arms run on
+`sussexneuro`, pinned to zen5, with `--time=14-00:00:00`. The stanli arm has
+`--mem=64G`. It is also the resubmission of the `gam_rdm5_mullerlyer` lost
+on 2026-10-14 (6.5), and the cmdstanr arm is the production fit.
+
+**Why 0.22.2.** It is the release of 2026-10-20. 0.22.0 cut the per-gradient
+cost of models that run Stan Math autodiff inside their functions (the brms
+DDM-4 program of stanli#455: 1.25-1.37x faster than 0.21.0). 0.22.2 makes
+`cm_invgaussian`, the race of Wald accumulators, about 1.9x faster per
+gradient. It runs only the branch that each iteration takes in loops with a
+very large body. 0.22.0 also moved the C API to ABI 2. An R package from
+before 0.22.0 refuses the new runtime, but runtimes are cached per release
+(`~/.cache/R/stanli/v<version>/`), so 0.21.0 is unaffected. The R functions
+that `fit_model.R` calls have the same signatures in both releases.
+
+**Installed in a library of its own**, `cogmod_stanli/R_libs_0.22.2` (only
+stanli; its imports are base R). Installing over the benchmark's
+`cogmod_stanli/R_libs` would have replaced the 0.21.0 package files under the
+two stanli LNR shards still running. Those shards load the rest of the
+package from those files when they save. The install script, the tarball
+(sha256 checked against the release) and a portable Makevars
+(`-march=x86-64-v3`, the SIGILL fix of cogmod's `benchmarks/stanli/hpc/run.sh`)
+are in `cogmod_stanli/src_0.22.2/` and `Makevars_0.22.2.portable`. Install job
+11611997: thread safe, a toy model's gradient correct, and rstan 2.32.6 and
+brms 2.21.0 resolved from the shared library. `./hpc` now defaults
+`IGC_STANLI_LIB` to it. `fit_model.R` refuses to reuse a shard from another
+sampler or stanli version, and `combine_model.R` refuses to mix them.
+
+**Smoke test** (30 participants, 300 + 200, `short`, 2 shards per arm):
+cmdstanr 11611998 (`smoke_rdm5_20261020_cmdstanr/`), stanli 11611999
+(`smoke_rdm5_20261020_stanli/`). Both arms ran clean:
+- step 0.029-0.036, 126-155 leapfrogs, 1 divergent transition in total
+  (cmdstanr), and 335 parameters in both arms;
+- stanli kept `reduce_sum` threaded (`retained: 1`, no fallbacks);
+- the 43 population-level and `sd`/`sds` parameters agree, with a
+  difference in means of at most 0.26 posterior SDs (median 0.06; the
+  comparison script is `smoke_rdm5_20261020_stanli/compare_smoke.R`).
+
+Per chain on the same node (a40-02), stanli took 391-423 s of warmup and 67-87
+s of sampling. cmdstanr took 735-768 s and 134-166 s, about **0.53x**. On
+a40-03, stanli's shard 2 took 552-557 s and 94-98 s. At 30 participants that
+is the reverse of the LNR test, where the backends were level per node at
+full data (6.6).
+
+| arm | job | nodes at start |
+| --- | --- | --- |
+| cmdstanr | 11612026 | shards 1-3 rtx-02, shard 4 rtx-00 |
+| stanli 0.22.2 | 11612031 | shards 1-4 rtx-00 |
+
+Both arms started at once, 2026-10-20 ~15:35. **Compare the same node**:
+cmdstanr shard 4 against the four stanli shards on rtx-00. rtx-02 was the slow
+node in 6.6. The 2026-10-13 projection for RDM-5 at 1500 + 1000 in cmdstanr is
+4.4 days per shard (5.8 for the slowest chain, 4.11).
+
+Progress: `./hpc progress gam_rdm5_mullerlyer` and `IGC_BACKEND=stanli ./hpc
+progress gam_rdm5_mullerlyer`.
+
+### 6.8 stanli 0.22.2 against cmdstanr on `gam_ddm4_mullerlyer` (2026-10-22)
+
+**The third sampler test, so each family has one**: LNR (6.6), RDM (6.7) and
+now DDM. The user asked for it on 2026-10-22. It uses the same design as 6.6
+and 6.7: same model, data, priors and inits, 4 shards x 2 chains x 8 threads,
+1500 + 1000, pinned to zen5. The DDM-4 is the case that stanli 0.22.0 targeted
+(stanli#455, 1.25-1.37x faster than 0.21.0 per gradient), and the one where
+the 0.21.0 benchmark had stanli at 1.11x cmdstanr's time. The cmdstanr arm is
+the production fit of `gam_ddm4_mullerlyer`.
+
+**Both arms are on `long`, not `sussexneuro`.** `dmm56` already held 144 of
+`sussexneuro`'s 256-CPU group quota with the 6.6 and 6.7 arms. On `long` it
+held nothing, and the two arms are 8 x 16 CPUs, exactly `long`'s
+per-user ceiling (4.2). `--time=8-00:00:00` is `long`'s maximum (3.7). DDM-4
+shards took 42-72 h at full data (`node_history.md`). The stanli arm has
+`--mem=64G`, as in 6.6 and 6.7. There was no smoke test this time: the
+DDM-4 program is what 0.22.0 was tested on, and the 0.22.2 install passed
+its checks on the RDM-5 (6.7).
+
+| arm | job | submitted |
+| --- | --- | --- |
+| cmdstanr | 11615774 | 2026-10-22, `PENDING (Priority)` |
+| stanli 0.22.2 | 11615777 | 2026-10-22, `PENDING (Priority)` |
+
+As in 6.6, compare shards on the same node, per leapfrog.
+
+Progress: `./hpc progress gam_ddm4_mullerlyer` and `IGC_BACKEND=stanli ./hpc
+progress gam_ddm4_mullerlyer`.
 
 ---
 

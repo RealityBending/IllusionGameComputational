@@ -190,6 +190,17 @@ Both were measured rather than assumed: `loo` over all 3,000 draws of the
 what 500 draws cost, so subsampling trades real precision for almost no time.
 `cores` does not help (6% at 16 CPUs). AGENT.md §4.8 has the table.
 
+**At 8,000 draws `loo` is computed in blocks of draws** (since 2026-10-19).
+`log_lik()` over every draw needs one dense draws x rows matrix, and Matrix
+cannot allocate one over 2^31 cells: 8,000 x 321,113 failed with `Cholmod
+error 'problem too large'`. `combine_model.R` then computes `log_lik()` in
+equal blocks under that limit (two of 4,000 at these row counts), runs PSIS
+row by row through loo's function interface (`loo.matrix()` segfaults over
+2^31 cells in R 4.3.2), and stores the same `loo` that `add_criterion()`
+would. `waic` and a subsampled
+criterion are not split, so they stop with a message above the limit instead.
+`IGC_LOO_BLOCK=<draws>` caps the block size, for testing.
+
 Override per run when a model actually overruns — not pre-emptively:
 
 ```bash
@@ -237,7 +248,8 @@ predicts these fits wrongly (see below).
 The job is `general`, 8 CPUs, 64G: no pointwise log-likelihood as in
 `combine`, just the fit plus predictions over 10k trials and small grids, with
 the components and the parameters forked over the cores. It takes **about
-30 seconds** per model (`gam_rdm`, 2026-09-28).
+30 seconds** per model (`gam_rdm`, 2026-09-28), and 0.8-0.9 min at 23-25 GB
+for the 8,000-draw DDM-4 fits (2026-10-19).
 
 ### Three traps, found 2026-09-28
 
@@ -525,6 +537,8 @@ two stack, so the fastest arrangement is a colleague on `long` plus a
 **For the 2026-10-13 refit, `refit_colleagues.md` is the step-by-step to send
 a colleague**: update, `./hpc archive`, cogmod 0.3.5, smoke test, submit, and
 what to send back. What follows is the one-time setup of a fresh account.
+**`onboarding_new_account.md` is that setup written for a newcomer's coding
+agent**, from VPN and SSH key to a passing smoke test.
 
 Their setup, once:
 
@@ -602,6 +616,7 @@ the script default.
 | `IGC_CRITERION` | `loo` | `waic` is cheaper; `none` skips it |
 | `IGC_CRITERION_NDRAWS` | all | subsample the draws the criterion uses |
 | `IGC_DELETE_SHARDS` | unset | set to `1` to drop shards after combining |
+| `IGC_LOO_BLOCK` | as many as fit under 2^31 cells | most draws per `log_lik()` block when `loo` is computed in blocks |
 | `IGC_COGMOD_REF` | `dev` | which cogmod branch/tag `./hpc install` tracks |
 
 Each fit prints a `REPORT ...` line (wall time, mean leapfrog steps,
