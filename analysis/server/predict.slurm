@@ -45,6 +45,9 @@ if [ -n "${IGC_R_LIBS:-}" ]; then
   export R_LIBS="${IGC_R_LIBS}${R_LIBS:+:$R_LIBS}"
 fi
 
+# brms 2.21.0, from cr291's shared library: see fit.slurm and AGENT.md 3.8.
+export R_LIBS_USER="${IGC_R_LIBS_USER:-/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/}"
+
 # Single-threaded BLAS, or the job never finishes. The module's OpenBLAS runs
 # its matrix products on an OpenMP thread pool, which a forked child does not
 # inherit: once a process has used it, the first %*% in any child it forks
@@ -55,6 +58,7 @@ fi
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 FLEXIBLAS_NUM_THREADS=1
 
 echo "Rscript: $(command -v Rscript)"
+Rscript -e 'cat("brms", format(packageVersion("brms")), "from", find.package("brms"), "\n")'
 
 Rscript predict_model.R
 status=$?

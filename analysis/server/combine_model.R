@@ -36,6 +36,13 @@ library(loo)
 
 options(mc.cores = as.numeric(Sys.getenv("SLURM_CPUS_PER_TASK", unset = "2")))
 
+# dmm56's ~/.Renviron on Artemis sets R_MAX_VSIZE=100Gb, which caps R's vector
+# heap well below combine.slurm's --mem. The 8,000-draw gam_lnr_mullerlyer
+# combine (11619557, 2026-10-23) died there in log_lik(), "vector memory
+# exhausted (limit reached?)", at 117 GB RSS of its 320G. The DDM-4 combines
+# had squeezed under it. Let SLURM's --mem be the only limit.
+invisible(mem.maxVSize(Inf))
+
 # The first stanli shards (job 11603743, AGENT.md 6.6) hold a stanli_stanfit,
 # stanli's subclass of rstan's stanfit, which readRDS() restores only with
 # stanli on the library path. ./hpc passes IGC_STANLI_LIB under

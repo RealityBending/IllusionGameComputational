@@ -145,7 +145,7 @@ shared by every project on the account — and why each piece is what it is:
 
 ## 3. Traps
 
-Only 3.6 and 3.9 are specific to this project. The rest are cluster facts and moved to
+Only 3.6, 3.9 and the workaround for 3.8 are specific to this project. The rest are cluster facts and moved to
 the lab hub on 2026-09-22; the numbers are kept so older references resolve.
 
 | § | trap | now in the hub |
@@ -155,7 +155,7 @@ the lab hub on 2026-09-22; the numbers are kept so older references resolve.
 | 3.4 | failed tasks reported COMPLETED | [`jobs.md#the-slurm-script`](https://github.com/RealityBending/Lab/blob/main/hpc/jobs.md#the-slurm-script) |
 | 3.5 | sshd rate-limits connection bursts | [`troubleshooting.md#ssh-connection-reset`](https://github.com/RealityBending/Lab/blob/main/hpc/troubleshooting.md#ssh-connection-reset) |
 | 3.7 | do not set `--time` below the partition's max for a job of uncertain length (this project's 42.7-44 h `gam_lnr` shards against a 2-day `--time`, 2026-09-20, are the example there) | [`jobs.md#wall-time`](https://github.com/RealityBending/Lab/blob/main/hpc/jobs.md#wall-time) |
-| 3.8 | a second account's fits fail to compile: `install_pkgs.R` does not reproduce the working brms, which `dmm56` borrows through `R_LIBS_USER` (found 2026-09-21; pinning brms in `install_pkgs.R` still to do) | [`toolchain.md#the-brms-trap`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#the-brms-trap) |
+| 3.8 | a second account's fits fail to compile: `install_pkgs.R` does not reproduce the working brms, which `dmm56` borrows through `R_LIBS_USER` (found 2026-09-21, again on `cc831` 2026-10-26; **worked around 2026-10-26**: every job sets `R_LIBS_USER` itself, see [3.8](#38-the-brms-trap-the-jobs-set-r_libs_user-themselves-2026-10-26) below; pinning brms in `install_pkgs.R` still to do) | [`toolchain.md#the-brms-trap`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#the-brms-trap) |
 
 ### 3.6 `file_refit = "never"` reuses stale fits silently
 
@@ -180,6 +180,54 @@ Probe and test runs **must** use a separate `IGC_MODELS_DIR` so their output can
 never be mistaken for production shards. Since 2026-09-18 `./hpc push` also
 mirrors rather than merges, so a renamed script cannot be left behind on the
 cluster and submitted by accident — the same class of bug one level up.
+
+### 3.8 The brms trap: the jobs set `R_LIBS_USER` themselves (2026-10-26)
+
+A fresh account cannot compile any model. The module ships brms 2.20.4, which
+writes the old array syntax, and CmdStan has rejected it since 2.33:
+
+```
+Syntax error in model_<hash>.stan, line 10:
+   int[] sequence(int start, int end) {
+Ill-formed type. Expected an unsized type in function signature.
+```
+
+`cc831` hit it on 2026-10-26: both smoke-test jobs (11625565-6) died after
+17 s. The account set up on 2026-09-21 hit it first.
+
+Every fit so far used brms 2.21.0 from
+`/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/`. That
+library belongs to `cr291`, of another research group, and anyone can read it
+(`other::r-x` all the way down, checked 2026-10-26). `dmm56` gets it through
+`export R_LIBS_USER=...` in `~/.bashrc`, **not `~/.Renviron` as the hub says**.
+`./hpc` connects over ssh, which reads `.bashrc`, and `sbatch --export=ALL`
+carries the variable into the job. A new account has no such line.
+
+**Since 2026-10-26 the project sets it, not the account.** `./hpc` passes
+`IGC_R_LIBS_USER` (default: that path) to every job, and sets `R_LIBS_USER`
+for `install` and `precompile`. Each `.slurm` exports it as `R_LIBS_USER`,
+with the same default when submitted by hand. Nothing changes for `dmm56`. R
+searches `R_LIBS` (the project library) first, then `R_LIBS_USER`, then the
+module's `R_LIBS_SITE` (the `CmdStanR` modulefile prepends there, checked). A
+brms in an account's own project library would therefore still shadow it.
+**Every job's log now has a `brms <version> from <path>` line** before the R
+script starts. Anything other than `brms 2.21.0 from /research/cisc2/...` is
+this trap.
+
+Still open:
+
+- The brms is borrowed. The library has not changed since 2024-05-14, but we
+  do not control it. It was built under R 4.2.1, and the module's R 4.3.2
+  loads it.
+- The real fix is still to pin brms 2.21.0 in `install_pkgs.R`, with the
+  CmdStan version (2.39.0 on `dmm56`). The 2026-09-21 account tried brms
+  2.21.0 in its project library, on CmdStan 2.37, and hit a C++ template
+  error in brms's `reduce_sum` code (hub). That route needs a smoke test of
+  its own.
+- Each account's CmdStan is whatever `install_cmdstan()` fetched on the day.
+- It is not recorded how `oc236` and `asf25` got past the trap. After their
+  next `./hpc push`, their jobs get this library too, and the brms line in
+  their logs will show what they load.
 
 ### 3.9 The laptop's brms rebuilds a cluster fit's smooths, wrongly (2026-10-02)
 
@@ -1631,8 +1679,8 @@ there are in `old_20261013/laptop_only/`.
 | `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11612026 (cmdstanr), 11612031 (stanli 0.22.2) | **resubmitted 2026-10-20** as both arms of the second stanli test (6.7). The cmdstanr arm is the production fit. Lost before: 11596823, cancelled by root after 12.3 h (its CSVs are still in `models/stan_csv/*_11596823`). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
 | `gam_ddm4_ebbinghaus` | `dmm56` `long`, zen5 | 11596774 | **fitted**: all 4 shards done by 2026-10-19 12:51 (`REPORT`), 43.2 h on rtx-01, 60.5-67.2 h on rtx-02, 72.3 h on rtx-00. Step 0.012-0.018, divergent 0-0.4%, max Rhat 1.83 per shard, except shard 1 (rtx-00): one chain at step 0.0124 ran at tree depth 9 (mean n_leapfrog 382 against 255), max Rhat 1.95. **Combined** 2026-10-19 (11608478, loo in blocks, 4.8): all 8 chains in one mode (`lp__` within 18 of the median, sd ~105), that chain included. elpd_loo -33,419 (SE 825), p_loo 10,921, 915 rows (0.3%) with Pareto k > 0.7. **Predicted** (11609939, 0.9 min, 25 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 0 conflicts, 4 low-tail flags, all smooth `sds` (`boundary` 1, `ndt` 1-3, posterior medians 0.17-0.26), the known CDF artefact of the `exponential(~0.085)` prior on flat smooths |
 | `gam_ddm4_verticalhorizontal` | `dmm56` `long`, zen5 | 11596775 | **fitted**: all 4 shards done 2026-10-18 06:31-07:45 on rtx-01, 41.9-43.2 h each (`REPORT`). Clean by 6.1: step 0.016-0.019 in all 8 chains, n_leapfrog 254, divergent 0-0.5%, no init rejections, max Rhat 1.83 per shard (the expected participant-level band). Combine 11606712 (2026-10-18) **failed** after 43 s in `add_criterion("loo")`: `Cholmod error 'problem too large'`. The chain table printed first: all 8 chains in one mode (`lp__` -20940 to -20964, sd ~105), none frozen. The failure is 8,000 draws x 321,113 rows = 2.57e9 cells, above the 2^31 that `Matrix` can allocate as one dense matrix when brms builds the participant-level predictor. Every 8,000-draw combine at full data will hit it (the ceiling is ~6,600 draws at 324k rows). The 4,000-draw combines of the old generation were 1.3e9. Seen 2026-10-19. The block-wise rerun (11608068) then segfaulted in `loo.matrix()`, the same limit in loo (4.8). **Combined** 2026-10-19 (11608477): elpd_loo -11,994 (SE 830), p_loo 12,089, 1,167 rows (0.4%) with Pareto k > 0.7. **Predicted** (11609938, 0.8 min, 23 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 6 low-tail flags and 1 conflict, all smooth `sds` (`boundary` 1/3, `bias` 1/3, `ndt` 1-3, posterior medians 0.08-0.36). The conflict is `sds_ndt` 3 at 0.08 (prior quantile 0.007), the same flat-smooth artefact one step further out. Nothing on `mu`, `boundary`, `bias` or `poutlier` is flagged |
-| `gam_lnr_mullerlyer` | `dmm56` `sussexneuro`, zen5 | see 6.6 | the cmdstanr arm of the stanli speed test (6.6), a production fit |
-| `gam_lnr_mullerlyer`, stanli | `dmm56` `sussexneuro`, zen5 | see 6.6 | the stanli arm (6.6), in `models_stanli/` |
+| `gam_lnr_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11603736 (see 6.6) | the cmdstanr arm of the stanli speed test (6.6), a production fit. **Fitted**: all 4 shards done 2026-10-21 01:20 to 2026-10-23 00:45. Step 0.0056-0.0076; three chains (shard 1 both, shard 3 chain 2) at max treedepth on 99-100% of draws, one (shard 4 chain 2) on 26%, the others never; divergent 0-0.7%. Combine 11619557 (2026-10-23) **failed** after 15 min in `log_lik()`, "vector memory exhausted (limit reached?)", at 117 GB of its 320G: `~/.Renviron` sets `R_MAX_VSIZE=100Gb`, and `combine_model.R` now lifts it with `mem.maxVSize(Inf)`. **Combined** 2026-10-23 (11619776, 44.8 min, peak 151 GB): all 8 chains in one mode (`lp__` within 25 of the median, sd ~110). elpd_loo 50,468 (SE 849), p_loo 13,215, 940 rows (0.3%) with Pareto k > 0.7. Population Rhat max 1.022 (`sd_Participant__ndt_Intercept`), lp__ 1.015, min bulk ESS 553. **Predicted** 2026-10-23 (11619777, 1.9 min) |
+| `gam_lnr_mullerlyer`, stanli | `dmm56` `sussexneuro`, zen5 | 11603743 (see 6.6) | the stanli arm (6.6), in `models_stanli/`. Shards 1, 3, 4 done; shard 2 died 2026-10-21 18:30 after 4.3 days with a bus error (`non-existent physical address`) inside `stanli::sample_model()` on rtx-02, at 2400/2500 in its second chain, nothing saved. **Resubmitted** 2026-10-23 12:52 as 11619556 (`--array=2`, same `sussexneuro`/zen5/64G/14 d), pinned to the 0.21.0 library (`IGC_STANLI_LIB=.../cogmod_stanli/R_libs`) so that it combines with the other three. That resubmission **failed after 15 s** (rtx-02, 12:52:18): "the stanli runtime is not installed. Run stanli_install() once, or set STANLI_RUNTIME". The 0.21.0 runtime had been deleted by the 0.22.2 install (6.6, "The 0.21.0 runtime"). **Resubmitted again** 2026-10-24 as 11623606, on the 0.21.0 library with `IGC_STANLI_RUNTIME=.../cogmod_stanli/runtime_v0.21.0/libstanli.so` |
 | `gam_ddm4_mullerlyer` | `dmm56` `long`, zen5 | 11615774 (cmdstanr), 11615777 (stanli 0.22.2) | **submitted 2026-10-22** as both arms of the third stanli test (6.8). The cmdstanr arm is the production fit. They fill `long`'s 8 tasks, so `gam_lnr_verticalhorizontal` and `gam_lnr_ebbinghaus` wait for them |
 | `gam_ddm5_verticalhorizontal`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer`, `gam_rdm_verticalhorizontal`, `gam_rdm_mullerlyer` | `dmm56` `long` (or `sussexneuro`) | — | to submit in this order once the first `REPORT` lines are clean; whether in cmdstanr or stanli depends on 6.6-6.8 |
 | `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A (`oc236`) | 11596852 (LBA VH), 11596853 (RDM-5 Ebb), 11602751-2 | 2026-10-20 08:50: LBA VerticalHorizontal shards 1-2 done (2026-10-19 18:10 / 22:07, 77.6 / 81.6 h on rtx-01), shards 3-4 still running. RDM-5 Ebbinghaus all 4 running (3.8 days in, rtx-00). LBA MullerLyer shards 1-2 running since 2026-10-19 ~18:10 / ~22:07 (rtx-01), 3-4 pending, and LBA Ebbinghaus pending (`QOSMaxCpuPerUserLimit`). 2026-10-19 13:00: RDM-5 Ebbinghaus and LBA VerticalHorizontal running since 2026-10-16 12:33 (3.0 days in, rtx-00/01), LBA MullerLyer and Ebbinghaus pending (`QOSMaxCpuPerUserLimit`, i.e. behind oc236's own cap) |
@@ -1719,6 +1767,44 @@ points `IGC_STANLI_LIB` at 0.22.2 (6.7). These shards are the old
 `stanli_stanfit` class, and they are stamped 0.21.0, so combine them with
 `IGC_BACKEND=stanli IGC_STANLI_LIB=/mnt/lustre/users/psych/dmm56/cogmod_stanli/R_libs ./hpc combine gam_lnr_mullerlyer`.
 
+**The 0.21.0 runtime was deleted by the 0.22.2 install, and that is what
+killed shard 2.** `stanli_install()` (0.21.0 and 0.22.2 alike) downloads its
+release's runtime into `~/.cache/R/stanli/v<release>/` and then deletes
+every *other* release's directory there as stale. The 0.22.2 install job
+(11611997, 2026-10-20 14:03:03-14:03:23) therefore removed `v0.21.0/`. The
+cache directory's mtime is 14:03, and only `v0.22.2/` is left. Two things
+followed:
+- Shard 2 of 11603743 was running at the time, with that `libstanli.so`
+  mapped. `~` is NFS, so once the file was gone, a page of it that had to be
+  read again could not be. That is very likely the bus error ("non-existent
+  physical address", inside `sample_model()`) that killed the shard 28 h
+  later, at 2400/2500. Shard 3 was also running then, and finished at 22:46
+  without hitting it.
+- The 2026-10-23 resubmission (11619556) loaded 0.21.0, found no runtime,
+  and stopped after 15 s.
+
+**Fix (2026-10-24):** the v0.21.0 Linux runtime asset was downloaded straight
+from the release, sha256-checked against the digest GitHub lists, and
+unpacked into `cogmod_stanli/runtime_v0.21.0/`, outside the cache. Nothing
+there is ever touched by `stanli_install()`. `./hpc` passes
+`IGC_STANLI_RUNTIME` to the job as `STANLI_RUNTIME`, which stanli reads before
+the cache. `runtime_v0.21.0/check.sh` ran on rtx-01 (11623605): 0.21.0 loads
+that runtime, it is thread safe, and a toy model's gradient is right. Shard 2
+was resubmitted as 11623606, with the same settings as before:
+
+```bash
+IGC_BACKEND=stanli IGC_STANLI_LIB=/mnt/lustre/users/psych/dmm56/cogmod_stanli/R_libs \
+IGC_STANLI_RUNTIME=/mnt/lustre/users/psych/dmm56/cogmod_stanli/runtime_v0.21.0/libstanli.so \
+./hpc fit gam_lnr_mullerlyer --array=2 --partition=sussexneuro \
+  --constraint=amd_zen5 --mem=64G --time=14-00:00:00
+```
+
+**Never run `stanli_install()` while any stanli job is running.** The 0.22.2
+shards (6.7, 6.8) load `~/.cache/R/stanli/v0.22.2/libstanli.so`, and
+installing any other release would delete it under them. A new release goes
+into a directory of its own outside the cache, as above, and is used through
+`IGC_STANLI_RUNTIME`. Do not fetch it with `stanli_install()`.
+
 ### 6.7 stanli 0.22.2 against cmdstanr on `gam_rdm5_mullerlyer` (2026-10-20)
 
 **The second sampler test, on a slow-family model.** The user asked for it on
@@ -1780,6 +1866,14 @@ node in 6.6. The 2026-10-13 projection for RDM-5 at 1500 + 1000 in cmdstanr is
 Progress: `./hpc progress gam_rdm5_mullerlyer` and `IGC_BACKEND=stanli ./hpc
 progress gam_rdm5_mullerlyer`.
 
+2026-10-24 (99 h in): on rtx-00, stanli's four shards were at 1600-2000 /
+2500, and cmdstanr shard 4 at 1300. cmdstanr's rtx-02 shards were at 1000-1700.
+cmdstanr shard 3 was the only shard sampling with CSVs to read: step
+0.0027 / 0.0038, tree depth 10 in both chains, no divergences, and
+**`lp__` 27,306 against 25,662** (sd ~110), so the two chains are in
+different modes after ~220 draws. That is the same split as the old
+generation's RDM-5 on MullerLyer.
+
 ### 6.8 stanli 0.22.2 against cmdstanr on `gam_ddm4_mullerlyer` (2026-10-22)
 
 **The third sampler test, so each family has one**: LNR (6.6), RDM (6.7) and
@@ -1801,8 +1895,17 @@ its checks on the RDM-5 (6.7).
 
 | arm | job | submitted |
 | --- | --- | --- |
-| cmdstanr | 11615774 | 2026-10-22, `PENDING (Priority)` |
-| stanli 0.22.2 | 11615777 | 2026-10-22, `PENDING (Priority)` |
+| cmdstanr | 11615774 | 2026-10-22; shards 1-2 rtx-00, 3 rtx-02, 4 rtx-01 |
+| stanli 0.22.2 | 11615777 | 2026-10-22; shards 1-2 rtx-00, 3 rtx-02, 4 rtx-01 |
+
+The arms did not start together: on 2026-10-24 cmdstanr's shards had run
+55-56 h and stanli's 41-49 h. At that point, on rtx-01, stanli shard 4 was at
+2000-2200 / 2500 after 41 h and cmdstanr shard 4 at 1000-1100 after 55 h. On
+rtx-00 the two arms were closer (stanli 1400-1700 after 48-49 h, cmdstanr
+1000-1800 after 56 h). On rtx-02 they were level per hour, and slow: cmdstanr
+shard 3 was at 700 / 2500, and stanli shard 3 at 500. Both rtx-02 shards then
+projected (linearly, from warmup) slightly past `long`'s 8-day limit: 5.9 days
+to go against 5.7 left (cmdstanr) and 7.3 against 6.2 (stanli).
 
 As in 6.6, compare shards on the same node, per leapfrog.
 

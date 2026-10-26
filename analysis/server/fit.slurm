@@ -48,7 +48,14 @@ if [ -n "${IGC_R_LIBS:-}" ]; then
   export R_LIBS="${IGC_R_LIBS}${R_LIBS:+:$R_LIBS}"
 fi
 
+# brms 2.21.0 is in neither: the module's 2.20.4 writes int[] arrays, which
+# CmdStan >= 2.33 rejects. It comes from cr291's shared library (AGENT.md 3.8),
+# set here rather than left to each account's ~/.bashrc. R searches it after
+# R_LIBS and before the module's R_LIBS_SITE.
+export R_LIBS_USER="${IGC_R_LIBS_USER:-/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/}"
+
 echo "Rscript: $(command -v Rscript)"
+Rscript -e 'cat("brms", format(packageVersion("brms")), "from", find.package("brms"), "\n")'
 
 # Propagate R's exit status. Without this the trailing echo below makes every
 # task report COMPLETED/0:0 even when Rscript died, which hides failures in

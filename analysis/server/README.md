@@ -465,9 +465,12 @@ Set `MODEL` to the entry you are fitting. The steps are the same for any of
 them.
 
 **On a second account, first make sure it can compile a model at all.** The
-fresh second account set up on 2026-09-21 failed on every model within ~40 s
-([hub `toolchain.md#the-brms-trap`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#the-brms-trap),
-still open). The smoke test in step 1 is the check. It runs on `short`, and a
+fresh accounts set up on 2026-09-21 and 2026-10-26 failed on every model
+within a minute: the module's brms is too old for their CmdStan
+([hub `toolchain.md#the-brms-trap`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md#the-brms-trap)).
+Since 2026-10-26 every job sets the brms library itself (`AGENT.md` §3.8),
+which should prevent it. The smoke test in step 1 is the check. It runs on
+`short`, its log should print `brms 2.21.0 from /research/cisc2/...`, and a
 compile failure shows up in `./hpc log` within the first minute. A cogmod
 older than 0.3.3 stops the job in its first second, and `./hpc install cogmod`
 fixes that.
@@ -665,7 +668,9 @@ a newer `cmdstanr`), built by `install_pkgs.R` via `./hpc install`:
 ```
 
 The library is shared with every other project on the account (FakeArt
-included). Stack, versions, module quirks and the brms trap on fresh accounts:
+included). brms 2.21.0 is in neither: it comes from another group's
+world-readable library, which every job puts on `R_LIBS_USER` (`AGENT.md`
+§3.8). Stack, versions, module quirks and the brms trap on fresh accounts:
 [hub `toolchain.md`](https://github.com/RealityBending/Lab/blob/main/hpc/toolchain.md).
 
 ### Refreshing cogmod
@@ -705,14 +710,15 @@ is found automatically by `cmdstanr`. On an account that has none, `./hpc
 install` builds one (`install_cmdstan()`, ~15-25 min, once per account) before
 going on to the packages.
 
-Both the module name and the library path are overridable:
+The module name and both library paths are overridable:
 
 | variable | default |
 | --- | --- |
 | `IGC_R_MODULE` | `CmdStanR/0.7.1-foss-2023a-R-4.3.2` |
 | `IGC_R_LIBS` | `/mnt/lustre/users/psych/$IGC_HPC_USER/cluster_R_libs/x86_64-pc-linux-gnu-library/4.3` |
+| `IGC_R_LIBS_USER` | `/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/` (brms 2.21.0) |
 
-`./hpc fit` / `./hpc combine` pass both to the job via `--export`; the `.slurm`
+`./hpc fit` / `./hpc combine` pass all three to the job via `--export`; the `.slurm`
 scripts fall back to these same defaults when submitted by hand.
 
 Data is read straight from the GitHub raw URLs in `fit_model.R` — the compute

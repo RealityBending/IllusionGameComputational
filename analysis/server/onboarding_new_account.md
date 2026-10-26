@@ -74,8 +74,9 @@ On Windows, use Git Bash for every command here.
    ssh artemis 'cat ~/.bashrc ~/.Renviron 2>/dev/null; id -Gn'
    ```
 
-   Report any `R_LIBS_USER` line to the person and Dom before going further
-   (hub `toolchain.md#the-brms-trap`). `id -Gn` lists their groups.
+   They need no `R_LIBS_USER` line: `./hpc` sets it in every job, so that the
+   fits get the same brms 2.21.0 as Dom's (`AGENT.md` §3.8). Report any R
+   setting you see there anyway. `id -Gn` lists their groups.
    `artemis_sussexneuro` there means they have `sussexneuro`.
 2. Point the project driver at their account. `hpc.local` is gitignored, so
    no tracked file changes:
@@ -100,8 +101,9 @@ On Windows, use Git Bash for every command here.
    ./hpc precompile   # CmdStan precompiled header
    ```
 
-   `install` must end with every package `OK`, including
-   `cogmod >= 0.3.5 OK`.
+   `install` must end with every package `OK`, including `brms OK 2.21.0`
+   and `cogmod >= 0.3.5 OK`. Note the version on its `cmdstan:` line (Dom's
+   account runs 2.39.0).
 
 ## C. Smoke test
 
@@ -122,9 +124,11 @@ that `sbatch` prints:
 ./hpc log <job number>
 ```
 
-A pass is `participants: 30  rows: 3734`, a `REPORT` line, `SUCCESSFUL` and
-`status 0`, within about 5-15 minutes. A compile error on both models within
-the first minute is the brms trap (`AGENT.md` §3.8): stop and report it.
+A pass is `brms 2.21.0 from /research/cisc2/...` near the top of the log,
+then `participants: 30  rows: 3734`, a `REPORT` line, `SUCCESSFUL` and
+`status 0`, within about 5-15 minutes. Any other brms line, or a compile
+error on both models within the first minute, is the brms trap
+(`AGENT.md` §3.8): stop and report it.
 
 If they have `sussexneuro`, confirm it with a bare submission. A partition
 list is not a test, because `-p sussexneuro,general` silently runs on
@@ -137,7 +141,7 @@ list is not a test, because `-p sussexneuro,general` silently runs on
 ## Then stop and report
 
 Send Dom (through the person) the user name, the output of `id -Gn`,
-whether `sussexneuro` worked, and both smoke-test logs. Dom replies with the
+whether `sussexneuro` worked, the CmdStan version, and both smoke-test logs. Dom replies with the
 models to fit and the exact `./hpc fit` lines. `refit_colleagues.md` shows
 what that phase looks like (submit, check progress, combine, send the files
 back).

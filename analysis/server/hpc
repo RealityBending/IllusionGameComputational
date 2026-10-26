@@ -72,6 +72,12 @@ MODELS_DIR="${IGC_MODELS_DIR:-${USERS_DIR}/models}"
 # The benchmark's library (cogmod_stanli/R_libs) holds the 0.21.0 of the LNR
 # test (6.6): combine that one with IGC_STANLI_LIB=.../cogmod_stanli/R_libs.
 # fit_model.R and combine_model.R refuse to mix shards of two stanli versions.
+# stanli_install() deletes every other release's runtime from ~/.cache/R/stanli
+# (0.22.2's install removed 0.21.0's on 2026-10-20, AGENT.md 6.6), so 0.21.0's
+# runtime now lives outside the cache, in cogmod_stanli/runtime_v0.21.0. A fit
+# on that library names it with IGC_STANLI_RUNTIME=<path to libstanli.so>,
+# which the job gets as STANLI_RUNTIME. Never run stanli_install() while a
+# stanli job is running.
 BACKEND="${IGC_BACKEND:-cmdstanr}"
 BACKEND_SUFFIX=""
 if [ "$BACKEND" = stanli ]; then
@@ -87,6 +93,14 @@ MAIL_USER="${IGC_MAIL_USER:-${HPC_USER}@sussex.ac.uk}"
 R_MODULE="${IGC_R_MODULE:-CmdStanR/0.7.1-foss-2023a-R-4.3.2}"
 EB_MODULES="${IGC_EB_MODULES:-/mnt/shared/easybuild/modules/all}"
 R_LIBS_DIR="${IGC_R_LIBS:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cluster_R_libs/x86_64-pc-linux-gnu-library/4.3}"
+# brms 2.21.0 is in neither: the module ships 2.20.4, whose old array syntax
+# (int[]) CmdStan >= 2.33 rejects, so every model fails to compile. It comes
+# from cr291's world-readable library, which dmm56 had on R_LIBS_USER through
+# ~/.bashrc and a fresh account does not (AGENT.md 3.8; cc831, 2026-10-26).
+# Every job, install and precompile now sets it, whatever the account. R
+# searches R_LIBS (the project library), then R_LIBS_USER, then the module's
+# R_LIBS_SITE, so a brms installed in the project library would still win.
+R_LIBS_USER_DIR="${IGC_R_LIBS_USER:-/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/}"
 
 # Which cogmod the cluster library tracks. 'dev', which is 0.3.5: new fits use
 # it (decision 2026-10-12, AGENT.md 2), and fit_model.R refuses anything below
@@ -221,6 +235,7 @@ cmd_install() {
       module use \"${EB_MODULES}\"
       module load \"${R_MODULE}\"
       export IGC_R_LIBS=\"${R_LIBS_DIR}\"
+      export R_LIBS_USER=\"${R_LIBS_USER_DIR}\"
       export IGC_COGMOD_REF=\"${COGMOD_REF}\"
       export IGC_COGMOD_MIN=\"${IGC_COGMOD_MIN:-0.3.5}\"
       export IGC_FORCE=\"${forced}\"
@@ -244,6 +259,7 @@ cmd_precompile() {
       module use \"${EB_MODULES}\"
       module load \"${R_MODULE}\"
       export R_LIBS=\"${R_LIBS_DIR}\"
+      export R_LIBS_USER=\"${R_LIBS_USER_DIR}\"
       Rscript precompile.R
     '"
 }
@@ -271,6 +287,7 @@ submit_per_model() {
     [ -n "$val" ] && extra="${extra},${v}='${val}'"
   done
   [ "$BACKEND" = stanli ] && extra="${extra},IGC_BACKEND='stanli',IGC_STANLI_LIB='${STANLI_LIB}'"
+  [ "$BACKEND" = stanli ] && [ -n "${IGC_STANLI_RUNTIME:-}" ] && extra="${extra},STANLI_RUNTIME='${IGC_STANLI_RUNTIME}'"
   # ... and every prediction setting, e.g. IGC_PRED_PPC_NDRAWS=1000
   for v in $(compgen -v IGC_PRED_ || true); do
     eval "val=\${$v:-}"
@@ -288,7 +305,7 @@ sbatch \
       --output='${SCRATCH_DIR}/${tag}_${model}${BACKEND_SUFFIX}_%A_%a.out' \
       --error='${SCRATCH_DIR}/${tag}_${model}${BACKEND_SUFFIX}_%A_%a.err' \
       --mail-user='${MAIL_USER}' \
-      --export=ALL,IGC_MODEL='${model}',IGC_USERS_DIR='${USERS_DIR}',IGC_SCRATCH_DIR='${SCRATCH_DIR}',IGC_MODELS_DIR='${MODELS_DIR}',IGC_R_MODULE='${R_MODULE}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_EB_MODULES='${EB_MODULES}',IGC_FILE_REFIT='${FILE_REFIT}'${extra} \
+      --export=ALL,IGC_MODEL='${model}',IGC_USERS_DIR='${USERS_DIR}',IGC_SCRATCH_DIR='${SCRATCH_DIR}',IGC_MODELS_DIR='${MODELS_DIR}',IGC_R_MODULE='${R_MODULE}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_R_LIBS_USER='${R_LIBS_USER_DIR}',IGC_EB_MODULES='${EB_MODULES}',IGC_FILE_REFIT='${FILE_REFIT}'${extra} \
       $* '${script}' || echo '  !! sbatch failed for ${model}'"
   done
   remote "$cmds"
@@ -316,7 +333,7 @@ cmd_priors() {
   require_link
   local force=""
   [ -n "${IGC_PRIORS_FORCE:-}" ] && force=",IGC_PRIORS_FORCE='${IGC_PRIORS_FORCE}'"
-  remote "mkdir -p '${SCRATCH_DIR}' && cd '${USERS_DIR}' && sbatch       --chdir='${USERS_DIR}'       --job-name='igc_priors_${want}'       --output='${SCRATCH_DIR}/priors_${want}_%j.out'       --error='${SCRATCH_DIR}/priors_${want}_%j.err'       --mail-user='${MAIL_USER}'       --export=ALL,IGC_MODEL='${want}',IGC_MODELS_DIR='${MODELS_DIR}',IGC_R_MODULE='${R_MODULE}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_EB_MODULES='${EB_MODULES}'${force}       $* priors.slurm"
+  remote "mkdir -p '${SCRATCH_DIR}' && cd '${USERS_DIR}' && sbatch       --chdir='${USERS_DIR}'       --job-name='igc_priors_${want}'       --output='${SCRATCH_DIR}/priors_${want}_%j.out'       --error='${SCRATCH_DIR}/priors_${want}_%j.err'       --mail-user='${MAIL_USER}'       --export=ALL,IGC_MODEL='${want}',IGC_MODELS_DIR='${MODELS_DIR}',IGC_R_MODULE='${R_MODULE}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_R_LIBS_USER='${R_LIBS_USER_DIR}',IGC_EB_MODULES='${EB_MODULES}'${force}       $* priors.slurm"
 }
 
 # Move one generation of fits out of the way of the next. fit_model.R reuses

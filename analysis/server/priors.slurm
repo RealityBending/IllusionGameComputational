@@ -31,6 +31,9 @@ module load "${IGC_R_MODULE:-CmdStanR/0.7.1-foss-2023a-R-4.3.2}"
 if [ -n "${IGC_R_LIBS:-}" ]; then
   export R_LIBS="${IGC_R_LIBS}${R_LIBS:+:$R_LIBS}"
 fi
+# brms 2.21.0, from cr291's shared library: see fit.slurm and AGENT.md 3.8.
+export R_LIBS_USER="${IGC_R_LIBS_USER:-/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/}"
+Rscript -e 'cat("brms", format(packageVersion("brms")), "from", find.package("brms"), "\n")'
 
 Rscript prior_check.R
 status=$?

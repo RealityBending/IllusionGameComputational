@@ -57,7 +57,12 @@ if [ -n "${IGC_R_LIBS:-}" ]; then
   export R_LIBS="${IGC_R_LIBS}${R_LIBS:+:$R_LIBS}"
 fi
 
+# brms 2.21.0, from cr291's shared library: see fit.slurm and AGENT.md 3.8.
+# combine_model.R also calls brms 2.21.0 internals.
+export R_LIBS_USER="${IGC_R_LIBS_USER:-/research/cisc2/shared/cluster_R_libs/x86_64-pc-linux-gnu-library/4.2/}"
+
 echo "Rscript: $(command -v Rscript)"
+Rscript -e 'cat("brms", format(packageVersion("brms")), "from", find.package("brms"), "\n")'
 
 Rscript combine_model.R
 status=$?
