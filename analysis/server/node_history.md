@@ -109,6 +109,20 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_lba_verticalhorizontal | 11596852 (`oc236`) | 3, 4 (same run) | rtx-01 / rtx-00 | zen5 (`--constraint`) | done 2026-10-20 17:30 / 2026-10-21 14:47 | 101.0 / 122.2 h (sacct) |
 | gam_rdm5_ebbinghaus | 11596853 (`oc236`) | 2, 3, 4 (2026-10-13 refit: 1500 + 1000, cogmod 0.3.5) | rtx-00 | zen5 (`--constraint`) | done 2026-10-21 15:27 / 08:29 / 07:11. Shard 1 (rtx-00) still running at 125.9 h | 122.9 / 115.9 / 114.6 h (sacct) |
 | gam_lnr6_mullerlyer | 11601935 (`asf25`) | 3 (2026-10-13 refit: 1500 + 1000, cogmod 0.3.5) | rtx-02 | zen5 (`--constraint`) | done 2026-10-20 19:51. Shards 1, 2, 4 (rtx-02) still running at 125.6 h | 103.0 h (sacct) |
+| gam_rdm5_ebbinghaus | 11596853 (`oc236`) | 1 (same run as 2-4) | rtx-00 | zen5 (`--constraint`) | done 2026-10-22 22:53 | 154.3 h (sacct) |
+| gam_lnr6_mullerlyer | 11601935 (`asf25`) | 1, 2 (same run as 3) | rtx-02 | zen5 (`--constraint`) | done 2026-10-23 21:12 / 2026-10-24 04:23 | 176.4 / 183.6 h (sacct) |
+| gam_lnr6_mullerlyer | 11601935 (`asf25`) | 4 (same run) | rtx-02 | zen5 (`--constraint`) | **`TIMEOUT`** at `long`'s 8-day wall, 2026-10-24 12:50, nothing saved | 192.0 h |
+| gam_lnr6_ebbinghaus | 11601936 (`asf25`) | 1, 2, 3 (2026-10-13 refit: 1500 + 1000, cogmod 0.3.5) | rtx-00 / rtx-02 / rtx-00 | zen5 (`--constraint`) | **`TIMEOUT`** at the 8-day wall, 2026-10-24 12:50 / 12:50 / 18:39, nothing saved | 192.0 h each |
+| gam_lnr6_ebbinghaus | 11601936 (`asf25`) | 4 (same run, started 2026-10-18 06:31) | rtx-01 | zen5 (`--constraint`) | done 2026-10-24 14:56 | 152.4 h (sacct) |
+| gam_lba_mullerlyer | 11602751 (`oc236`) | 1-4 (2026-10-13 refit: 1500 + 1000, cogmod 0.3.5) | rtx-01 | zen5 (`--constraint`) | done 2026-10-24 02:12 / 2026-10-24 22:23 / 2026-10-25 20:14 / 2026-10-25 15:46 | 104.0 / 120.3 / 122.7 / 104.6 h (sacct) |
+| gam_rdm5_verticalhorizontal | 11601937 (`asf25`) | 1 (2026-10-13 refit: 1500 + 1000, cogmod 0.3.5) | rtx-02 | zen5 (`--constraint`) | done 2026-10-25 14:00 | 114.1 h (sacct) |
+| gam_lba_ebbinghaus | 11602752 (`oc236`) | 3 (2026-10-13 refit: 1500 + 1000, cogmod 0.3.5) | rtx-02 | zen5 (`--constraint`) | cancelled by `oc236` 2026-10-25 14:18, resubmitted 23 s later as 11624187_3 (rtx-01). Reason not known | 94.8 h |
+| gam_lba_ebbinghaus | 11602752 (`oc236`) | 1, 2 (same run) | rtx-00 / rtx-01 | zen5 (`--constraint`) | done 2026-10-26 04:52 / 12:58 | 116.4 / 118.2 h (sacct) |
+| gam_ddm4_mullerlyer, **stanli** | 11615777 | 4 (stanli test, AGENT.md 6.8; 1500 + 1000, cogmod 0.3.5) | rtx-01 | zen5 (`--constraint`) | done 2026-10-25 01:09: step 0.0119, n_leapfrog 509, treedepth 8.99, divergent 0.6%, max Rhat 1.43 | 48.6 h |
+| gam_ddm4_mullerlyer, **stanli** | 11615777 | 1, 2 (same run) | rtx-00 | zen5 (`--constraint`) | done 2026-10-25 19:21 / 2026-10-26 01:49: step 0.0104 / 0.0109, n_leapfrog 511 / 509, treedepth 9.00 / 8.98, divergent 0.1 / 0.4%, max Rhat 1.83 | 74.8 / 80.0 h |
+| gam_ddm4_mullerlyer | 11615774 | 2 (cmdstanr arm of the 6.8 test) | rtx-00 | zen5 (`--constraint`) | done 2026-10-25 20:47: step 0.0102, n_leapfrog 511, treedepth 9.00, divergent 0, max Rhat 1.83 | 83.2 h |
+| gam_rdm5_mullerlyer, **stanli** | 11612031 | 1-4 (stanli test, AGENT.md 6.7; 1500 + 1000, cogmod 0.3.5) | rtx-00 | zen5 (`--constraint` on sussexneuro) | done 2026-10-26 09:43 / 18:11 / 2026-10-25 21:52 / 2026-10-26 06:54: step 0.0032 / 0.0024 / 0.0032 / 0.0030, n_leapfrog 1023, **treedepth 10.00** in every chain, divergent 0, max Rhat 1.04 / 1.07 / 1.05 / 1.04 | 139.3 / 147.8 / 127.5 / 136.5 h |
+| gam_rdm5_mullerlyer | 11612026 | 3 (cmdstanr arm of the 6.7 test) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done 2026-10-26 17:12: step 0.0027 / 0.0038, n_leapfrog 1023, treedepth 10.00, divergent 0, **max Rhat 1.85**: its two chains are in different modes (AGENT.md 6.7) | 146.8 h |
 
 ## What it says so far (updated 2026-09-26)
 

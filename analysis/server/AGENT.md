@@ -384,6 +384,51 @@ Reported upstream on 2026-10-02, with the fix of keeping the stored `$sm`
 entries in `restructure_v2()`. It reintroduces brms#1465 for every fit older
 than 2.23.0, and it is still in brms master (2.23.2) as of that date.
 
+### 3.10 Jobs in different partitions get the same CPUs (2026-10-26)
+
+**Slurm gives a `sussexneuro` or `verylong` job CPUs that a `long` job
+already holds, and both then run on them at once.** `OverSubscribe=NO` holds
+only within a partition. The hub says "`PreemptMode=GANG,SUSPEND` ... does not
+bite". It is right that nothing is ever suspended: `SuspendTime=None` and
+`SecsPreSuspend=0` on every job below. But the overlapping jobs share their
+CPUs for as long as both run, and each runs at roughly half speed while they
+do. Here is `scontrol -d show job <id> | grep CPU_IDs`, 2026-10-26 ~18:45:
+
+| node | `long` job | its CPUs | also on them |
+| --- | --- | --- | --- |
+| rtx-01 | 11615774_4 (DDM-4 ML cmdstanr) | 94-103, 116-121 | all 16: eight 2-CPU `verylong` jobs of `ec700` (11614937-11615286) |
+| rtx-00 | 11615774_1 (DDM-4 ML cmdstanr) | 8-9, 18-31 | 18-31: our 11612026_4 (RDM-5 ML, `sussexneuro`); 8-9: `ec700` `verylong` 11615209 |
+| rtx-02 | 11615774_3 (DDM-4 ML cmdstanr) | 30-31, 64-77 | 64-77: our 11612026_1 (RDM-5 ML, `sussexneuro`) |
+| rtx-02 | 11615777_3 (DDM-4 ML stanli) | 28-29, 78-79, 112-117, 122-127 | 78-79: 11612026_1 |
+| rtx-02 | `asf25`'s 11601938_1 / _2 (LNR-6 VH) | 4-15 / 0-3, ... | our 11623606_2 (LNR ML stanli, `sussexneuro`): 0-15 |
+
+`sussexneuro` and `verylong` jobs overlapped `long` jobs. No two `long` jobs
+overlapped, and no `general` job overlapped a `long` one. rtx-02 had
+128/128 CPUs allocated and a load of 142.7.
+
+What it explains:
+
+- **The shards that run slowest are the ones that share.** All three DDM-4
+  ML shards still running share CPUs. The shard on rtx-01 was at
+  1900-2000 / 2500 after 104 h. stanli's shard 4 had finished all 2500 on the
+  same node in 49 h. Both rtx-02 shard 3s, the two projected past the 8-day
+  wall (6.8), share CPUs with our own RDM-5 shard 1.
+- **Our `sussexneuro` jobs slow our own `long` jobs, and the colleagues'.**
+  `asf25`'s four LNR-6 timeouts (6.5) ran on rtx-02 and rtx-00 while our
+  `sussexneuro` tests (6.6, 6.7) ran there. Whether they shared CPUs is no
+  longer visible: `CPU_IDs` exist only while a job runs.
+- **Wall times cannot compare backends or nodes** unless both shards are
+  known not to share. That holds for the stanli tests (6.6-6.8) too.
+
+Still open: report it to Artemis support, with the job ids above. Until it is
+fixed, a `sussexneuro` job buys quota at the cost of whichever `long` job it
+lands on. To check one node for overlaps after a submission:
+
+```bash
+./hpc sh 'n=artemis-rtx-02; for j in $(squeue -w $n -h -o %i); do
+  echo "$j $(squeue -j $j -h -o "%u %P") $(scontrol -d show job $j | grep -oE "CPU_IDs=[^ ]+" | head -1)"; done'
+```
+
 ---
 
 ## 4. Measurements
@@ -1275,6 +1320,29 @@ through the whole sampling phase, i.e. a warmup 1000 that never reached the
 typical set. If 1500 does not fix that, the answer is a reparametrisation,
 not more hours.
 
+**Candidate if run length comes down: 1500 + 500 (user, 2026-10-26). Not
+adopted. The user said to wait.** The trigger was four `asf25` LNR-6 shards
+lost at `long`'s 8-day wall, and two DDM-4 shards projected past it (6.5,
+6.8). Much of that is CPU sharing (3.10), which no run length fixes. For
+anything that does come down, 1500 + 500 is the preferred cut:
+
+- It keeps the 1500 warmup, which is what targets 4.10 C.
+- At 0.75-1.5x per warmup iteration, the shard wall is ~0.8x.
+- 8 chains x 500 is 4,000 draws, as in the old generation. The combine
+  stays under the ~6,600-draw loo ceiling (4.8), and needs less memory than
+  8,000 draws.
+
+Considered and set aside the same day: 1200 + 300 over 8 shards. It is
+0.6x the wall per shard, but 1.2x the zen5 time and 300 draws a chain. At
+LNR MullerLyer's 553 bulk ESS from 8,000 draws, that is ~20 effective draws
+per chain on the worst population parameter, too few for the stuck-chain and
+mode checks. 1200 warmup would also drop the 4.10 C test. More accounts add
+quota, not zen5 CPUs: the project held ~270 of the 384 on 2026-10-26.
+`fit_model.R` takes `IGC_SAMPLES=500` per submission, so nothing needs
+changing until it is adopted. Adopt it per model, never per shard: rstan's
+`sflist2stanfit()`, under `combine_models()`, needs the same iterations in
+every chain. A lost shard of a 1500 + 1000 model is rerun at 1500 + 1000.
+
 The per-chain seconds come straight from the `fit_*.out` files in scratch;
 one grep over their `$chains` rows reproduces the tables.
 
@@ -1676,15 +1744,15 @@ there are in `old_20261013/laptop_only/`.
 | --- | --- | --- | --- |
 | `gam_lnr_verticalhorizontal` | `dmm56` `long`, zen5 | 11596772 | **lost**: `CANCELLED by 0` (root) 2026-10-14 08:39 after 13.7 h, no reason in the logs, nothing saved. To resubmit |
 | `gam_lnr_ebbinghaus` | `dmm56` `long`, zen5 | 11596773 | **lost**, as above. To resubmit |
-| `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11612026 (cmdstanr), 11612031 (stanli 0.22.2) | **resubmitted 2026-10-20** as both arms of the second stanli test (6.7). The cmdstanr arm is the production fit. Lost before: 11596823, cancelled by root after 12.3 h (its CSVs are still in `models/stan_csv/*_11596823`). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
+| `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11612026 (cmdstanr), 11612031 (stanli 0.22.2) | **resubmitted 2026-10-20** as both arms of the second stanli test (6.7). The cmdstanr arm is the production fit. 2026-10-26: the stanli arm is done, all 4 shards; its combine (11625850) and predict (11625852) are queued. cmdstanr shard 3 finished 17:12 (146.8 h, max Rhat 1.85, two modes). Shards 1, 2 and 4 are at 1700-1800 / 2500, ~2.4-2.9 days to go, and shard 4 has one chain in the low mode too (6.7). Lost before: 11596823, cancelled by root after 12.3 h (its CSVs are still in `models/stan_csv/*_11596823`). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
 | `gam_ddm4_ebbinghaus` | `dmm56` `long`, zen5 | 11596774 | **fitted**: all 4 shards done by 2026-10-19 12:51 (`REPORT`), 43.2 h on rtx-01, 60.5-67.2 h on rtx-02, 72.3 h on rtx-00. Step 0.012-0.018, divergent 0-0.4%, max Rhat 1.83 per shard, except shard 1 (rtx-00): one chain at step 0.0124 ran at tree depth 9 (mean n_leapfrog 382 against 255), max Rhat 1.95. **Combined** 2026-10-19 (11608478, loo in blocks, 4.8): all 8 chains in one mode (`lp__` within 18 of the median, sd ~105), that chain included. elpd_loo -33,419 (SE 825), p_loo 10,921, 915 rows (0.3%) with Pareto k > 0.7. **Predicted** (11609939, 0.9 min, 25 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 0 conflicts, 4 low-tail flags, all smooth `sds` (`boundary` 1, `ndt` 1-3, posterior medians 0.17-0.26), the known CDF artefact of the `exponential(~0.085)` prior on flat smooths |
 | `gam_ddm4_verticalhorizontal` | `dmm56` `long`, zen5 | 11596775 | **fitted**: all 4 shards done 2026-10-18 06:31-07:45 on rtx-01, 41.9-43.2 h each (`REPORT`). Clean by 6.1: step 0.016-0.019 in all 8 chains, n_leapfrog 254, divergent 0-0.5%, no init rejections, max Rhat 1.83 per shard (the expected participant-level band). Combine 11606712 (2026-10-18) **failed** after 43 s in `add_criterion("loo")`: `Cholmod error 'problem too large'`. The chain table printed first: all 8 chains in one mode (`lp__` -20940 to -20964, sd ~105), none frozen. The failure is 8,000 draws x 321,113 rows = 2.57e9 cells, above the 2^31 that `Matrix` can allocate as one dense matrix when brms builds the participant-level predictor. Every 8,000-draw combine at full data will hit it (the ceiling is ~6,600 draws at 324k rows). The 4,000-draw combines of the old generation were 1.3e9. Seen 2026-10-19. The block-wise rerun (11608068) then segfaulted in `loo.matrix()`, the same limit in loo (4.8). **Combined** 2026-10-19 (11608477): elpd_loo -11,994 (SE 830), p_loo 12,089, 1,167 rows (0.4%) with Pareto k > 0.7. **Predicted** (11609938, 0.8 min, 23 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 6 low-tail flags and 1 conflict, all smooth `sds` (`boundary` 1/3, `bias` 1/3, `ndt` 1-3, posterior medians 0.08-0.36). The conflict is `sds_ndt` 3 at 0.08 (prior quantile 0.007), the same flat-smooth artefact one step further out. Nothing on `mu`, `boundary`, `bias` or `poutlier` is flagged |
 | `gam_lnr_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11603736 (see 6.6) | the cmdstanr arm of the stanli speed test (6.6), a production fit. **Fitted**: all 4 shards done 2026-10-21 01:20 to 2026-10-23 00:45. Step 0.0056-0.0076; three chains (shard 1 both, shard 3 chain 2) at max treedepth on 99-100% of draws, one (shard 4 chain 2) on 26%, the others never; divergent 0-0.7%. Combine 11619557 (2026-10-23) **failed** after 15 min in `log_lik()`, "vector memory exhausted (limit reached?)", at 117 GB of its 320G: `~/.Renviron` sets `R_MAX_VSIZE=100Gb`, and `combine_model.R` now lifts it with `mem.maxVSize(Inf)`. **Combined** 2026-10-23 (11619776, 44.8 min, peak 151 GB): all 8 chains in one mode (`lp__` within 25 of the median, sd ~110). elpd_loo 50,468 (SE 849), p_loo 13,215, 940 rows (0.3%) with Pareto k > 0.7. Population Rhat max 1.022 (`sd_Participant__ndt_Intercept`), lp__ 1.015, min bulk ESS 553. **Predicted** 2026-10-23 (11619777, 1.9 min) |
-| `gam_lnr_mullerlyer`, stanli | `dmm56` `sussexneuro`, zen5 | 11603743 (see 6.6) | the stanli arm (6.6), in `models_stanli/`. Shards 1, 3, 4 done; shard 2 died 2026-10-21 18:30 after 4.3 days with a bus error (`non-existent physical address`) inside `stanli::sample_model()` on rtx-02, at 2400/2500 in its second chain, nothing saved. **Resubmitted** 2026-10-23 12:52 as 11619556 (`--array=2`, same `sussexneuro`/zen5/64G/14 d), pinned to the 0.21.0 library (`IGC_STANLI_LIB=.../cogmod_stanli/R_libs`) so that it combines with the other three. That resubmission **failed after 15 s** (rtx-02, 12:52:18): "the stanli runtime is not installed. Run stanli_install() once, or set STANLI_RUNTIME". The 0.21.0 runtime had been deleted by the 0.22.2 install (6.6, "The 0.21.0 runtime"). **Resubmitted again** 2026-10-24 as 11623606, on the 0.21.0 library with `IGC_STANLI_RUNTIME=.../cogmod_stanli/runtime_v0.21.0/libstanli.so` |
-| `gam_ddm4_mullerlyer` | `dmm56` `long`, zen5 | 11615774 (cmdstanr), 11615777 (stanli 0.22.2) | **submitted 2026-10-22** as both arms of the third stanli test (6.8). The cmdstanr arm is the production fit. They fill `long`'s 8 tasks, so `gam_lnr_verticalhorizontal` and `gam_lnr_ebbinghaus` wait for them |
+| `gam_lnr_mullerlyer`, stanli | `dmm56` `sussexneuro`, zen5 | 11603743 (see 6.6) | the stanli arm (6.6), in `models_stanli/`. Shards 1, 3, 4 done; shard 2 died 2026-10-21 18:30 after 4.3 days with a bus error (`non-existent physical address`) inside `stanli::sample_model()` on rtx-02, at 2400/2500 in its second chain, nothing saved. **Resubmitted** 2026-10-23 12:52 as 11619556 (`--array=2`, same `sussexneuro`/zen5/64G/14 d), pinned to the 0.21.0 library (`IGC_STANLI_LIB=.../cogmod_stanli/R_libs`) so that it combines with the other three. That resubmission **failed after 15 s** (rtx-02, 12:52:18): "the stanli runtime is not installed. Run stanli_install() once, or set STANLI_RUNTIME". The 0.21.0 runtime had been deleted by the 0.22.2 install (6.6, "The 0.21.0 runtime"). **Resubmitted again** 2026-10-24 as 11623606, on the 0.21.0 library with `IGC_STANLI_RUNTIME=.../cogmod_stanli/runtime_v0.21.0/libstanli.so`. 2026-10-26 18:15: running (rtx-02), at 1900-2000 / 2500 after 48 h, ~15 h to go |
+| `gam_ddm4_mullerlyer` | `dmm56` `long`, zen5 | 11615774 (cmdstanr), 11615777 (stanli 0.22.2) | **submitted 2026-10-22** as both arms of the third stanli test (6.8). The cmdstanr arm is the production fit. 2026-10-26: cmdstanr shard 2 and stanli shards 1, 2 and 4 are done. cmdstanr shards 1 and 4 have ~1.1-1.4 days to go. **Both shard 3s (rtx-02) project past the 8-day wall** (6.8). They fill `long`'s 8 tasks, so `gam_lnr_verticalhorizontal` and `gam_lnr_ebbinghaus` wait for them |
 | `gam_ddm5_verticalhorizontal`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer`, `gam_rdm_verticalhorizontal`, `gam_rdm_mullerlyer` | `dmm56` `long` (or `sussexneuro`) | — | to submit in this order once the first `REPORT` lines are clean; whether in cmdstanr or stanli depends on 6.6-6.8 |
-| `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A (`oc236`) | 11596852 (LBA VH), 11596853 (RDM-5 Ebb), 11602751-2 | 2026-10-20 08:50: LBA VerticalHorizontal shards 1-2 done (2026-10-19 18:10 / 22:07, 77.6 / 81.6 h on rtx-01), shards 3-4 still running. RDM-5 Ebbinghaus all 4 running (3.8 days in, rtx-00). LBA MullerLyer shards 1-2 running since 2026-10-19 ~18:10 / ~22:07 (rtx-01), 3-4 pending, and LBA Ebbinghaus pending (`QOSMaxCpuPerUserLimit`). 2026-10-19 13:00: RDM-5 Ebbinghaus and LBA VerticalHorizontal running since 2026-10-16 12:33 (3.0 days in, rtx-00/01), LBA MullerLyer and Ebbinghaus pending (`QOSMaxCpuPerUserLimit`, i.e. behind oc236's own cap) |
-| `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B (`asf25`) | 11601935-8 | 2026-10-20 08:50: still unchanged, nothing finished; LNR-6 MullerLyer 3.8 days in, LNR-6 VH and RDM-5 VH pending. 2026-10-19 13:00: unchanged, LNR-6 MullerLyer (rtx-02) and Ebbinghaus running, the rest pending. 2026-10-18 08:00: LNR-6 MullerLyer running since 2026-10-16 ~13:00. LNR-6 Ebbinghaus shards 1-2 since then, shard 3 since ~18:40, shard 4 only since 2026-10-18 06:31 (rtx-01), so that model ends ~1.7 days after its siblings. RDM-5 VH and LNR-6 VH pending (`QOSMaxCpuPerUserLimit`) |
+| `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A (`oc236`) | 11596852 (LBA VH), 11596853 (RDM-5 Ebb), 11602751-2, 11624187 (LBA Ebb shard 3) | 2026-10-26 18:15 (sacct; their logs are not readable from `dmm56`): **LBA VerticalHorizontal, RDM-5 Ebbinghaus and LBA MullerLyer are fitted**, all 4 shards each. The last finished 2026-10-21 14:47, 2026-10-22 22:53 and 2026-10-25 20:14. LBA Ebbinghaus shards 1-2 finished 2026-10-26 (116 / 118 h). Shard 4 has been running 3.8 days (rtx-00). `oc236` cancelled shard 3 on 2026-10-25 14:18 after 94.8 h on rtx-02 and resubmitted it 23 s later as 11624187_3 (rtx-01, 1.2 days in). The reason is not known. 2026-10-20 08:50: LBA VerticalHorizontal shards 1-2 done (2026-10-19 18:10 / 22:07, 77.6 / 81.6 h on rtx-01), shards 3-4 still running. RDM-5 Ebbinghaus all 4 running (3.8 days in, rtx-00). LBA MullerLyer shards 1-2 running since 2026-10-19 ~18:10 / ~22:07 (rtx-01), 3-4 pending, and LBA Ebbinghaus pending (`QOSMaxCpuPerUserLimit`). 2026-10-19 13:00: RDM-5 Ebbinghaus and LBA VerticalHorizontal running since 2026-10-16 12:33 (3.0 days in, rtx-00/01), LBA MullerLyer and Ebbinghaus pending (`QOSMaxCpuPerUserLimit`, i.e. behind oc236's own cap) |
+| `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B (`asf25`) | 11601935-8 | 2026-10-26 18:15 (sacct; their logs are not readable from `dmm56`): **four LNR-6 shards hit `long`'s 8-day wall on 2026-10-24** (`TIMEOUT`, nothing saved): MullerLyer shard 4 (rtx-02) and Ebbinghaus shards 1-3 (rtx-00, rtx-02, rtx-00). MullerLyer shards 1-2 finished just inside the wall (176 / 184 h, rtx-02), and Ebbinghaus shard 4 in 152 h (rtx-01). So LNR-6 MullerLyer has 3 of 4 shards and LNR-6 Ebbinghaus 1 of 4. Nothing has been resubmitted. Whether the timeouts are the 4.10 C adaptation failure, which made the old LNR-6 Ebbinghaus slow, is not known. RDM-5 VerticalHorizontal shard 1 finished 2026-10-25 14:00 (114 h, rtx-02). Its shards 2-4 have been running 2.2-2.9 days. LNR-6 VerticalHorizontal has all 4 shards running, 2.0-2.2 days in (rtx-00/01/02). 2026-10-20 08:50: still unchanged, nothing finished; LNR-6 MullerLyer 3.8 days in, LNR-6 VH and RDM-5 VH pending. 2026-10-19 13:00: unchanged, LNR-6 MullerLyer (rtx-02) and Ebbinghaus running, the rest pending. 2026-10-18 08:00: LNR-6 MullerLyer running since 2026-10-16 ~13:00. LNR-6 Ebbinghaus shards 1-2 since then, shard 3 since ~18:40, shard 4 only since 2026-10-18 06:31 (rtx-01), so that model ends ~1.7 days after its siblings. RDM-5 VH and LNR-6 VH pending (`QOSMaxCpuPerUserLimit`) |
 
 Update the table as things move, and add a `node_history.md` row for every
 shard that finishes. The colleagues send each model's combined fit,
@@ -1874,6 +1942,24 @@ cmdstanr shard 3 was the only shard sampling with CSVs to read: step
 different modes after ~220 draws. That is the same split as the old
 generation's RDM-5 on MullerLyer.
 
+2026-10-26 (147 h in): **the stanli arm is done.** All four shards finished
+on rtx-00 in 127.5-147.8 h (2026-10-25 21:52 to 2026-10-26 18:11). Every
+chain ran at step 0.0024-0.0032 and tree depth 10.00 (n_leapfrog 1023), with
+no divergences. Max Rhat per shard is 1.04-1.07, so both chains of each shard
+agree. Whether all eight are in one mode needs the combine. cmdstanr shard 3
+finished at 17:12 (146.8 h, rtx-02) with max Rhat 1.85, which is the split
+above. cmdstanr shards 1, 2 (rtx-02) and 4 (rtx-00) are at 1700-1800 / 2500,
+~2.4-2.9 days to go. **Shard 4's chain 1 is now in the low mode too**
+(`lp__` 25,595 against 27,304 for its sibling, sd ~115). Shards 1 and 2 have
+all four chains at 27,304-27,333. So far, 2 of the 8 cmdstanr chains are in
+the low mode. On rtx-00, stanli ran all 2500 iterations in 5.3-6.2 days,
+while cmdstanr shard 4 had reached only 1700-1800 after 6.2 days.
+
+The stanli arm's **combine** (11625850, `general`, 320G, into
+`models_stanli/combined/`) and **predict** (11625852,
+`--dependency=afterok:11625850`) were submitted on 2026-10-26 at ~18:40. The
+combine's chain table answers whether stanli's eight chains share one mode.
+
 ### 6.8 stanli 0.22.2 against cmdstanr on `gam_ddm4_mullerlyer` (2026-10-22)
 
 **The third sampler test, so each family has one**: LNR (6.6), RDM (6.7) and
@@ -1911,6 +1997,19 @@ As in 6.6, compare shards on the same node, per leapfrog.
 
 Progress: `./hpc progress gam_ddm4_mullerlyer` and `IGC_BACKEND=stanli ./hpc
 progress gam_ddm4_mullerlyer`.
+
+2026-10-26 18:15: stanli shards 1 and 2 (rtx-00) finished in 74.8 / 80.0 h,
+and stanli shard 4 (rtx-01) in 48.6 h. cmdstanr shard 2 (rtx-00) finished in
+83.2 h. All four ran at step 0.010-0.012, tree depth ~9 (n_leapfrog 509-511),
+divergent 0-0.6%, max Rhat 1.43-1.83 per shard (the DDM-4 band, 6.5). On the
+same node, cmdstanr shard 1 (rtx-00) was at 2000-2100 / 2500 after 104.6 h,
+~1.1 days to go. cmdstanr shard 4 (rtx-01) was at 1900-2000 after 103.6 h,
+~1.4 days to go. **Both rtx-02 shards still project past the 8-day wall.**
+cmdstanr shard 3 has chain 1 at 2200 and chain 2 at 1300 / 2500, still in
+warmup: ~4.0 days to go against 3.7 left (wall 2026-10-30 10:35 UTC). stanli
+shard 3 is at 1100-1200: ~4.9 days to go against 4.2 left (wall 2026-10-30
+22:16). Four of `asf25`'s LNR-6 shards on rtx-00 and rtx-02 hit that wall on
+2026-10-24 (6.5).
 
 ---
 
