@@ -44,57 +44,69 @@ path <- if (dir.exists("models")) "models/" else "analysis/models/"
 
 pred_path <- paste0(path, "predictions/")
 
+# The same models fitted in stanli instead of cmdstanr, the sampler tests of
+# server/AGENT.md 6.6-6.8. They have the production names, so they have a
+# directory of their own, laid out the same way (`IGC_BACKEND=stanli ./hpc pull
+# predictions` fills its predictions/).
+stanli_path <- sub("models/$", "models_stanli/", path)
+model_dirs <- c(cmdstanr = path, stanli = stanli_path)
+
 # A fit does not know which illusion it was fitted to: its data only has the
 # Z-scored predictors, and combine_model.R drops $file. The file name is the one
 # place it is recorded (<model>_<illusion>[_suffix].rds), so it is attached to
 # the fit here, for model_illusion(). Only needed to compute predictions
 # locally (see load_predictions() below).
-load_fit <- function(file) {
+load_fit <- function(file, dir = path) {
   illusion <- regmatches(file, regexpr("MullerLyer|Ebbinghaus|VerticalHorizontal", file))
   if (length(illusion) == 0) stop("No illusion in the file name: ", file)
-  m <- readRDS(paste0(path, file))
+  m <- readRDS(paste0(dir, file))
   attr(m, "illusion") <- illusion
   m
 }
 
 # The results of server/predictions.R for one model, from
 # models/predictions/<name>.rds as written by `./hpc predict` and fetched by
-# `./hpc pull predictions`. A model with no such file but a fit in models/ has
-# them computed here instead, once, and saved to the same place -- slow, and it
-# loads the fit, but it means a fit pulled without its predictions still works.
-# Delete a prediction file to have it recomputed.
-load_predictions <- function(name) {
-  file <- paste0(pred_path, name, ".rds")
-  fit_file <- paste0(path, name, ".rds")
+# `./hpc pull predictions` (models_stanli/ for the stanli fit). A model with no
+# such file but a fit in models/ has them computed here instead, once, and
+# saved to the same place -- slow, and it loads the fit, but it means a fit
+# pulled without its predictions still works. Delete a prediction file to have
+# it recomputed. The sampler is recorded in $meta$sampler, which the files
+# themselves do not have.
+load_predictions <- function(name, sampler = "cmdstanr") {
+  dir <- model_dirs[[sampler]]
+  hpc <- if (sampler == "stanli") "IGC_BACKEND=stanli ./hpc" else "./hpc"
+  file <- paste0(dir, "predictions/", name, ".rds")
+  fit_file <- paste0(dir, name, ".rds")
   if (!file.exists(file)) {
     if (!file.exists(fit_file)) {
-      stop("No predictions and no fit for ", name, ": run `./hpc predict ",
-           sub("_[^_]+$", "", name), "` and `./hpc pull predictions`.")
+      stop("No predictions and no fit for ", name, " (", sampler, "): run `", hpc, " predict ",
+           sub("_[^_]+$", "", name), "` and `", hpc, " pull predictions`.")
     }
-    message("No predictions for ", name, ": computing them from the local fit (slow).")
-    fit <- load_fit(basename(fit_file))
+    message("No predictions for ", name, " (", sampler, "): computing them from the local fit (slow).")
+    fit <- load_fit(basename(fit_file), dir)
     rez <- run_predictions(fit, name, fit_file = fit_file)
     rm(fit)
     gc()
-    dir.create(pred_path, showWarnings = FALSE)
+    dir.create(paste0(dir, "predictions/"), recursive = TRUE, showWarnings = FALSE)
     saveRDS(rez, file)
   }
   rez <- readRDS(file)
 
   if (!identical(rez$meta$version, igc_predictions_version)) {
-    stop(name, ": the predictions are format ", rez$meta$version, " and this script reads ",
-         igc_predictions_version, ". Re-run `./hpc predict`, or delete ", file,
-         " to recompute locally.")
+    stop(name, " (", sampler, "): the predictions are format ", rez$meta$version,
+         " and this script reads ", igc_predictions_version, ". Re-run `", hpc,
+         " predict`, or delete ", file, " to recompute locally.")
   }
   # A fit re-combined or re-fitted since. The size is compared rather than the
   # time, which a copy does not always keep.
   if (file.exists(fit_file) && !identical(file.size(fit_file), rez$meta$fit_size)) {
-    warning(name, ": the predictions were made from another fit than models/", basename(fit_file),
-            ". Re-run `./hpc predict`, or delete ", file, " to recompute locally.")
+    warning(name, ": the predictions were made from another fit than ", fit_file,
+            ". Re-run `", hpc, " predict`, or delete ", file, " to recompute locally.")
   }
   if (!identical(plot_ranges[[rez$meta$illusion]], rez$meta$plot_range)) {
     warning(name, ": plot_ranges has changed since the predictions were made.")
   }
+  rez$meta$sampler <- sampler
   rez
 }
 
@@ -135,14 +147,39 @@ models <- list(
   )
 )
 
-# A model with neither predictions nor a fit yet (still running on the
-# cluster, say) is left out of its tab rather than stopping the whole render
-models <- lapply(models, function(m) {
-  here <- file.exists(paste0(pred_path, m, ".rds")) | file.exists(paste0(path, m, ".rds"))
-  if (any(!here)) message("Not available yet, skipped: ", paste(m[!here], collapse = ", "))
-  m[here]
+# Which fit each model's results come from. A model is its cmdstanr fit, the
+# production one. Its stanli fit, the same model sampled by another sampler,
+# stands in only while there is no cmdstanr fit (still running on the cluster,
+# or too slow to finish), and is otherwise used only in the sampler comparison
+# below. A model with neither is left out of its tab rather than stopping the
+# whole render.
+has_results <- function(name, sampler) {
+  dir <- model_dirs[[sampler]]
+  file.exists(paste0(dir, "predictions/", name, ".rds")) | file.exists(paste0(dir, name, ".rds"))
+}
+
+# Every model that has a stanli fit, whether or not its cmdstanr twin is there
+# yet, for the sampler comparison
+twins <- purrr::imap_dfr(models, \(m, illusion) {
+  data.frame(Illusion = illusion, Model = names(m), Name = unname(m))
+}) |>
+  mutate(cmdstanr = has_results(Name, "cmdstanr"), stanli = has_results(Name, "stanli")) |>
+  filter(stanli)
+
+samplers <- lapply(models, \(m) {
+  setNames(ifelse(has_results(m, "cmdstanr"), "cmdstanr",
+                  ifelse(has_results(m, "stanli"), "stanli", NA_character_)),
+           names(m))
 })
-preds <- lapply(models, \(m) lapply(m, load_predictions))
+skipped <- unlist(Map(\(m, s) m[is.na(s)], models, samplers))
+if (length(skipped) > 0) message("Not available yet, skipped: ", paste(skipped, collapse = ", "))
+standins <- unlist(Map(\(m, s) m[s %in% "stanli"], models, samplers))
+if (length(standins) > 0) {
+  message("No cmdstanr fit yet, its stanli fit stands in: ", paste(standins, collapse = ", "))
+}
+models <- Map(\(m, s) m[!is.na(s)], models, samplers)
+samplers <- lapply(samplers, \(s) s[!is.na(s)])
+preds <- Map(\(m, s) Map(load_predictions, m, s), models, samplers)
 
 # One colour per model, whatever the illusion, so a model looks the same in
 # every tab
@@ -184,6 +221,226 @@ model_fill <- function(labels) {
 # write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")
 ```
 
+## Sampler: stanli Against cmdstanr
+
+Some models were fitted twice, once by cmdstanr, which samples the production
+fits, and once by stanli: one per family, all on the Muller-Lyer (LNR, RDM-5
+and DDM-4; stanli 0.21.0 for the LNR, 0.22.2 for the other two;
+`server/AGENT.md` 6.6-6.8). Only the sampler differs. Both run the Stan
+program that brms 2.21.0 writes, on the same data, with the same priors,
+inits, shards, chains and threads. Two samplers of one posterior should agree
+on everything but their speed. The loo, and the parameters behind it, should
+match to within Monte Carlo error. A larger difference means that one of them
+did not explore the whole posterior, for instance because some chains settled
+in a mode they never left. The convergence of each fit then says which one to
+trust, not the sampler.
+
+Everywhere else in this document a model is its cmdstanr fit. Its stanli fit
+stands in only while there is no cmdstanr fit, because that is still fitting or
+was too slow to finish. The convergence table and the cost plot mark the
+stand-ins.
+
+```{r}
+# Both fits of every model that has a stanli one (`twins`, from the loading
+# chunk). A cmdstanr fit that is not there yet is NULL.
+twin_preds <- lapply(seq_len(nrow(twins)), \(i) list(
+  cmdstanr = if (twins$cmdstanr[i]) load_predictions(twins$Name[i], "cmdstanr"),
+  stanli = load_predictions(twins$Name[i], "stanli")
+))
+twins$Label <- paste0(twins$Model, " (", twins$Illusion, ")")
+names(twin_preds) <- twins$Label
+complete <- twins$cmdstanr
+
+sampler_colors <- c("cmdstanr" = "#455A64", "stanli" = "#F4511E")
+
+if (nrow(twins) == 0) {
+  cat("No model has a stanli fit.\n")
+} else {
+  tinytable::tt(data.frame(
+    Illusion = twins$Illusion,
+    Model = twins$Model,
+    cmdstanr = ifelse(twins$cmdstanr, "fitted", "not yet"),
+    stanli = "fitted",
+    "Used in this document" = ifelse(twins$cmdstanr, "cmdstanr", "stanli (stand-in)"),
+    check.names = FALSE
+  )) |>
+    fill_cells(2, model_fill(twins$Model))
+}
+```
+
+### Agreement
+
+```{r}
+# One row per fit, the two fits of a model one above the other. The ELPD
+# difference is stanli's minus cmdstanr's, with the SE that loo_compare() would
+# give it: both fits are of the same trials, so the pointwise values pair up
+# (`yhash`, loo's hash of the outcome, checks that they do). The Monte Carlo
+# SE is that of the difference, from every trial's own MCSE, and is the yardstick:
+# a difference within about twice it is what two runs of one sampler would give.
+# loo's mcse_loo() returns NA as soon as one trial has a Pareto k above 0.7,
+# which every fit here has, and those trials' MCSEs are underestimated, so read
+# it as a lower bound.
+table_sampler_agreement <- function(twin_preds) {
+  rows <- purrr::imap_dfr(twin_preds, \(pair, label) {
+    loo_c <- pair$cmdstanr$loo
+    loo_s <- pair$stanli$loo
+    if (!identical(attr(loo_c, "yhash"), attr(loo_s, "yhash"))) {
+      stop(label, ": the two fits are not of the same trials.")
+    }
+    d <- loo_s$pointwise[, "elpd_loo"] - loo_c$pointwise[, "elpd_loo"]
+    mcse <- sqrt(sum(loo_c$pointwise[, "mcse_elpd_loo"]^2, loo_s$pointwise[, "mcse_elpd_loo"]^2))
+    purrr::imap_dfr(pair, \(p, sampler) {
+      conv <- p$convergence
+      data.frame(
+        Model = label,
+        Family = sub(" .*", "", label),
+        Sampler = sampler,
+        ELPD = sprintf("%s ± %s", formatC(p$loo$estimates["elpd_loo", 1], format = "f", digits = 1, big.mark = ","),
+                       formatC(p$loo$estimates["elpd_loo", 2], format = "f", digits = 1, big.mark = ",")),
+        p_loo = formatC(p$loo$estimates["p_loo", 1], format = "f", digits = 1, big.mark = ","),
+        "ELPD diff ± SE" = if (sampler == "stanli") sprintf("%.1f ± %.1f", sum(d), sqrt(length(d)) * sd(d)) else "",
+        "Monte Carlo SE" = if (sampler == "stanli") sprintf("%.1f", mcse) else "",
+        "R-hat, population (max)" = formatC(conv$rhat_pop_max, format = "f", digits = 3),
+        "R-hat, lp__" = formatC(conv$rhat_lp, format = "f", digits = 3),
+        # Chains in different modes show here first: within a mode the chain
+        # means of lp__ sit within a few tens of each other (sd ~110)
+        "lp__, spread of the chain means" = formatC(diff(range(conv$lp_chain_mean)), format = "f", digits = 0, big.mark = ","),
+        check.names = FALSE
+      )
+    })
+  })
+  tinytable::tt(select(rows, -Family)) |>
+    tinytable::style_tt(j = 3:9, align = "r") |>
+    fill_cells(1, model_fill(rows$Family))
+}
+
+if (any(complete)) {
+  table_sampler_agreement(twin_preds[complete])
+} else {
+  cat("No model has both fits yet.\n")
+}
+```
+
+The parameters: each one's predicted curves along illusion strength, the
+cmdstanr fit solid and the stanli fit dashed, as in the parameter curves
+further down. Each panel gives the largest gap between the two over the grid,
+in posterior SDs of the cmdstanr fit.
+
+```{r}
+plot_sampler_curves <- function(pair, label) {
+  curves <- purrr::imap_dfr(pair, \(p, sampler) mutate(p$curves, Sampler = sampler)) |>
+    restore_units(illusion = pair$stanli$meta$illusion)
+
+  gap <- curves |>
+    select(Parameter, Type, Illusion_StrengthZ, Illusion_DifferenceZ, Sampler, Predicted, SE) |>
+    pivot_wider(names_from = Sampler, values_from = c(Predicted, SE)) |>
+    summarise(.by = Parameter,
+              Gap = max(abs(Predicted_stanli - Predicted_cmdstanr) / SE_cmdstanr, na.rm = TRUE))
+  curves <- curves |>
+    left_join(gap, by = "Parameter") |>
+    mutate(Panel = sprintf("%s (gap %.2f SD)", Parameter, Gap),
+           Illusion_Difference = factor(round(Illusion_Difference, 5)))
+
+  curve_cols <- colorRampPalette(
+    c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")
+  )(nlevels(curves$Illusion_Difference))
+
+  ggplot(curves, aes(Illusion_Strength, Predicted, colour = Illusion_Difference,
+                     group = interaction(Sampler, Illusion_Difference))) +
+    geom_line(aes(linetype = Sampler), linewidth = 0.9) +
+    facet_wrap(~Panel, scales = "free_y") +
+    scale_colour_manual(values = curve_cols) +
+    scale_linetype_manual(values = c("cmdstanr" = "solid", "stanli" = "dashed")) +
+    labs(title = label, x = "Illusion Strength", y = NULL, colour = "Task Difficulty") +
+    theme_minimal()
+}
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 7
+#| warning: false
+
+# warning: false for the Mean RT, which is NA at the grid points where a fit
+# predicts no response of that kind, and ggplot says so
+if (any(complete)) {
+  for (label in names(twin_preds)[complete]) print(plot_sampler_curves(twin_preds[[label]], label))
+} else {
+  cat("No model has both fits yet.\n")
+}
+```
+
+### Speed
+
+Wall clock per chain, warmup and sampling apart. The shards of both fits ran
+on the same three nodes, which are shared with other users and do not run at
+the same speed (rtx-02 is the slow one). Neither fit's file says which node
+each chain ran on. So read a gap of a few tens of percent with caution:
+`server/AGENT.md` 6.6-6.8 compares the two samplers node by node.
+
+```{r}
+table_sampler_speed <- function(twin_preds) {
+  rows <- purrr::imap_dfr(twin_preds, \(pair, label) {
+    time_c <- median(pair$cmdstanr$efficiency$Time_total)
+    purrr::imap_dfr(pair, \(p, sampler) {
+      e <- p$efficiency
+      data.frame(
+        Model = label,
+        Family = sub(" .*", "", label),
+        Sampler = sampler,
+        Chains = nrow(e),
+        "Step size (median)" = formatC(median(p$convergence$stepsize_chain), format = "f", digits = 4),
+        "Warmup (h)" = sprintf("%.0f", median(e$Time_warmup) / 3600),
+        "Sampling (h)" = sprintf("%.0f", median(e$Time_sample) / 3600),
+        "Total (h)" = sprintf("%.0f", median(e$Time_total) / 3600),
+        "Against cmdstanr" = sprintf("%.2fx", median(e$Time_total) / time_c),
+        "Bulk ESS / h" = sprintf("%.1f", mean(e$ESS_per_hour)),
+        check.names = FALSE
+      )
+    })
+  })
+  tinytable::tt(select(rows, -Family)) |>
+    tinytable::style_tt(j = 3:9, align = "r") |>
+    fill_cells(1, model_fill(rows$Family)) |>
+    tinytable::group_tt(j = list("Per chain, median" = 4:7))
+}
+
+plot_sampler_speed <- function(twin_preds) {
+  d <- purrr::imap_dfr(twin_preds, \(pair, label) {
+    purrr::imap_dfr(pair, \(p, sampler) mutate(p$efficiency, Model = label, Sampler = sampler))
+  }) |>
+    pivot_longer(c(Time_warmup, Time_sample), names_to = "Phase", values_to = "Seconds") |>
+    mutate(Phase = factor(Phase, levels = c("Time_warmup", "Time_sample"), labels = c("Warmup", "Sampling")),
+           Model = factor(Model, levels = rev(names(twin_preds))))
+
+  ggplot(d, aes(x = Seconds / 3600, y = Model, colour = Sampler)) +
+    geom_point(position = position_dodge(width = 0.5), size = 2.5, alpha = 0.5) +
+    stat_summary(fun = median, geom = "point", shape = 18, size = 5,
+                 position = position_dodge(width = 0.5)) +
+    facet_wrap(~Phase, scales = "free_x") +
+    scale_colour_manual(values = sampler_colors) +
+    labs(x = "Hours per chain", y = NULL,
+         subtitle = "One point per chain, diamond is the median.") +
+    theme_minimal() +
+    theme(legend.position = "top")
+}
+```
+
+```{r}
+if (any(complete)) {
+  table_sampler_speed(twin_preds[complete])
+} else {
+  cat("No model has both fits yet.\n")
+}
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 4
+
+if (any(complete)) plot_sampler_speed(twin_preds[complete])
+```
+
 ## Convergence
 
 A model is only worth comparing if its chains agree. Each cell is coloured by
@@ -212,6 +469,7 @@ show_convergence <- function(preds) {
   }
   if (!any(have)) return(invisible(NULL))
   conv <- conv[have]
+  sampler <- vapply(preds[have], \(p) p$meta$sampler, character(1))
   get <- \(k) vapply(conv, \(x) as.numeric(x[[k]]), numeric(1))
 
   rhat_pop <- get("rhat_pop_max")
@@ -239,6 +497,7 @@ show_convergence <- function(preds) {
   n_params <- get("n_params")
   tab <- data.frame(
     Model = names(conv),
+    Sampler = ifelse(sampler == "stanli", "stanli (stand-in)", sampler),
     Chains = get("n_chains"),
     "R-hat, population (max)" = formatC(rhat_pop, format = "f", digits = 3),
     "R-hat, all (max)" = formatC(rhat_all, format = "f", digits = 3),
@@ -253,13 +512,13 @@ show_convergence <- function(preds) {
   )
 
   out <- tinytable::tt(tab) |>
-    tinytable::style_tt(j = 2:9, align = "r") |>
+    tinytable::style_tt(j = 3:10, align = "r") |>
     fill_cells(1, model_fill(tab$Model)) |>
-    fill_cells(3, palette[g_rhat]) |>
-    fill_cells(6, palette[g_lp]) |>
-    fill_cells(7, palette[g_ess]) |>
-    fill_cells(8, palette[g_div]) |>
-    fill_cells(10, palette[g_all])
+    fill_cells(4, palette[g_rhat]) |>
+    fill_cells(7, palette[g_lp]) |>
+    fill_cells(8, palette[g_ess]) |>
+    fill_cells(9, palette[g_div]) |>
+    fill_cells(11, palette[g_all])
   out
 }
 ```
@@ -395,7 +654,7 @@ illu |>
 # Sampling efficiency: bulk ESS per hour of sampling, chain by chain (see
 # compute_efficiency() in server/predictions.R for what is counted)
 tidy_efficiency <- function(preds) {
-  purrr::imap_dfr(preds, \(p, name) mutate(p$efficiency, Model = name)) |>
+  purrr::imap_dfr(preds, \(p, name) mutate(p$efficiency, Model = name, Sampler = p$meta$sampler)) |>
     mutate(Model = factor(Model, levels = names(preds)))
 }
 
@@ -408,12 +667,14 @@ plot_efficiency <- function(preds) {
               ESS_per_hour = mean(ESS_per_hour),
               Time_total = mean(Time_total))
 
-  # What each fit was: two models are only comparable here if these match
+  # What each fit was: two models are only comparable here if these match. A
+  # stanli stand-in is a different sampler as well (see "Sampler" above).
   caption <- efficiency |>
     summarise(.by = Model,
-              label = sprintf("%s: %d chains, %g threads/chain, n = %s",
+              label = sprintf("%s: %d chains, %g threads/chain, n = %s%s",
                               first(Model), n(), first(Threads),
-                              format(first(N), big.mark = ","))) |>
+                              format(first(N), big.mark = ","),
+                              if (first(Sampler) == "stanli") ", stanli (stand-in)" else "")) |>
     pull(label) |>
     paste(collapse = "\n")
 

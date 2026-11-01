@@ -46,8 +46,9 @@ invisible(mem.maxVSize(Inf))
 # The first stanli shards (job 11603743, AGENT.md 6.6) hold a stanli_stanfit,
 # stanli's subclass of rstan's stanfit, which readRDS() restores only with
 # stanli on the library path. ./hpc passes IGC_STANLI_LIB under
-# IGC_BACKEND=stanli. It goes last on the path, so that the brms 2.23.1 in that
-# library cannot shadow the production one. read_shard() turns the fit into a
+# IGC_BACKEND=stanli. It goes last on the path, so that nothing in that library
+# can shadow the production packages (0.21.0's held brms 2.23.1). 0.25.0 reads
+# those 0.21.0 shards too (AGENT.md 6.10). read_shard() turns the fit into a
 # plain stanfit, as fit_model.R now saves it, so the combined fit reads anywhere.
 stanli_lib <- Sys.getenv("IGC_STANLI_LIB")
 if (nzchar(stanli_lib)) .libPaths(c(.libPaths(), stanli_lib))

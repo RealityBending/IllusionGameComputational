@@ -175,6 +175,9 @@ compute_efficiency <- function(m, pars = "^b_|^bs_|^sd_|^sds_") {
   # carried along too and printed under the plot.
   time <- rstan::get_elapsed_time(m$fit)
   threads <- as.numeric(m$fit@stan_args[[1]]$num_threads)
+  # A stanli fit's stan_args do not have it (fit_model.R, "Backend"), but the
+  # brm(empty = TRUE) it was built from keeps the threading it was given
+  if (length(threads) == 0) threads <- as.numeric(m$threads$threads)
 
   do.call(rbind, lapply(seq_len(posterior::nchains(draws)), function(chain) {
     # Parameters that were fixed rather than estimated (sigmadrift = 0 and the

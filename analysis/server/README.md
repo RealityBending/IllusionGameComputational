@@ -59,6 +59,20 @@ cd analysis/server
 ./hpc pull predictions     # -> analysis/models/predictions/
 ```
 
+**Fitting in stanli** (since 2026-10-31, AGENT.md 6.9-6.10): put
+`IGC_BACKEND=stanli` in front of every command for that model. The fit then
+uses stanli 0.25.0 instead of cmdstanr, its shards, combined fit and
+predictions go to `models_stanli/`, and its jobs are named
+`igc_<step>_<model>_stanli`:
+
+```bash
+IGC_BACKEND=stanli ./hpc fit gam_rdm_ebbinghaus --partition=long \
+  --constraint=amd_zen5 --mem=64G --time=8-00:00:00
+IGC_BACKEND=stanli ./hpc combine gam_rdm_ebbinghaus
+IGC_BACKEND=stanli ./hpc predict gam_rdm_ebbinghaus --dependency=afterok:<combine job id>
+IGC_BACKEND=stanli ./hpc pull predictions
+```
+
 `push` **mirrors** rather than merges: a top-level `*.R` / `*.slurm` on the
 cluster that no longer exists locally is deleted, so a renamed script can never
 be submitted by accident. `models/`, `tests/` and the logs are untouched.
@@ -234,7 +248,12 @@ share. On the cluster:
 ./hpc predict gam_lnr_mullerlyer --dependency=afterok:<combine job id>   # or queue it behind its combine
 ./hpc pull predictions                      # predictions/*.rds -> analysis/models/predictions/
 ./hpc pull 'predictions/gam_rdm_*.rds'      # just some: still lands in predictions/, never next to the fit
+IGC_BACKEND=stanli ./hpc pull predictions   # the stanli fits' -> analysis/models_stanli/predictions/
 ```
+
+The qmd reads the stanli prediction files too. Its first section compares
+each stanli fit with its cmdstanr twin. Everywhere else a model is its cmdstanr
+fit, and the stanli one stands in only while there is none.
 
 Each writes `models/predictions/<model>_<illusion>.rds`, ~20 MB (almost all of
 it `loo`'s pointwise matrix, which `loo_compare()` needs), and the qmd

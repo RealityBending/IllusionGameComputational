@@ -41,9 +41,10 @@ if (!backend %in% c("cmdstanr", "stanli")) {
   stop("IGC_BACKEND must be 'cmdstanr' or 'stanli', not '", backend, "'", call. = FALSE)
 }
 if (backend == "stanli") {
-  # stanli alone from its own library. That library also holds brms 2.23.1,
-  # which must not shadow the production brms 2.21.0: both arms have to
-  # sample the program the same brms writes.
+  # stanli alone from its own library (cogmod_stanli/R_libs_<version>), so
+  # that nothing installed there can shadow the production brms 2.21.0: both
+  # arms have to sample the program the same brms writes. The first one,
+  # 0.21.0's, also held brms 2.23.1.
   loadNamespace("stanli", lib.loc = Sys.getenv("IGC_STANLI_LIB"))
   if (!stanli::stanli_thread_safe()) {
     stop("this stanli runtime has no thread support", call. = FALSE)

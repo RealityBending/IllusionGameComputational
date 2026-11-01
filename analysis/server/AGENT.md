@@ -1742,17 +1742,19 @@ there are in `old_20261013/laptop_only/`.
 
 | model | where | job | state |
 | --- | --- | --- | --- |
-| `gam_lnr_verticalhorizontal` | `dmm56` `long`, zen5 | 11596772 | **lost**: `CANCELLED by 0` (root) 2026-10-14 08:39 after 13.7 h, no reason in the logs, nothing saved. To resubmit |
-| `gam_lnr_ebbinghaus` | `dmm56` `long`, zen5 | 11596773 | **lost**, as above. To resubmit |
-| `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11612026 (cmdstanr), 11612031 (stanli 0.22.2) | **resubmitted 2026-10-20** as both arms of the second stanli test (6.7). The cmdstanr arm is the production fit. 2026-10-26: the stanli arm is done, all 4 shards; its combine (11625850) and predict (11625852) are queued. cmdstanr shard 3 finished 17:12 (146.8 h, max Rhat 1.85, two modes). Shards 1, 2 and 4 are at 1700-1800 / 2500, ~2.4-2.9 days to go, and shard 4 has one chain in the low mode too (6.7). Lost before: 11596823, cancelled by root after 12.3 h (its CSVs are still in `models/stan_csv/*_11596823`). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
+| `gam_lnr_verticalhorizontal` | `cc831` `long`, zen5 (was `dmm56`) | 11626372 (was 11596772) | **fitted by `cc831`** (submitted 2026-10-27 after its smoke tests 11626366-7; sacct, their logs are not readable from `dmm56`): all 4 shards done 2026-10-28 12:43 to 2026-10-30 18:37, 27.6 / 29.4 h on rtx-01, 38.5 h on rtx-00, and **81.5 h for shard 1 on rtx-02**, 2-3x its siblings: ask for its `REPORT` line. No combine job as of 2026-10-31. Before: 11596772 on `dmm56`, `CANCELLED by 0` (root) 2026-10-14 08:39 after 13.7 h, no reason in the logs, nothing saved |
+| `gam_lnr_ebbinghaus` | `cc831` `long`, zen5 (was `dmm56`) | 11626373 (was 11596773) | **fitted by `cc831`**: shard 4 finished 2026-11-01 02:59 (104.5 h, rtx-00). Not combined as of 2026-11-01 08:00. Before that (sacct): 2026-10-31 11:05, shards 1-3 done (2026-10-29 15:58 to 2026-10-30 16:57; 51.9 h on rtx-01, 75.6 / 79.9 h on rtx-00). Shard 4 has run 88.7 h on rtx-00, with 4.3 days left to the wall. Whether the old generation's adaptation failure (4.10 C) is back shows only in their `REPORT` step sizes. Before: 11596773 on `dmm56`, lost as above |
+| `gam_rdm5_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11612026 (cmdstanr), 11612031 (stanli 0.22.2) | **resubmitted 2026-10-20** as both arms of the second stanli test (6.7). The cmdstanr arm is the production fit. 2026-10-26: the stanli arm is done, all 4 shards; its combine (11625850) and predict (11625852) are queued. cmdstanr shard 3 finished 17:12 (146.8 h, max Rhat 1.85, two modes). Shards 1, 2 and 4 are at 1700-1800 / 2500, ~2.4-2.9 days to go, and shard 4 has one chain in the low mode too (6.7). 2026-10-28: the stanli arm is **combined and predicted**, and is in two modes, four chains against four (6.7). cmdstanr shard 1 is done (11:01), and shards 2 and 4 are running. 2026-10-31: **all 4 cmdstanr shards are done**, shard 4 on 2026-10-29 23:20 (224.9 h, rtx-00) and shard 2 on 2026-10-30 05:08 (230.7 h, rtx-02). Max Rhat per shard 1.03 / 1.02 / 1.85 / 1.86: shards 3 and 4 each have one chain in the low mode, so 2 of the 8 chains, as on 2026-10-26. **Combined** 2026-10-31 (11639134, 71 min, loo 69.7 min): 6 chains at `lp__` 27,304-27,326 and 2 at 25,640-25,658. elpd_loo 38,774 (SE 894), p_loo 13,432, 420 rows with Pareto k > 0.7. Population Rhat max 1.51 (`b_Intercept`), min bulk ESS 15. **Predicted** (11639136, 1.5 min) and pulled. Lost before: 11596823, cancelled by root after 12.3 h (its CSVs are still in `models/stan_csv/*_11596823`). First submitted as `gam_rdm5` (11596782, 18:59) and cancelled after 1.4 h for the rename |
 | `gam_ddm4_ebbinghaus` | `dmm56` `long`, zen5 | 11596774 | **fitted**: all 4 shards done by 2026-10-19 12:51 (`REPORT`), 43.2 h on rtx-01, 60.5-67.2 h on rtx-02, 72.3 h on rtx-00. Step 0.012-0.018, divergent 0-0.4%, max Rhat 1.83 per shard, except shard 1 (rtx-00): one chain at step 0.0124 ran at tree depth 9 (mean n_leapfrog 382 against 255), max Rhat 1.95. **Combined** 2026-10-19 (11608478, loo in blocks, 4.8): all 8 chains in one mode (`lp__` within 18 of the median, sd ~105), that chain included. elpd_loo -33,419 (SE 825), p_loo 10,921, 915 rows (0.3%) with Pareto k > 0.7. **Predicted** (11609939, 0.9 min, 25 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 0 conflicts, 4 low-tail flags, all smooth `sds` (`boundary` 1, `ndt` 1-3, posterior medians 0.17-0.26), the known CDF artefact of the `exponential(~0.085)` prior on flat smooths |
 | `gam_ddm4_verticalhorizontal` | `dmm56` `long`, zen5 | 11596775 | **fitted**: all 4 shards done 2026-10-18 06:31-07:45 on rtx-01, 41.9-43.2 h each (`REPORT`). Clean by 6.1: step 0.016-0.019 in all 8 chains, n_leapfrog 254, divergent 0-0.5%, no init rejections, max Rhat 1.83 per shard (the expected participant-level band). Combine 11606712 (2026-10-18) **failed** after 43 s in `add_criterion("loo")`: `Cholmod error 'problem too large'`. The chain table printed first: all 8 chains in one mode (`lp__` -20940 to -20964, sd ~105), none frozen. The failure is 8,000 draws x 321,113 rows = 2.57e9 cells, above the 2^31 that `Matrix` can allocate as one dense matrix when brms builds the participant-level predictor. Every 8,000-draw combine at full data will hit it (the ceiling is ~6,600 draws at 324k rows). The 4,000-draw combines of the old generation were 1.3e9. Seen 2026-10-19. The block-wise rerun (11608068) then segfaulted in `loo.matrix()`, the same limit in loo (4.8). **Combined** 2026-10-19 (11608477): elpd_loo -11,994 (SE 830), p_loo 12,089, 1,167 rows (0.4%) with Pareto k > 0.7. **Predicted** (11609938, 0.8 min, 23 GB) and **prior-checked** (11609940) 2026-10-19: 34 parameters, 6 low-tail flags and 1 conflict, all smooth `sds` (`boundary` 1/3, `bias` 1/3, `ndt` 1-3, posterior medians 0.08-0.36). The conflict is `sds_ndt` 3 at 0.08 (prior quantile 0.007), the same flat-smooth artefact one step further out. Nothing on `mu`, `boundary`, `bias` or `poutlier` is flagged |
 | `gam_lnr_mullerlyer` | `dmm56` `sussexneuro`, zen5 | 11603736 (see 6.6) | the cmdstanr arm of the stanli speed test (6.6), a production fit. **Fitted**: all 4 shards done 2026-10-21 01:20 to 2026-10-23 00:45. Step 0.0056-0.0076; three chains (shard 1 both, shard 3 chain 2) at max treedepth on 99-100% of draws, one (shard 4 chain 2) on 26%, the others never; divergent 0-0.7%. Combine 11619557 (2026-10-23) **failed** after 15 min in `log_lik()`, "vector memory exhausted (limit reached?)", at 117 GB of its 320G: `~/.Renviron` sets `R_MAX_VSIZE=100Gb`, and `combine_model.R` now lifts it with `mem.maxVSize(Inf)`. **Combined** 2026-10-23 (11619776, 44.8 min, peak 151 GB): all 8 chains in one mode (`lp__` within 25 of the median, sd ~110). elpd_loo 50,468 (SE 849), p_loo 13,215, 940 rows (0.3%) with Pareto k > 0.7. Population Rhat max 1.022 (`sd_Participant__ndt_Intercept`), lp__ 1.015, min bulk ESS 553. **Predicted** 2026-10-23 (11619777, 1.9 min) |
-| `gam_lnr_mullerlyer`, stanli | `dmm56` `sussexneuro`, zen5 | 11603743 (see 6.6) | the stanli arm (6.6), in `models_stanli/`. Shards 1, 3, 4 done; shard 2 died 2026-10-21 18:30 after 4.3 days with a bus error (`non-existent physical address`) inside `stanli::sample_model()` on rtx-02, at 2400/2500 in its second chain, nothing saved. **Resubmitted** 2026-10-23 12:52 as 11619556 (`--array=2`, same `sussexneuro`/zen5/64G/14 d), pinned to the 0.21.0 library (`IGC_STANLI_LIB=.../cogmod_stanli/R_libs`) so that it combines with the other three. That resubmission **failed after 15 s** (rtx-02, 12:52:18): "the stanli runtime is not installed. Run stanli_install() once, or set STANLI_RUNTIME". The 0.21.0 runtime had been deleted by the 0.22.2 install (6.6, "The 0.21.0 runtime"). **Resubmitted again** 2026-10-24 as 11623606, on the 0.21.0 library with `IGC_STANLI_RUNTIME=.../cogmod_stanli/runtime_v0.21.0/libstanli.so`. 2026-10-26 18:15: running (rtx-02), at 1900-2000 / 2500 after 48 h, ~15 h to go |
-| `gam_ddm4_mullerlyer` | `dmm56` `long`, zen5 | 11615774 (cmdstanr), 11615777 (stanli 0.22.2) | **submitted 2026-10-22** as both arms of the third stanli test (6.8). The cmdstanr arm is the production fit. 2026-10-26: cmdstanr shard 2 and stanli shards 1, 2 and 4 are done. cmdstanr shards 1 and 4 have ~1.1-1.4 days to go. **Both shard 3s (rtx-02) project past the 8-day wall** (6.8). They fill `long`'s 8 tasks, so `gam_lnr_verticalhorizontal` and `gam_lnr_ebbinghaus` wait for them |
-| `gam_ddm5_verticalhorizontal`, `gam_rdm_ebbinghaus`, `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer`, `gam_rdm_verticalhorizontal`, `gam_rdm_mullerlyer` | `dmm56` `long` (or `sussexneuro`) | — | to submit in this order once the first `REPORT` lines are clean; whether in cmdstanr or stanli depends on 6.6-6.8 |
-| `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A (`oc236`) | 11596852 (LBA VH), 11596853 (RDM-5 Ebb), 11602751-2, 11624187 (LBA Ebb shard 3) | 2026-10-26 18:15 (sacct; their logs are not readable from `dmm56`): **LBA VerticalHorizontal, RDM-5 Ebbinghaus and LBA MullerLyer are fitted**, all 4 shards each. The last finished 2026-10-21 14:47, 2026-10-22 22:53 and 2026-10-25 20:14. LBA Ebbinghaus shards 1-2 finished 2026-10-26 (116 / 118 h). Shard 4 has been running 3.8 days (rtx-00). `oc236` cancelled shard 3 on 2026-10-25 14:18 after 94.8 h on rtx-02 and resubmitted it 23 s later as 11624187_3 (rtx-01, 1.2 days in). The reason is not known. 2026-10-20 08:50: LBA VerticalHorizontal shards 1-2 done (2026-10-19 18:10 / 22:07, 77.6 / 81.6 h on rtx-01), shards 3-4 still running. RDM-5 Ebbinghaus all 4 running (3.8 days in, rtx-00). LBA MullerLyer shards 1-2 running since 2026-10-19 ~18:10 / ~22:07 (rtx-01), 3-4 pending, and LBA Ebbinghaus pending (`QOSMaxCpuPerUserLimit`). 2026-10-19 13:00: RDM-5 Ebbinghaus and LBA VerticalHorizontal running since 2026-10-16 12:33 (3.0 days in, rtx-00/01), LBA MullerLyer and Ebbinghaus pending (`QOSMaxCpuPerUserLimit`, i.e. behind oc236's own cap) |
-| `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B (`asf25`) | 11601935-8 | 2026-10-26 18:15 (sacct; their logs are not readable from `dmm56`): **four LNR-6 shards hit `long`'s 8-day wall on 2026-10-24** (`TIMEOUT`, nothing saved): MullerLyer shard 4 (rtx-02) and Ebbinghaus shards 1-3 (rtx-00, rtx-02, rtx-00). MullerLyer shards 1-2 finished just inside the wall (176 / 184 h, rtx-02), and Ebbinghaus shard 4 in 152 h (rtx-01). So LNR-6 MullerLyer has 3 of 4 shards and LNR-6 Ebbinghaus 1 of 4. Nothing has been resubmitted. Whether the timeouts are the 4.10 C adaptation failure, which made the old LNR-6 Ebbinghaus slow, is not known. RDM-5 VerticalHorizontal shard 1 finished 2026-10-25 14:00 (114 h, rtx-02). Its shards 2-4 have been running 2.2-2.9 days. LNR-6 VerticalHorizontal has all 4 shards running, 2.0-2.2 days in (rtx-00/01/02). 2026-10-20 08:50: still unchanged, nothing finished; LNR-6 MullerLyer 3.8 days in, LNR-6 VH and RDM-5 VH pending. 2026-10-19 13:00: unchanged, LNR-6 MullerLyer (rtx-02) and Ebbinghaus running, the rest pending. 2026-10-18 08:00: LNR-6 MullerLyer running since 2026-10-16 ~13:00. LNR-6 Ebbinghaus shards 1-2 since then, shard 3 since ~18:40, shard 4 only since 2026-10-18 06:31 (rtx-01), so that model ends ~1.7 days after its siblings. RDM-5 VH and LNR-6 VH pending (`QOSMaxCpuPerUserLimit`) |
+| `gam_lnr_mullerlyer`, stanli | `dmm56` `sussexneuro`, zen5 | 11603743 (see 6.6) | the stanli arm (6.6), in `models_stanli/`. Shards 1, 3, 4 done; shard 2 died 2026-10-21 18:30 after 4.3 days with a bus error (`non-existent physical address`) inside `stanli::sample_model()` on rtx-02, at 2400/2500 in its second chain, nothing saved. **Resubmitted** 2026-10-23 12:52 as 11619556 (`--array=2`, same `sussexneuro`/zen5/64G/14 d), pinned to the 0.21.0 library (`IGC_STANLI_LIB=.../cogmod_stanli/R_libs`) so that it combines with the other three. That resubmission **failed after 15 s** (rtx-02, 12:52:18): "the stanli runtime is not installed. Run stanli_install() once, or set STANLI_RUNTIME". The 0.21.0 runtime had been deleted by the 0.22.2 install (6.6, "The 0.21.0 runtime"). **Resubmitted again** 2026-10-24 as 11623606, on the 0.21.0 library with `IGC_STANLI_RUNTIME=.../cogmod_stanli/runtime_v0.21.0/libstanli.so`. 2026-10-26 18:15: running (rtx-02), at 1900-2000 / 2500 after 48 h, ~15 h to go. **Done** 2026-10-27 04:42 (58.8 h). Combine 11629256 and predict 11629257 submitted 2026-10-28 15:40, on the 0.21.0 library and runtime (6.6) |
+| `gam_ddm4_mullerlyer` | `dmm56` `long`, zen5 | 11615774 (cmdstanr), 11615777 (stanli 0.22.2) | **submitted 2026-10-22** as both arms of the third stanli test (6.8). The cmdstanr arm is the production fit. 2026-10-26: cmdstanr shard 2 and stanli shards 1, 2 and 4 are done. cmdstanr shards 1 and 4 have ~1.1-1.4 days to go. **Both shard 3s (rtx-02) project past the 8-day wall** (6.8). They fill `long`'s 8 tasks, so `gam_lnr_verticalhorizontal` and `gam_lnr_ebbinghaus` wait for them. 2026-10-28: the stanli arm is done (shard 3 in 119.1 h, inside the wall), and its combine 11629253 and predict 11629255 were submitted at 15:40. cmdstanr shards 1, 2 and 4 are done. Shard 3 is in its last 500 iterations and should finish ~2026-10-29, before the wall (6.8). Then combine and predict it. 2026-10-31: **all 4 cmdstanr shards are done**, shard 3 on 2026-10-28 23:31 (156.9 h, rtx-02, inside the wall). Step 0.0094-0.0113, n_leapfrog 510-511, divergent 0-0.3%, max Rhat 1.83 per shard (the DDM-4 band). **Combined** 2026-10-31 (11639135, 31.6 min): all 8 chains in one mode (`lp__` 24,009-24,039, sd ~108), the stanli arm's level. elpd_loo 33,158 (SE 888), p_loo 12,064, 1,032 rows (0.3%) with Pareto k > 0.7. Population Rhat max 1.034 (`b_ndt_Intercept`), min bulk ESS 337. **Predicted** (11639137, 2.2 min) and pulled |
+| `gam_ddm5_verticalhorizontal`, `gam_rdm_ebbinghaus` | `dmm56` `long`, zen5, **stanli 0.25.0** | 11639227 (DDM-5 VH), 11639228 (RDM Ebb) | **submitted 2026-10-31** in stanli only (user's decision after 6.9), with no smoke test and no cmdstanr twin, into `models_stanli/`, 64G, 8 days (6.10). Neither the developers nor this project had run the DDM-5's `sigmadrift` path of `wiener_lpdf` in stanli before |
+| `gam_rdm_verticalhorizontal`, `gam_rdm_mullerlyer` | `dmm56` `long`, zen5, **stanli 0.25.0** | 11641546 (RDM VH), 11641547 (RDM ML) | **submitted 2026-11-01 ~08:30** with the same settings as 11639227-8 (6.10), into `models_stanli/`. They wait on `long`'s per-user cap (`QOSMaxCpuPerUserLimit`) for 11639227-8's shards, which had ~0.5-1.9 days to go. With RDM Ebbinghaus, the whole RDM family is on stanli |
+| `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer` | colleague C (`cc831`), `long`, zen5, **cmdstanr** | — | **handed to `cc831` on 2026-11-01** (user's choice), to use its idle `long` quota rather than queue behind `dmm56`'s. cmdstanr because a second account has no stanli install (`dmm56`'s Lustre home is `drwx------`). DDM-5 is the family whose stanli speed-up is least certain: DDM-5 VH warmed up at ~70 s/it in stanli against 56-84 in cmdstanr (4.11). Instructions: `refit_colleagues.md` → "C: the two DDM-5 fits", which reaches `cc831` only once committed and pushed. So DDM-5 VH is stanli and DDM-5 ML/Ebb are cmdstanr; each model is on one sampler, which is what combine requires |
+| `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | colleague A (`oc236`) | 11596852 (LBA VH), 11596853 (RDM-5 Ebb), 11602751-2, 11624187 (LBA Ebb shard 3) | 2026-10-31 11:05 (sacct): **all four are fitted.** LBA Ebbinghaus shard 4 finished 2026-10-28 09:22 (130.5 h, rtx-00), and the resubmitted shard 3 (11624187_3) 2026-10-29 05:55 (87.6 h, rtx-01). Only RDM-5 Ebbinghaus is combined (11624188, after an out-of-memory 11624121), predicted (11624189) and prior-checked (11624190), all 2026-10-25. No LBA combine job since the refit began. Nothing running. 2026-10-26 18:15 (sacct; their logs are not readable from `dmm56`): **LBA VerticalHorizontal, RDM-5 Ebbinghaus and LBA MullerLyer are fitted**, all 4 shards each. The last finished 2026-10-21 14:47, 2026-10-22 22:53 and 2026-10-25 20:14. LBA Ebbinghaus shards 1-2 finished 2026-10-26 (116 / 118 h). Shard 4 has been running 3.8 days (rtx-00). `oc236` cancelled shard 3 on 2026-10-25 14:18 after 94.8 h on rtx-02 and resubmitted it 23 s later as 11624187_3 (rtx-01, 1.2 days in). The reason is not known. 2026-10-20 08:50: LBA VerticalHorizontal shards 1-2 done (2026-10-19 18:10 / 22:07, 77.6 / 81.6 h on rtx-01), shards 3-4 still running. RDM-5 Ebbinghaus all 4 running (3.8 days in, rtx-00). LBA MullerLyer shards 1-2 running since 2026-10-19 ~18:10 / ~22:07 (rtx-01), 3-4 pending, and LBA Ebbinghaus pending (`QOSMaxCpuPerUserLimit`). 2026-10-19 13:00: RDM-5 Ebbinghaus and LBA VerticalHorizontal running since 2026-10-16 12:33 (3.0 days in, rtx-00/01), LBA MullerLyer and Ebbinghaus pending (`QOSMaxCpuPerUserLimit`, i.e. behind oc236's own cap) |
+| `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | colleague B (`asf25`) | 11601935-8 | 2026-10-31 11:05 (sacct): **RDM-5 VerticalHorizontal and LNR-6 VerticalHorizontal are fitted**, all 4 shards each. RDM-5 VH shards 2-4 finished 2026-10-28 19:27 / 17:57 / 2026-10-30 05:05 (118.3 / 109.6 h rtx-02, 136.3 h rtx-00). LNR-6 VH finished 2026-10-27 22:13 to 2026-10-29 22:36 (79.3 h rtx-01, 104.6 / 129.8 h rtx-02, 122.1 h rtx-00). The four LNR-6 shards that timed out on 2026-10-24 (MullerLyer 4, Ebbinghaus 1-3) are **still not resubmitted**, and `asf25` has no combine job since the refit began. Nothing running. 2026-10-26 18:15 (sacct; their logs are not readable from `dmm56`): **four LNR-6 shards hit `long`'s 8-day wall on 2026-10-24** (`TIMEOUT`, nothing saved): MullerLyer shard 4 (rtx-02) and Ebbinghaus shards 1-3 (rtx-00, rtx-02, rtx-00). MullerLyer shards 1-2 finished just inside the wall (176 / 184 h, rtx-02), and Ebbinghaus shard 4 in 152 h (rtx-01). So LNR-6 MullerLyer has 3 of 4 shards and LNR-6 Ebbinghaus 1 of 4. Nothing has been resubmitted. Whether the timeouts are the 4.10 C adaptation failure, which made the old LNR-6 Ebbinghaus slow, is not known. RDM-5 VerticalHorizontal shard 1 finished 2026-10-25 14:00 (114 h, rtx-02). Its shards 2-4 have been running 2.2-2.9 days. LNR-6 VerticalHorizontal has all 4 shards running, 2.0-2.2 days in (rtx-00/01/02). 2026-10-20 08:50: still unchanged, nothing finished; LNR-6 MullerLyer 3.8 days in, LNR-6 VH and RDM-5 VH pending. 2026-10-19 13:00: unchanged, LNR-6 MullerLyer (rtx-02) and Ebbinghaus running, the rest pending. 2026-10-18 08:00: LNR-6 MullerLyer running since 2026-10-16 ~13:00. LNR-6 Ebbinghaus shards 1-2 since then, shard 3 since ~18:40, shard 4 only since 2026-10-18 06:31 (rtx-01), so that model ends ~1.7 days after its siblings. RDM-5 VH and LNR-6 VH pending (`QOSMaxCpuPerUserLimit`) |
 
 Update the table as things move, and add a `node_history.md` row for every
 shard that finishes. The colleagues send each model's combined fit,
@@ -1867,6 +1869,17 @@ IGC_STANLI_RUNTIME=/mnt/lustre/users/psych/dmm56/cogmod_stanli/runtime_v0.21.0/l
   --constraint=amd_zen5 --mem=64G --time=14-00:00:00
 ```
 
+11623606 finished 2026-10-27 04:42 (58.8 h, rtx-02), so all four shards are
+there. They were combined on 2026-10-28 (11629256) with the 0.21.0 library
+and its runtime, as above but `combine` instead of `fit` and without the
+sbatch arguments, and predicted behind it (11629257). **Combined** in 33.2
+min: all 8 chains are in one mode (`lp__` 38,766-38,808, sd ~117), the same
+level as the cmdstanr arm's (38,764-38,806). elpd_loo 50,459 (SE 849) and
+p_loo 13,217, against cmdstanr's 50,468 and 13,215: 8.6 apart, within the
+Monte Carlo error of the two (~10). 950 rows have Pareto k > 0.7.
+**Predicted** in 1.2 min. `2_modelcomparison.qmd`'s first section compares
+the two arms.
+
 **Never run `stanli_install()` while any stanli job is running.** The 0.22.2
 shards (6.7, 6.8) load `~/.cache/R/stanli/v0.22.2/libstanli.so`, and
 installing any other release would delete it under them. A new release goes
@@ -1960,6 +1973,21 @@ The stanli arm's **combine** (11625850, `general`, 320G, into
 `--dependency=afterok:11625850`) were submitted on 2026-10-26 at ~18:40. The
 combine's chain table answers whether stanli's eight chains share one mode.
 
+**They do not** (combined 2026-10-26, 71 min; predicted 1.0 min). Shards 1
+and 3 have both chains at `lp__` 25,625-25,661, and shards 2 and 4 both at
+27,323-27,337. So it is four chains against four, and each shard's two chains
+agree, which is why the per-shard Rhat was 1.04-1.07. Population Rhat max
+1.72 (`b_Intercept`), lp__ 1.71, min bulk ESS 12. elpd_loo 38,298 (SE 895),
+p_loo 13,531, 434 rows with Pareto k > 0.7. The cmdstanr arm has the same two
+levels (2 of its 8 chains low so far). So the two modes are a property of the
+RDM-5 posterior, not of either sampler. It is the old generation's split
+(4.10), and the faster sampler only reaches it sooner. Re-predicted 2026-10-28
+(11629266) after `compute_efficiency()` learned to read a stanli fit's threads
+from `m$threads` (its `stan_args` have none, so `Threads` had been `NA`). In
+`2_modelcomparison.qmd` this fit stands in for `gam_rdm5_mullerlyer` until the
+cmdstanr arm is combined. 2026-10-28: cmdstanr shard 1 finished 11:01 (188.6
+h), and shards 2 and 4 have run 8.1 days of their 14.
+
 ### 6.8 stanli 0.22.2 against cmdstanr on `gam_ddm4_mullerlyer` (2026-10-22)
 
 **The third sampler test, so each family has one**: LNR (6.6), RDM (6.7) and
@@ -2010,6 +2038,158 @@ warmup: ~4.0 days to go against 3.7 left (wall 2026-10-30 10:35 UTC). stanli
 shard 3 is at 1100-1200: ~4.9 days to go against 4.2 left (wall 2026-10-30
 22:16). Four of `asf25`'s LNR-6 shards on rtx-00 and rtx-02 hit that wall on
 2026-10-24 (6.5).
+
+2026-10-28 15:40: **the stanli arm is done.** Shard 3 (rtx-02) finished
+2026-10-27 21:22 after 119.1 h, inside the wall after all. Its combine
+(11629253, `general`, 320G) and predict (11629255,
+`--dependency=afterok:11629253`) were submitted, into `models_stanli/`. The
+cmdstanr arm has shards 1 (2026-10-27 18:28, 128.9 h), 2 and 4 (2026-10-28
+02:06, 135.4 h). Shard 3 (rtx-02) has chain 1 finished (480,353 s) and chain 2
+at 2000 / 2500 in sampling at 14:01 UTC. At the rate since chain 1 finished
+(~30 iterations/h) it ends ~2026-10-29 06:00 UTC, and at the sibling shards'
+sampling rate (~16/h) ~21:00. Either way that is before the wall (2026-10-30
+10:35). Shards 1 and 4 report max Rhat 1.83 per shard, the DDM-4 band. Until
+the cmdstanr arm is combined, `2_modelcomparison.qmd` uses the stanli fit as
+its stand-in. **Combined** in 23.7 min: all 8 chains are in one mode (`lp__`
+24,016-24,043, sd ~107). elpd_loo 33,169 (SE 888), p_loo 12,030, 1,008 rows
+(0.3%) with Pareto k > 0.7. **Predicted** in 1.1 min.
+
+### 6.9 What the three sampler tests say (2026-10-31)
+
+Both arms of all three tests were combined and predicted by 2026-10-31, the
+cmdstanr arms of the RDM-5 and DDM-4 last (11639134-7). The comparison is the
+first section of `2_modelcomparison.qmd`. The numbers below come from the
+prediction files. The ELPD difference is paired by trial. The Monte Carlo SE
+is that of the difference, from each trial's own MCSE. The curve gap is the
+stanli minus cmdstanr prediction of a parameter along illusion strength, in
+posterior SDs of the cmdstanr fit, over the whole grid.
+
+| model | ELPD, stanli − cmdstanr | MC SE of the difference | curve gap, max (median) | `lp__` levels | per-chain hours, median (stanli / cmdstanr) | bulk ESS per sampling hour |
+| --- | --- | --- | --- | --- | --- | --- |
+| LNR (stanli 0.21.0) | −8.6 ± 10.5 | 9.9 | 0.16 (≤ 0.05) SD | one mode in both, 38,756-38,808 | 60.9 / 85.0 (0.72x) | 11.0 / 7.0 |
+| DDM-4 (0.22.2) | +11.2 ± 11.8 | 9.6 | 0.13 (≤ 0.06) SD | one mode in both, 24,009-24,043 | 74.4 / 130.1 (0.57x) | 23.2 / 11.4 |
+| RDM-5 (0.22.2) | −475.6 ± 17.1 | 23.3 | 0.58 (0.31-0.57) SD | the same two modes in both: 27,304-27,337 and 25,625-25,661 | 137.3 / 204.9 (0.67x) | 2.8 / 2.3 |
+
+**Where the posterior has one mode, the two samplers agree.** On the LNR and
+the DDM-4, the ELPDs are within 1.2 Monte Carlo SEs of each other, every
+parameter curve is within 0.16 posterior SD, the posterior SDs themselves
+match (ratio 0.98-1.01), and every chain of both samplers sits at the same
+`lp__` level. That is what two runs of one sampler would give. stanli's
+population Rhat and minimum ESS are comparable: better on the DDM-4 (Rhat
+1.012 against 1.034, min bulk ESS 549 against 337) and a little worse on the
+LNR (1.030 against 1.022, 344 against 553).
+
+**The RDM-5 difference is the mode split, not the sampler.** Both samplers
+find the same two modes at the same two `lp__` levels. cmdstanr put 6 of its
+8 chains in the high one and stanli 4, so the pooled posteriors are different
+mixtures of the same two components. That moves the ELPD by 476 and the
+curves by up to 0.58 SD, and makes stanli's posterior SDs 6-16% wider. Neither
+fit is a valid posterior summary (4.10 B). The direct check would be per mode:
+the high-mode chains of both arms against each other, and the low-mode chains
+likewise. The prediction files are pooled over chains and cannot show this,
+so that check would need the two combined fits.
+
+**Speed.** On wall clock per chain stanli took 0.57-0.72x cmdstanr's time,
+and it had 1.2-2x the bulk ESS per sampling hour. The node confound (6.6)
+still applies, but every same-node pair in `node_history.md` points the same
+way. The LNR test ran stanli 0.21.0, and the other two 0.22.2. `./hpc` now
+uses 0.25.0 (6.10).
+
+### 6.10 stanli 0.25.0, and the first fits in stanli only (2026-10-31)
+
+On 2026-10-31 the user asked for the latest stanli and then for the next two
+models "directly ... in stanli only, no smoke test".
+
+**What 0.25.0 changes for this project.** The release is from 2026-10-29. The
+developers' reply on stanli#455 (2026-10-30) puts the Linux DDM-4 gap down to
+a call on every access to Stan Math's thread-local autodiff stack. 0.22.0
+(#470) fixed that, and 0.22.2 already had the fix. Their per-gradient ratios
+for the LNR, LBA and RDM are flat from 0.21.0 to main. So 0.25.0 should not be
+much faster than 0.22.2 here. What it adds are correctness fixes:
+- integer division was promoted to real, which "could produce incorrect log
+  densities" (0.24.0, #498);
+- in-place writes could change values that a retained loop had already read
+  (0.25.0, #508);
+- 2-D int arrays written by rows were read wrongly (#523).
+None of these touched the three tested programs: their `lp__` levels matched
+cmdstanr's (6.9). The developers have not run the DDM-5 (or the LNR-6 or
+DDM-7) programs.
+
+**The R side is unchanged for `fit_model.R`.** Checked in the 0.25.0 source
+against what `fit_model.R` calls: `stanli_model()`, `unconstrain(partial =)`,
+`sample_model()` with every argument it passes, `as_stanfit(exclude =)`,
+`get_elapsed_time()` and `$model$reduce_sum_count` all keep their
+signatures. As in 0.22.2, `as_stanfit()` keeps the live model in `.MISC`, and
+`methods::as(..., "stanfit", strict = TRUE)` keeps that `.MISC` as it did.
+0.24.0 added `plain = TRUE`, which would drop it. That is not used, so the
+shards are built exactly as before.
+
+**Installed** like 0.22.2 (6.7), except that the runtime never goes through
+the cache:
+- Release assets fetched on the login node into `cogmod_stanli/src_0.25.0/`,
+  sha256 checked against GitHub's digests (`SHA256SUMS` there).
+- The linux-x86_64 runtime unpacked into `cogmod_stanli/runtime_v0.25.0/`.
+- The package installed into `cogmod_stanli/R_libs_0.25.0` with
+  `-march=x86-64-v3` by `src_0.25.0/install_stanli_0.25.0.sh` (job 11639226,
+  rtx-01, 20 s).
+- `stanli_install()` was never called.
+
+The check in the same job:
+- 0.25.0 loads `runtime_v0.25.0/libstanli.so` through `STANLI_RUNTIME`, is
+  thread safe, and gets a toy model's gradient exactly;
+- rstan 2.32.6 and brms 2.21.0 resolve from the shared library;
+- it **reads a 0.21.0 `stanli_stanfit` shard** of the LNR test and turns it
+  into a plain `stanfit` (`lp__` mean 38,787, that test's level). So
+  re-combining the LNR test needs no old library.
+
+`./hpc` defaults `IGC_STANLI_LIB` to `R_libs_0.25.0` and `IGC_STANLI_RUNTIME`
+to `runtime_v0.25.0/libstanli.so`. Every stanli job now gets `STANLI_RUNTIME`,
+not only those that set it.
+
+**Submitted** in stanli only (README → "Fitting in stanli"), both on `long`
+with `--constraint=amd_zen5 --mem=64G --time=8-00:00:00`, into
+`models_stanli/`:
+
+| model | job | cmdstanr projection per shard (4.11) |
+| --- | --- | --- |
+| `gam_ddm5_verticalhorizontal` | 11639227 | 1.2-2.5 days, slowest chain up to ~4.4 |
+| `gam_rdm_ebbinghaus` | 11639228 | the same band |
+
+At 0.57-0.72x (6.9), both should finish well inside the 8 days. In
+`2_modelcomparison.qmd` a stanli fit without a cmdstanr twin shows as
+"stanli (stand-in)". That label dates from when stanli fits were only tests.
+DDM-5 VH started at 12:44 on rtx-00 (all 4 shards) and reached warmup at
+~12:55: 0.25.0 loaded from `R_libs_0.25.0`, on the runtime that
+`STANLI_RUNTIME` points to, since no other copy of it exists. RDM Ebbinghaus
+was `PENDING (Priority)` at 13:15, waiting for zen5. Its shards started
+between 13:34 and 17:45, on rtx-01 (1-3) and rtx-00 (4). The first
+`./hpc progress` ETAs were inflated by the slow start of warmup: DDM-5 VH
+projected ~6 days at iteration 100-200 (18:42). By 2026-11-01 08:00 it was at
+900-1000 / 2500 after 19.3 h, ~1.2-1.4 days to go. RDM Ebbinghaus was at
+700-1300 / 2500, 0.5-1.9 days to go.
+
+**The older stanli installs were removed** on 2026-10-31 at 13:15, at the
+user's suggestion ("unless we still need them"), once both 0.25.0 fits were
+submitted. Removed:
+- 0.21.0: `cogmod_stanli/R_libs` (the benchmark's library: stanli 0.21.0,
+  brms 2.23.1, loo, posterior), `stanli_0.21.0.tar.gz`, `Makevars.portable`
+  and `runtime_v0.21.0/`;
+- 0.22.2: `R_libs_0.22.2`, `src_0.22.2/`, `Makevars_0.22.2.portable` and
+  `~/.cache/R/stanli/v0.22.2`;
+- 111 MB in all.
+
+Nothing needs them any more:
+- every combined stanli fit (`models_stanli/combined/`) is a plain `stanfit`,
+  and so is every shard saved since 11603743;
+- 0.25.0 reads that job's three `stanli_stanfit` shards (above), so the LNR
+  test can still be re-combined;
+- the qmd reads only prediction files.
+
+Rerunning a test on an old version would mean reinstalling it from the GitHub
+release, as above. The cogmod benchmark's scripts and `results/` were left in
+`cogmod_stanli/`; its `install.R` would rebuild its own library. The warnings
+in 6.6 about `~/.cache/R/stanli/v0.22.2` now concern nothing that exists, but
+the rule stands: never call `stanli_install()`.
 
 ---
 

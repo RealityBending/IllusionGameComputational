@@ -24,6 +24,7 @@ and `README.md` in the same folder is the full reference.
 | --- | --- | --- |
 | A | `gam_lba_mullerlyer`, `gam_lba_ebbinghaus`, `gam_lba_verticalhorizontal`, `gam_rdm5_ebbinghaus` | LBA ~4.3 days (up to ~5.1), RDM-5 ~4.3 (up to ~5.7) |
 | B | `gam_lnr6_mullerlyer`, `gam_lnr6_ebbinghaus`, `gam_rdm5_verticalhorizontal`, `gam_lnr6_verticalhorizontal` | LNR-6 3.5-5.5 days (up to ~6.6), RDM-5 ~3.9 (up to ~4.8) |
+| C | `gam_lnr_verticalhorizontal`, `gam_lnr_ebbinghaus` (fitted by 2026-11-01), then `gam_ddm5_ebbinghaus`, `gam_ddm5_mullerlyer` (from 2026-11-01; see "C: the two DDM-5 fits" below) | DDM-5 1.2-2.5 days (up to ~4.4) |
 
 Model names are the ones in `models.R`: `<family>_<illusion>`, e.g.
 `gam_lba_mullerlyer`. The MullerLyer models were plain `gam_lba`, `gam_lnr6`,
@@ -195,6 +196,32 @@ Then send Dom, through Sussex OneDrive, for each model:
 Do not rename anything: the names are what the notebooks look for. Leave the
 shards on the cluster. They are not needed for the transfer, and Dom will say
 when they can go.
+
+## C: the two DDM-5 fits (from 2026-11-01)
+
+C's two LNR models are already fitted on the current setup, so steps 2-4
+do not apply. In particular, **do not run `./hpc archive`**: it would move
+those LNR shards away. Before submitting:
+
+```bash
+git pull
+cd analysis/server
+./hpc push
+./hpc ls               # must list no gam_ddm5_* file
+```
+
+First the step 7 jobs for the two LNR models (they run on `general`, not
+`long`, so they do not hold up the fits). Then the fits, on cmdstanr like
+everything else on your account:
+
+```bash
+./hpc fit gam_ddm5_ebbinghaus,gam_ddm5_mullerlyer --constraint=amd_zen5
+```
+
+Both models fit on your `long` quota at once (8 tasks). Expect 1.2-2.5 days
+per shard on a zen5 node, longer if they wait for one. Then step 7 for both.
+Do not reinstall cogmod in between: the DDM-5 shards must be on the same
+cogmod 0.3.5 as everything else.
 
 ## If something goes wrong
 

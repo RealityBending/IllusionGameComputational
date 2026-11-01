@@ -123,6 +123,22 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_ddm4_mullerlyer | 11615774 | 2 (cmdstanr arm of the 6.8 test) | rtx-00 | zen5 (`--constraint`) | done 2026-10-25 20:47: step 0.0102, n_leapfrog 511, treedepth 9.00, divergent 0, max Rhat 1.83 | 83.2 h |
 | gam_rdm5_mullerlyer, **stanli** | 11612031 | 1-4 (stanli test, AGENT.md 6.7; 1500 + 1000, cogmod 0.3.5) | rtx-00 | zen5 (`--constraint` on sussexneuro) | done 2026-10-26 09:43 / 18:11 / 2026-10-25 21:52 / 2026-10-26 06:54: step 0.0032 / 0.0024 / 0.0032 / 0.0030, n_leapfrog 1023, **treedepth 10.00** in every chain, divergent 0, max Rhat 1.04 / 1.07 / 1.05 / 1.04 | 139.3 / 147.8 / 127.5 / 136.5 h |
 | gam_rdm5_mullerlyer | 11612026 | 3 (cmdstanr arm of the 6.7 test) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done 2026-10-26 17:12: step 0.0027 / 0.0038, n_leapfrog 1023, treedepth 10.00, divergent 0, **max Rhat 1.85**: its two chains are in different modes (AGENT.md 6.7) | 146.8 h |
+| gam_lnr_mullerlyer, **stanli** | 11623606 | 2 (resubmission of 11603743_2, stanli 0.21.0) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done 2026-10-27 04:42: step 0.00659, n_leapfrog 535, treedepth 9.01, divergent 0.1%, max Rhat 1.83 | 58.8 h |
+| gam_ddm4_mullerlyer, **stanli** | 11615777 | 3 (stanli test, AGENT.md 6.8) | rtx-02 | zen5 (`--constraint`) | done 2026-10-27 21:23: step 0.0108, n_leapfrog 511, treedepth 9.00, divergent 0.2%, max Rhat 1.83 | 119.1 h |
+| gam_ddm4_mullerlyer | 11615774 | 1 (cmdstanr arm of the 6.8 test) | rtx-00 | zen5 (`--constraint`) | done 2026-10-27 18:28: step 0.0107 / 0.0100, n_leapfrog 511, treedepth 9.00, divergent 0, max Rhat 1.83 | 128.8 h |
+| gam_ddm4_mullerlyer | 11615774 | 4 (same run) | rtx-01 | zen5 (`--constraint`) | done 2026-10-28 02:06: step 0.0094 / 0.0101, n_leapfrog 511, treedepth 9.00, divergent 0.2%, max Rhat 1.83 | 135.4 h |
+| gam_ddm4_mullerlyer | 11615774 | 3 (same run) | rtx-02 | zen5 (`--constraint`) | done 2026-10-28 23:31, inside the 8-day wall: step 0.0113 / 0.0098, n_leapfrog 510, treedepth 8.99, divergent 0.3%, max Rhat 1.83 | 156.9 h |
+| gam_rdm5_mullerlyer | 11612026 | 1 (cmdstanr arm of the 6.7 test) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done 2026-10-28 11:01: step 0.0027 / 0.0033, n_leapfrog 1023, treedepth 10.00, divergent 0, max Rhat 1.03 | 188.6 h |
+| gam_rdm5_mullerlyer | 11612026 | 4 (same run) | rtx-00 | zen5 (`--constraint` on sussexneuro) | done 2026-10-29 23:20: step 0.0037 / 0.0025, n_leapfrog 1023, treedepth 10.00, divergent 0, **max Rhat 1.86**: one chain in the low mode (AGENT.md 6.7) | 224.9 h |
+| gam_rdm5_mullerlyer | 11612026 | 2 (same run) | rtx-02 | zen5 (`--constraint` on sussexneuro) | done 2026-10-30 05:08: step 0.0030 / 0.0028, n_leapfrog 1023, treedepth 10.00, divergent 0, max Rhat 1.02 | 230.7 h |
+| gam_lba_ebbinghaus | 11602752 (`oc236`) | 4 (2026-10-13 refit) | rtx-00 | zen5 (`--constraint`) | done 2026-10-28 09:22 | 130.5 h (sacct) |
+| gam_lba_ebbinghaus | 11624187 (`oc236`) | 3 (resubmission of 11602752_3) | rtx-01 | zen5 (`--constraint`) | done 2026-10-29 05:55 | 87.6 h (sacct) |
+| gam_rdm5_verticalhorizontal | 11601937 (`asf25`) | 2, 3 (2026-10-13 refit) | rtx-02 | zen5 (`--constraint`) | done 2026-10-28 19:27 / 17:57 | 118.3 / 109.6 h (sacct) |
+| gam_rdm5_verticalhorizontal | 11601937 (`asf25`) | 4 (same run) | rtx-00 | zen5 (`--constraint`) | done 2026-10-30 05:05 | 136.3 h (sacct) |
+| gam_lnr6_verticalhorizontal | 11601938 (`asf25`) | 1-4 (2026-10-13 refit) | rtx-02 / rtx-02 / rtx-01 / rtx-00 | zen5 (`--constraint`) | done 2026-10-29 22:36 / 2026-10-28 21:26 / 2026-10-27 22:13 / 2026-10-29 20:43 | 129.8 / 104.6 / 79.3 / 122.1 h (sacct) |
+| gam_lnr_verticalhorizontal | 11626372 (`cc831`) | 1-4 (2026-10-13 refit settings) | rtx-02 / rtx-01 / rtx-01 / rtx-00 | zen5 (`--constraint`) | done 2026-10-30 18:37 / 2026-10-28 14:30 / 12:43 / 23:38. Shard 1 took 2-3x its siblings; REPORT not readable from `dmm56` | 81.5 / 29.4 / 27.6 / 38.5 h (sacct) |
+| gam_lnr_ebbinghaus | 11626373 (`cc831`) | 1-3 (same settings) | rtx-00 / rtx-00 / rtx-01 | zen5 (`--constraint`) | done 2026-10-30 12:43 / 16:57 / 2026-10-29 15:58. Shard 4 (rtx-00) still running at 88.7 h | 75.6 / 79.9 / 51.9 h (sacct) |
+| gam_lnr_ebbinghaus | 11626373 (`cc831`) | 4 (same run) | rtx-00 | zen5 (`--constraint`) | done 2026-11-01 02:59, 1.3-2.3x its siblings; REPORT not readable from `dmm56` | 104.5 h (sacct) |
 
 ## What it says so far (updated 2026-09-26)
 

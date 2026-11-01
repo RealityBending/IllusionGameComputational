@@ -67,24 +67,22 @@ MODELS_DIR="${IGC_MODELS_DIR:-${USERS_DIR}/models}"
 # stanli instead of cmdstanr. Its shards have the production names, so they go
 # to models_stanli/ unless IGC_MODELS_DIR says otherwise, and its jobs and logs
 # are igc_fit_<model>_stanli. Every command takes it: IGC_BACKEND=stanli ./hpc
-# ls / combine / progress. stanli is 0.22.2 (from the RDM-5 test of
-# 2026-10-20, AGENT.md 6.7), in a library of its own next to the benchmark's.
-# The benchmark's library (cogmod_stanli/R_libs) holds the 0.21.0 of the LNR
-# test (6.6): combine that one with IGC_STANLI_LIB=.../cogmod_stanli/R_libs.
-# fit_model.R and combine_model.R refuse to mix shards of two stanli versions.
-# stanli_install() deletes every other release's runtime from ~/.cache/R/stanli
-# (0.22.2's install removed 0.21.0's on 2026-10-20, AGENT.md 6.6), so 0.21.0's
-# runtime now lives outside the cache, in cogmod_stanli/runtime_v0.21.0. A fit
-# on that library names it with IGC_STANLI_RUNTIME=<path to libstanli.so>,
-# which the job gets as STANLI_RUNTIME. Never run stanli_install() while a
-# stanli job is running.
+# ls / combine / progress. stanli is 0.25.0 (2026-10-31, AGENT.md 6.10), in a
+# library of its own, cogmod_stanli/R_libs_0.25.0, on the release's runtime in
+# cogmod_stanli/runtime_v0.25.0, which every stanli job gets as STANLI_RUNTIME.
+# That runtime lives outside ~/.cache/R/stanli because stanli_install()
+# deletes every other release's runtime from the cache (6.6). A new release
+# goes in its own two directories the same way, and is never fetched with
+# stanli_install(). fit_model.R and combine_model.R refuse to mix shards of
+# two stanli versions.
 BACKEND="${IGC_BACKEND:-cmdstanr}"
 BACKEND_SUFFIX=""
 if [ "$BACKEND" = stanli ]; then
   MODELS_DIR="${IGC_MODELS_DIR:-${USERS_DIR}/models_stanli}"
   BACKEND_SUFFIX="_stanli"
 fi
-STANLI_LIB="${IGC_STANLI_LIB:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cogmod_stanli/R_libs_0.22.2}"
+STANLI_LIB="${IGC_STANLI_LIB:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cogmod_stanli/R_libs_0.25.0}"
+STANLI_RUNTIME="${IGC_STANLI_RUNTIME:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cogmod_stanli/runtime_v0.25.0/libstanli.so}"
 MAIL_USER="${IGC_MAIL_USER:-${HPC_USER}@sussex.ac.uk}"
 
 # Environment modules / R library used by the jobs. CmdStanR/0.7.1 is the
@@ -286,8 +284,7 @@ submit_per_model() {
     eval "val=\${$v:-}"
     [ -n "$val" ] && extra="${extra},${v}='${val}'"
   done
-  [ "$BACKEND" = stanli ] && extra="${extra},IGC_BACKEND='stanli',IGC_STANLI_LIB='${STANLI_LIB}'"
-  [ "$BACKEND" = stanli ] && [ -n "${IGC_STANLI_RUNTIME:-}" ] && extra="${extra},STANLI_RUNTIME='${IGC_STANLI_RUNTIME}'"
+  [ "$BACKEND" = stanli ] && extra="${extra},IGC_BACKEND='stanli',IGC_STANLI_LIB='${STANLI_LIB}',STANLI_RUNTIME='${STANLI_RUNTIME}'"
   # ... and every prediction setting, e.g. IGC_PRED_PPC_NDRAWS=1000
   for v in $(compgen -v IGC_PRED_ || true); do
     eval "val=\${$v:-}"
