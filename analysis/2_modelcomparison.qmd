@@ -135,10 +135,10 @@ models <- list(
     "RDM-5" = "gam_rdm5_verticalhorizontal_VerticalHorizontal"  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
   ),
   Ebbinghaus = c(
-    # "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the cogmod 0.3.4
-    # refit (11553388, combined 2026-10-12) still has every chain drifting:
-    # population Rhat 6.6, lp__ 5.2 (server/lnr_modes/). Predicted 2026-10-13 all
-    # the same; the 0.3.3 predictions are *_20261002.
+    # "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the cogmod 0.3.5
+    # refit with 1500 warmup (11626373 on cc831, combined 2026-11-02) failed like
+    # the 0.3.4 one: step sizes 5e-5 to 8e-4, population Rhat 4.9, lp__ 4.4, one
+    # chain frozen (server/AGENT.md 4.10 C). Predicted all the same.
     "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the gam_lnr_ebbinghaus adaptation failure, Rhat 3.05 (server/AGENT.md 4.10 C); 11553384, combined 2026-10-13
     "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
     "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",

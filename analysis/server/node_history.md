@@ -136,9 +136,12 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_rdm5_verticalhorizontal | 11601937 (`asf25`) | 2, 3 (2026-10-13 refit) | rtx-02 | zen5 (`--constraint`) | done 2026-10-28 19:27 / 17:57 | 118.3 / 109.6 h (sacct) |
 | gam_rdm5_verticalhorizontal | 11601937 (`asf25`) | 4 (same run) | rtx-00 | zen5 (`--constraint`) | done 2026-10-30 05:05 | 136.3 h (sacct) |
 | gam_lnr6_verticalhorizontal | 11601938 (`asf25`) | 1-4 (2026-10-13 refit) | rtx-02 / rtx-02 / rtx-01 / rtx-00 | zen5 (`--constraint`) | done 2026-10-29 22:36 / 2026-10-28 21:26 / 2026-10-27 22:13 / 2026-10-29 20:43 | 129.8 / 104.6 / 79.3 / 122.1 h (sacct) |
-| gam_lnr_verticalhorizontal | 11626372 (`cc831`) | 1-4 (2026-10-13 refit settings) | rtx-02 / rtx-01 / rtx-01 / rtx-00 | zen5 (`--constraint`) | done 2026-10-30 18:37 / 2026-10-28 14:30 / 12:43 / 23:38. Shard 1 took 2-3x its siblings; REPORT not readable from `dmm56` | 81.5 / 29.4 / 27.6 / 38.5 h (sacct) |
-| gam_lnr_ebbinghaus | 11626373 (`cc831`) | 1-3 (same settings) | rtx-00 / rtx-00 / rtx-01 | zen5 (`--constraint`) | done 2026-10-30 12:43 / 16:57 / 2026-10-29 15:58. Shard 4 (rtx-00) still running at 88.7 h | 75.6 / 79.9 / 51.9 h (sacct) |
-| gam_lnr_ebbinghaus | 11626373 (`cc831`) | 4 (same run) | rtx-00 | zen5 (`--constraint`) | done 2026-11-01 02:59, 1.3-2.3x its siblings; REPORT not readable from `dmm56` | 104.5 h (sacct) |
+| gam_lnr_verticalhorizontal | 11626372 (`cc831`) | 1 (2026-10-13 refit settings) | rtx-02 | zen5 (`--constraint`) | done 2026-10-30 18:37: step 0.00595 / 0.0102, n_leapfrog 766 (chain 1 at treedepth 10 on every draw, chain 2 at 511), divergent 0.3%, max Rhat 1.06. Both chains took 2.4-2.8x the rtx-01 shards' chain times, so the node, not only chain 1's small step | 81.5 h |
+| gam_lnr_verticalhorizontal | 11626372 (`cc831`) | 2, 3 (same run) | rtx-01 | zen5 (`--constraint`) | done 2026-10-28 14:30 / 12:43: step 0.0108 / 0.0108 and 0.0093 / 0.0100, n_leapfrog 511 / 510, divergent 0.1% / 0.4%, max Rhat 1.27 / 1.40 | 29.4 / 27.6 h |
+| gam_lnr_verticalhorizontal | 11626372 (`cc831`) | 4 (same run) | rtx-00 | zen5 (`--constraint`) | done 2026-10-28 23:38: step 0.0096 / 0.0119, n_leapfrog 511, divergent 0.1%, max Rhat 1.49 | 38.5 h |
+| gam_lnr_ebbinghaus | 11626373 (`cc831`) | 1, 2 (same settings) | rtx-00 | zen5 (`--constraint`) | done 2026-10-30 12:43 / 16:57, **adaptation failed again** (AGENT.md 4.10 C): step 8.0e-4 / 1.3e-4 and 2.6e-4 / 1.6e-4, n_leapfrog 1018 / 1021, divergent 1.0% / 0.3%, max Rhat 3.04, E-BFMI < 0.3 in one chain each | 75.6 / 79.9 h |
+| gam_lnr_ebbinghaus | 11626373 (`cc831`) | 3 (same run) | rtx-01 | zen5 (`--constraint`) | done 2026-10-29 15:58, **adaptation failed**: step 1.1e-4 / 5.2e-5, n_leapfrog 1021, divergent 0.4%, max Rhat 3.04 | 51.9 h |
+| gam_lnr_ebbinghaus | 11626373 (`cc831`) | 4 (same run) | rtx-00 | zen5 (`--constraint`) | done 2026-11-01 02:59, **adaptation failed**: step 3.6e-4 / 2.2e-4, n_leapfrog 1019, divergent 0.9%, max Rhat 3.00, E-BFMI < 0.3 in one chain | 104.5 h |
 
 ## What it says so far (updated 2026-09-26)
 
