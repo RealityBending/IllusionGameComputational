@@ -372,12 +372,12 @@ the new `gam_lnr_mullerlyer_MullerLyer.rds`. The formulas did not change
 | family | cogmod family | distributional parameters with a 2-D smooth | fixed | |
 | --- | --- | --- | --- | --- |
 | `gam_lnr` | `cogmod_lnr()` | drift, `nuone`, `sigmazero`, `sigmaone`, `ndt` | `sigmabias = 0` |
-| `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal fits not converged: chains in separate `sigmabias` modes** (`AGENT.md` §4.10) |
+| `gam_lnr6` | `cogmod_lnr()` | as LNR plus `sigmabias` | — | VerticalHorizontal **converged on the 2026-10-13 refit** (8 chains in one mode), after the pre-refit fit split. ⚠ MullerLyer split before the refit, and its refit has 3 of 4 shards. Ebbinghaus fails to adapt (§4.10 C) (`AGENT.md` §4.10, §6.5) |
 | `gam_ddm4` | `cogmod_ddm()` | drift, `boundary`, `bias`, `ndt` | `sigmadrift`/`sigmabias`/`sigmandt` = 0 |
 | `gam_ddm5` | `cogmod_ddm()` | as DDM-4 plus `sigmadrift` | `sigmabias`/`sigmandt` = 0 |
 | `gam_ddm7` | `cogmod_ddm()` | all seven: as DDM-5 plus `sigmabias`, `sigmandt` | — | ⚠ **not viable at full data — subsample only** |
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
-| `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal fits not converged: chains in separate `sigmabias` modes** (`AGENT.md` §4.10) |
+| `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal not converged, on the 2026-10-13 refit too: each has 2 of 8 chains in a separate `sigmabias` mode** (`AGENT.md` §4.10, §6.5) |
 | `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **not converged: two modes, max Rhat 13.8, so no predictions. The 0.3.4 re-run (2026-10-07) replicated the split, and VerticalHorizontal splits too** (`AGENT.md` §4.9, §4.10, `cogmod_lba_modes_issue.md`) |
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =
