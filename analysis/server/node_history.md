@@ -148,6 +148,8 @@ The rtx nodes are the only zen5 nodes in `sussexneuro` (`sinfo -N -p sussexneuro
 | gam_rdm_mullerlyer, **stanli** | 11641547 | 1-4 (same) | rtx-01 | zen5 (`--constraint`) | done 2026-11-05 07:24 / 2026-11-04 09:57 / 2026-11-05 16:27 / 14:22: step 0.0030 / 0.0030 / 0.0033 / 0.0034, n_leapfrog 1023, **treedepth 10.00 (every draw at the cap)**, divergent 0, max Rhat 1.04 / 1.04 / 1.04 / 1.03 | 67.4 / 45.5 / 73.5 / 69.3 h |
 | gam_ddm5_ebbinghaus | 11643549 (`cc831`, cmdstanr) | 1-4 (1500 + 1000) | rtx-00 / rtx-02 / rtx-02 / rtx-01 | zen5 (`--constraint`) | done 2026-11-04 09:18 / 2026-11-05 07:16 / 19:02 / 06:42; `REPORT` not readable from `dmm56` | 41.5 / 62.1 / 73.9 / 58.2 h (sacct) |
 | gam_ddm5_mullerlyer | 11643550 (`cc831`, cmdstanr) | 1 (1500 + 1000) | rtx-02 | zen5 (`--constraint`) | done 2026-11-06 09:30; `REPORT` not readable from `dmm56` | 75.3 h (sacct) |
+| gam_ddm5_mullerlyer | 11643550 (`cc831`, cmdstanr) | 2, 3, 4 (same run) | rtx-02 / rtx-00 / rtx-02 | zen5 (`--constraint`) | done 2026-11-06 12:52 / 17:09 / 2026-11-07 01:30; `REPORT` not readable from `dmm56` | 75.7 / 76.9 / 79.9 h (sacct) |
+| gam_lnr6_mullerlyer | 11662404 (`asf25`, cmdstanr, **`verylong`**) | 4 (rerun of the 2026-10-24 `TIMEOUT`, 1500 + 1000) | rtx-01 | zen5 (`--constraint`) | done 2026-11-11 16:56; `REPORT` not readable from `dmm56`. The same shard ran 192 h on rtx-02 without finishing | 124.8 h (sacct) |
 
 ## What it says so far (updated 2026-09-26)
 

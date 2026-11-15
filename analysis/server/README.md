@@ -378,6 +378,7 @@ the new `gam_lnr_mullerlyer_MullerLyer.rds`. The formulas did not change
 | `gam_ddm7` | `cogmod_ddm()` | all seven: as DDM-5 plus `sigmabias`, `sigmandt` | — | ⚠ **not viable at full data — subsample only** |
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
 | `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal not converged, on the 2026-10-13 refit too: each has 2 of 8 chains in a separate `sigmabias` mode** (`AGENT.md` §4.10, §6.5) |
+| `gam_rdm5r` | `cogmod_rdm()` | as RDM; `sigmabias` free but `1 + (1 \| Participant)`, no smooth | — | the `gam_rdm5` fix of `AGENT.md` §4.10 B (option 1), first fitted 2026-11-15 (§6.11) |
 | `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **not converged: two modes, max Rhat 13.8, so no predictions. The 0.3.4 re-run (2026-10-07) replicated the split, and VerticalHorizontal splits too** (`AGENT.md` §4.9, §4.10, `cogmod_lba_modes_issue.md`) |
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =

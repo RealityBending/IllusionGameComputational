@@ -185,6 +185,10 @@ for (par in c("", setdiff(unique(priors$dpar), c("poutlier", "")))) {
   # The blanket `b` row for this dpar: class "b" with no coef, no group.
   blanket <- priors$class == "b" & priors$dpar == par &
     !nzchar(priors$coef) & !nzchar(priors$group)
+  # No row at all: this dpar has no slopes (an intercept-only formula, e.g.
+  # sigmabias in gam_rdm5r), and brms rejects a prior on a `b` that does not
+  # exist. Every other model has the row for every dpar but poutlier.
+  if (!any(blanket)) next
   if (any(blanket & nzchar(priors$prior))) next # cogmod set it; keep it
   priors <- c(priors, brms::prior_string("normal(0, 2)", class = "b", dpar = par),
               replace = TRUE)

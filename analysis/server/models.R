@@ -202,6 +202,26 @@ igc_formulas <- list(
     )
   },
 
+  # RDM-5r ------------------------------------------------------------------
+  # gam_rdm5 with the start-point range freed but not smoothed: a population
+  # intercept and a participant intercept, no effect of the illusion. Added
+  # 2026-11-15 because gam_rdm5 split into two stationary modes again on the
+  # 2026-10-13 refit, 6 chains against 2 on both MullerLyer and
+  # VerticalHorizontal (AGENT.md 4.10 B, option 1). The modes disagree most on
+  # sigmabias's smooth and its trade-off with boundary, which varies with the
+  # same predictors. If this still splits, the fallback is sigmabias ~ 1.
+  gam_rdm5r = function() {
+    brms::bf(
+      igc_rt(),
+      igc_t2("driftone"),
+      sigmabias ~ 1 + (1 | Participant),
+      igc_t2("boundary"),
+      igc_t2("ndt"),
+      poutlier ~ 1 + (1 | Participant),
+      family = cogmod::cogmod_rdm()
+    )
+  },
+
   # LBA ---------------------------------------------------------------------
   # Linear ballistic accumulator, two accumulators (cogmod_lba2). Note this is
   # lba2 and not lba1: lba1 has a single drift and no second accumulator, so it
@@ -289,6 +309,11 @@ igc_models <- list(
     formula = igc_formulas$gam_rdm5
   ),
 
+  gam_rdm5r_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$gam_rdm5r
+  ),
+
   gam_lba_mullerlyer = list(
     illusion = "MullerLyer",
     formula = igc_formulas$gam_lba
@@ -326,6 +351,11 @@ igc_models <- list(
     formula = igc_formulas$gam_rdm5
   ),
 
+  gam_rdm5r_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = igc_formulas$gam_rdm5r
+  ),
+
   gam_lba_verticalhorizontal = list(
     illusion = "VerticalHorizontal",
     formula = igc_formulas$gam_lba
@@ -361,6 +391,11 @@ igc_models <- list(
   gam_rdm5_ebbinghaus = list(
     illusion = "Ebbinghaus",
     formula = igc_formulas$gam_rdm5
+  ),
+
+  gam_rdm5r_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = igc_formulas$gam_rdm5r
   ),
 
   gam_lba_ebbinghaus = list(
