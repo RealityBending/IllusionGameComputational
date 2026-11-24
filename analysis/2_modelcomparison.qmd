@@ -142,7 +142,7 @@ models <- list(
     # Its ELPD and curves are not even roughly meaningful. Listed so that the
     # tables show it was fitted and failed.
     "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",
-    "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # 1 of 4 shards on the 2026-10-13 refit, with the gam_lnr_ebbinghaus adaptation failure (server/AGENT.md 4.10 C)
+    "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # 1 of 4 shards on the 2026-10-13 refit, with the gam_lnr_ebbinghaus adaptation failure (server/AGENT.md 4.10 C); refitting in stanli as 11819833 (2026-11-24, 6.13), which will be picked up from models_stanli/ once predicted
     "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
     "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",  # converged (cc831, uploaded 2026-11-16)
     "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus",  # stanli stand-in until the cmdstanr refit 11698242
@@ -1652,6 +1652,10 @@ note <- function(x, y, label, component, hjust = 0.5, vjust = 0.5) {
          fill = scales::alpha("white", 0.8), label.padding = grid::unit(1, "pt")),
     border))
 }
+# The correct response and the error, as lines and as text: the boundaries of
+# the diffusion and the accumulators of the race
+response_colours <- c(correct = "#43A047", error = "#E53935")
+response_ink <- c(correct = "#2E7D32", error = "#C62828")
 arrow_small <- grid::arrow(length = grid::unit(3.5, "pt"), type = "closed")
 arrow_both <- grid::arrow(length = grid::unit(3.5, "pt"), type = "closed", ends = "both")
 # What the two schematics share: the time axis and the boundary's height
@@ -1678,9 +1682,13 @@ plot_schematic_diffusion <- function() {
     mutate(simulate_path(rate, z, a, lower = 0, seed = 32, t0 = t0), Path = "b"),
     mutate(simulate_path(-0.5, z, a, lower = 0, seed = 12, t0 = t0), Path = "c"))
   ggplot(main, aes(Time, Evidence)) +
-    annotate("segment", x = t0, xend = 1.55, y = c(0, a), yend = c(0, a), linewidth = 0.7) +
-    annotate("text", x = 1.55, y = a + 0.06, label = "Correct response", hjust = 1, size = 2.6) +
-    annotate("text", x = 1.55, y = -0.07, label = "Error", hjust = 1, size = 2.6) +
+    # The two boundaries in the colours of the two accumulators of the race
+    annotate("segment", x = t0, xend = 1.55, y = c(0, a), yend = c(0, a), linewidth = 0.8,
+             colour = response_colours[c("error", "correct")]) +
+    annotate("text", x = 1.55, y = a + 0.06, label = "Correct response", hjust = 1, size = 2.6,
+             colour = response_ink[["correct"]], fontface = "bold") +
+    annotate("text", x = 1.55, y = -0.07, label = "Error", hjust = 1, size = 2.6,
+             colour = response_ink[["error"]], fontface = "bold") +
     geom_line(data = other, aes(group = Path), colour = "grey70", linewidth = 0.3) +
     annotate("segment", x = 0, xend = t0, y = z, yend = z, linewidth = 0.7, colour = component_colours[["ndt"]]) +
     # The rate is the average slope, and its variability a fan of slopes
@@ -1716,8 +1724,8 @@ plot_schematic_race <- function() {
     annotate("text", x = 1.55, y = b + 0.06, label = "Response", hjust = 1, size = 2.6) +
     annotate("segment", x = 0, xend = t0, y = 0.125, yend = 0.125, linewidth = 0.7,
              colour = component_colours[["ndt"]]) +
-    geom_line(data = error, linewidth = 0.45, colour = "#E53935") +
-    geom_line(linewidth = 0.45, colour = "#43A047") +
+    geom_line(data = error, linewidth = 0.45, colour = response_colours[["error"]]) +
+    geom_line(linewidth = 0.45, colour = response_colours[["correct"]]) +
     annotate("segment", x = t0, xend = t0 + 0.3, y = 0.18, yend = 0.18 + 0.3 * 0.95, linewidth = 0.8,
              colour = component_colours[["rate"]], arrow = arrow_small) +
     annotate("segment", x = t0, xend = t0 + 0.3, y = 0.07, yend = 0.07 + 0.3 * 0.45, linewidth = 0.8,
@@ -1726,9 +1734,9 @@ plot_schematic_race <- function() {
     annotate("segment", x = t0 + 0.06, xend = t0 + 0.16, y = 0.56, yend = 0.4, linewidth = 0.25,
              colour = component_colours[["rate"]]) +
     annotate("text", x = max(correct$Time) - 0.3, y = 0.9, label = "Correct accumulator", hjust = 1,
-             size = 2.5, colour = "#2E7D32", fontface = "bold") +
+             size = 2.5, colour = response_ink[["correct"]], fontface = "bold") +
     annotate("text", x = 1.57, y = error$Evidence[nrow(error)] - 0.17, label = "Error accumulator",
-             hjust = 1, size = 2.5, colour = "#C62828", fontface = "bold") +
+             hjust = 1, size = 2.5, colour = response_ink[["error"]], fontface = "bold") +
     annotate("segment", x = t0, xend = t0, y = 0, yend = 0.25, linewidth = 1.8,
              colour = component_colours[["startrange"]], alpha = 0.5) +
     note(t0 + 0.05, -0.07, "Start-point range", "startrange", hjust = 0) +
@@ -1801,7 +1809,22 @@ save_figure(plot_models(preds), "study1_models", width = 7.2, height = 5.6)
 # legend. plot_ppc() is the one of the section above. The legend of the models
 # is taken from the panel that has the most of them: patchwork only merges
 # legends that are identical, and an illusion with a model missing has another.
-plot_ppc_paper <- function(preds) {
+#
+# The models differ most at the peak of the correct responses, where their
+# lines are on top of each other on a plain axis. Two ways of pulling them
+# apart:
+# - `y_scale`: "square" stretches the high densities (and flattens the errors
+#   and the tails), "sqrt" does the opposite, "linear" leaves the axis alone.
+#   The transform is of the size of the density, so that errors stay mirrored.
+# - `zoom`: an inset with the peak enlarged, in the empty corner of the panel,
+#   and a frame around what it enlarges.
+signed_power <- function(power) {
+  scales::new_transform(paste0("signed_power_", power),
+                        transform = \(x) sign(x) * abs(x)^power,
+                        inverse = \(x) sign(x) * abs(x)^(1 / power))
+}
+plot_ppc_paper <- function(preds, y_scale = c("linear", "square", "sqrt"), zoom = FALSE) {
+  y_scale <- match.arg(y_scale)
   preds <- lapply(preds, \(p) p[intersect(paper_models, names(p))])
   with_legend <- which.max(lengths(preds))
   panels <- lapply(seq_along(preds), \(i) {
@@ -1818,6 +1841,37 @@ plot_ppc_paper <- function(preds) {
       theme(plot.title = element_text(face = "bold", size = 9.5, hjust = 0.5),
             panel.grid.minor = element_blank(),
             panel.grid.major = element_line(linewidth = 0.25))
+    if (y_scale != "linear") {
+      p <- suppressMessages(
+        p + scale_y_continuous(transform = signed_power(c(square = 2, sqrt = 0.5)[[y_scale]]),
+                               breaks = c(-0.5, -0.1, 0, 0.1, 0.5, 1, 1.5, 2), labels = abs)
+      )
+    }
+    if (!zoom) return(p)
+
+    # The peak of the correct responses: the observed mode, 0.12 s either
+    # side, and the top quarter of the densities there. The inset is the same
+    # plot cut to that window, on a plain axis.
+    observed <- p$layers[[1]]$data
+    predicted <- p$layers[[2]]$data
+    mode <- observed$x[which.max(observed$y)]
+    window_x <- mode + c(-0.12, 0.12)
+    top <- max(observed$y, predicted$y)
+    window_y <- c(0.72, 1.03) * top
+    inset <- suppressMessages(
+      p + scale_y_continuous(labels = abs) +
+        coord_cartesian(xlim = window_x, ylim = window_y, expand = FALSE) +
+        labs(title = NULL, x = NULL, y = NULL) +
+        theme(legend.position = "none", axis.text = element_blank(),
+              panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+              panel.border = element_rect(fill = NA, colour = "grey30", linewidth = 0.4),
+              plot.background = element_rect(fill = "white", colour = NA),
+              plot.margin = margin(0, 0, 0, 0))
+    )
+    p +
+      annotate("rect", xmin = window_x[1], xmax = window_x[2], ymin = window_y[1], ymax = window_y[2],
+               fill = NA, colour = "grey30", linewidth = 0.3) +
+      annotation_custom(ggplotGrob(inset), xmin = 0.95, xmax = 2.05, ymin = 0.42 * top, ymax = 1.03 * top)
   })
   wrap_plots(panels, nrow = 1, guides = "collect") &
     theme(legend.position = "bottom", legend.box = "vertical", legend.margin = margin(t = -2),
@@ -1826,11 +1880,16 @@ plot_ppc_paper <- function(preds) {
 }
 ```
 
+It is the lower half of the paper's comparison figure, saved with it below.
+
 ```{r}
 #| fig-width: 7.2
 #| fig-height: 3.3
 
-save_figure(plot_ppc_paper(preds), "study1_ppc", width = 7.2, height = 3.3)
+# The paper has the zoom. A squared axis pulls the lines apart at the peak too,
+# but flattens the errors and the tails to nothing; a square-root or log axis
+# does the opposite of what is wanted (tried 2026-11-24).
+plot_ppc_paper(preds, zoom = TRUE)
 ```
 
 ### Convergence, Performance and Cost
@@ -1855,8 +1914,12 @@ summarise_fits <- function(preds, reference = retained_model) {
         ELPD = p$loo$estimates["elpd_loo", "Estimate"], ELPD_SE = p$loo$estimates["elpd_loo", "SE"],
         ELPD_diff = sum(d), ELPD_diff_SE = sqrt(length(d)) * sd(d),
         Pareto_k_pct = 100 * mean(p$loo$diagnostics$pareto_k > 0.7),
-        Core_hours = sum(p$efficiency$Time_total * p$efficiency$Threads) / 3600,
-        Chain_hours = mean(p$efficiency$Time_total) / 3600
+        # Compute: how long a chain took on average, and the total over the
+        # chains and their threads, which is what one core would have taken
+        # (assuming threading scales linearly, server/AGENT.md 4.4.1)
+        Chain_days = mean(p$efficiency$Time_total) / 86400,
+        Core_days = sum(p$efficiency$Time_total * p$efficiency$Threads) / 86400,
+        Core_hours = sum(p$efficiency$Time_total * p$efficiency$Threads) / 3600
       )
     })
   }) |>
@@ -1869,6 +1932,14 @@ summarise_fits <- function(preds, reference = retained_model) {
 # chains settled in and how the 8 chains divided between them, or a warmup that
 # never adapted. This is read off the chains by hand, not computed
 # (server/AGENT.md 4.10 B and C, and the comments in `models` above).
+#
+# LNR-6 on Ebbinghaus has no combined fit in this generation (cogmod 0.3.5,
+# 1500 warmup + 1000 draws): three of its four jobs ran into the 8-day limit,
+# and were not rerun because the one that finished had the adaptation failure
+# of LNR on that illusion. The complete fit of it that exists is of the
+# generation before (cogmod 0.3.4, 1000 + 500), archived at the 2026-10-13
+# refit, and it failed in the same way (server/AGENT.md 4.10 C and 6.5). See
+# `earlier_fits` below for what the figure takes from it.
 failures <- c(
   "LNR-6 MullerLyer" = "2 modes (4:4)", "RDM-5 MullerLyer" = "2 modes (6:2)",
   "LBA MullerLyer" = "2 modes (6:2)", "RDM-5 VerticalHorizontal" = "2 modes (6:2)",
@@ -1876,11 +1947,37 @@ failures <- c(
   "LNR Ebbinghaus" = "failed warmup", "LNR-6 Ebbinghaus" = "failed warmup"
 )
 
-plot_comparison <- function(fits) {
+# A model with no complete fit in this generation, but one in the generation
+# before: its convergence cell is filled from that fit, and marked. Nothing
+# else can be taken from it. That fit is of other data (the block exclusions
+# changed on 2026-10-12: 320,144 trials against 316,487), with other priors
+# (cogmod 0.3.4) and a shorter run, so its ELPD cannot be set against DDM-5's
+# and its cost is not that of the others. Its prediction file is read as it
+# is, without load_predictions(), which is for the current generation.
+earlier_fits <- purrr::pmap_dfr(
+  list(Model = "LNR-6", Illusion = "Ebbinghaus",
+       File = "old_20261004/gam_lnr6_ebbinghaus_Ebbinghaus.rds"),
+  \(Model, Illusion, File) {
+    if (!file.exists(paste0(pred_path, File))) return(NULL)
+    cv <- readRDS(paste0(pred_path, File))$convergence
+    data.frame(Model = Model, Illusion = Illusion, Rhat_earlier = cv$rhat_pop_max,
+               Converged_earlier = cv$rhat_pop_max <= 1.05 & cv$rhat_lp <= 1.1 &
+                 cv$ess_bulk_pop_min >= 100 & cv$divergent_pct < 1)
+  }
+)
+
+plot_comparison <- function(fits, earlier = earlier_fits) {
+  if (is.null(earlier) || nrow(earlier) == 0) {
+    earlier <- data.frame(Model = character(), Illusion = character(), Rhat_earlier = numeric(),
+                          Converged_earlier = logical())
+  }
   d <- expand.grid(Model = paper_models, Illusion = names(paper_illusions), stringsAsFactors = FALSE) |>
     left_join(fits, by = c("Model", "Illusion")) |>
+    left_join(earlier, by = c("Model", "Illusion")) |>
     mutate(Failure = failures[paste(Model, Illusion)],
            Fitted = !is.na(Rhat),
+           # No fit in this generation, but one in the one before
+           Earlier = !Fitted & !is.na(Rhat_earlier),
            Group = factor(paper_families[Model], levels = c("Diffusion", "Race")),
            Model = factor(Model, levels = rev(paper_models)),
            Illusion = factor(paper_illusions[Illusion], levels = paper_illusions),
@@ -1895,7 +1992,12 @@ plot_comparison <- function(fits) {
       geom_tile(data = \(x) filter(x, Retained), fill = NA, colour = "black", linewidth = 0.5,
                 width = 0.96, height = 0.92) +
       geom_text(aes(label = {{ top }}, colour = {{ ink }}), size = 2.9, fontface = "bold", nudge_y = 0.17) +
-      geom_text(aes(label = {{ bottom }}, colour = {{ ink }}), size = 2.2, nudge_y = -0.2) +
+      geom_text(data = \(x) filter(x, !grepl("\n", {{ bottom }})),
+                aes(label = {{ bottom }}, colour = {{ ink }}), size = 2.2, nudge_y = -0.2) +
+      # A second line of two rows (the fit with no combined fit) has the cell
+      # to itself, and is centred in it
+      geom_text(data = \(x) filter(x, grepl("\n", {{ bottom }})),
+                aes(label = {{ bottom }}, colour = {{ ink }}), size = 2.2, lineheight = 0.9) +
       scale_fill_identity() +
       scale_colour_identity() +
       scale_x_discrete(position = "top", expand = c(0, 0), labels = \(x) sub("-", "-\n", x)) +
@@ -1909,11 +2011,14 @@ plot_comparison <- function(fits) {
   # Convergence: green if the chains agree, red if not, with the largest Rhat
   # and, under it, the smallest effective sample size or the kind of failure
   d <- d |>
-    mutate(Conv_fill = case_when(!Fitted ~ "#E0E0E0", Converged ~ "#B7E1BB", .default = "#F2A6A0"),
-           Conv_top = ifelse(Fitted, formatC(Rhat, format = "f", digits = 3), "–"),
-           Conv_bottom = case_when(!Fitted ~ "not completed",
+    mutate(Conv_fill = case_when(Earlier & Converged_earlier ~ "#B7E1BB", Earlier ~ "#F2A6A0",
+                                 !Fitted ~ "#E0E0E0", Converged ~ "#B7E1BB", .default = "#F2A6A0"),
+           Conv_top = case_when(Earlier ~ paste0(formatC(Rhat_earlier, format = "f", digits = 3), "‡"),
+                                Fitted ~ formatC(Rhat, format = "f", digits = 3), .default = ""),
+           Conv_bottom = case_when(Earlier ~ Failure,
+                                   !Fitted ~ paste0(Failure, "\n(not completed)"),
                                    Converged ~ paste("ESS", num(ESS)), .default = Failure),
-           Conv_ink = ifelse(Fitted, "black", "grey35"))
+           Conv_ink = ifelse(Fitted | Earlier, "black", "grey35"))
 
   # Predictive performance: blue where the model predicts better than the
   # retained one and brown where worse, on a square-root scale so that the
@@ -1930,18 +2035,19 @@ plot_comparison <- function(fits) {
                                 .default = paste0(ifelse(ELPD_diff > 0, "+", ""), num(ELPD_diff),
                                                   ifelse(Converged, "", "†"))),
            Perf_bottom = case_when(!Fitted ~ "", Retained ~ paste0("ELPD ", num(ELPD)),
-                                   .default = paste0("SE ", num(ELPD_diff_SE))),
+                                   .default = paste0("± ", num(ELPD_diff_SE))),
            Perf_ink = case_when(!Fitted | !Converged ~ "grey45",
                                 abs(signed_sqrt(ELPD_diff)) / limit > 0.75 ~ "white", .default = "black"))
 
-  # Computational cost: core-hours of sampling, darker when dearer
+  # Computational cost, in days, darker when dearer: how long a chain took,
+  # which is what one waits for, and under it the total in days of one core
   cost <- scales::colour_ramp(c("#F3F0F7", "#7E6BAD"))
   d <- d |>
-    mutate(Cost_fill = ifelse(Fitted, cost(scales::rescale(Core_hours, from = c(0, max(Core_hours, na.rm = TRUE)))),
+    mutate(Cost_fill = ifelse(Fitted, cost(scales::rescale(Core_days, from = c(0, max(Core_days, na.rm = TRUE)))),
                               "#E0E0E0"),
-           Cost_top = ifelse(Fitted, num(Core_hours), "–"),
-           Cost_bottom = ifelse(Fitted, paste0(num(Chain_hours), " h/chain"), ""),
-           Cost_ink = ifelse(Fitted & Core_hours > 0.8 * max(Core_hours, na.rm = TRUE), "white", "black"))
+           Cost_top = ifelse(Fitted, paste(num(Chain_days, 1), "days"), "–"),
+           Cost_bottom = ifelse(Fitted, paste(num(Core_days), "total days"), ""),
+           Cost_ink = ifelse(Fitted & Core_days > 0.8 * max(Core_days, na.rm = TRUE), "white", "black"))
 
   # The model names, on their colours, once for the three panels
   names_panel <- ggplot(distinct(d, Model, Group), aes(1, Model)) +
@@ -1964,9 +2070,20 @@ plot_comparison <- function(fits) {
     panel(Perf_fill, Perf_top, Perf_bottom, Perf_ink, "Predictive performance",
           expression(Delta * "ELPD from DDM-5 (higher is better)")),
     panel(Cost_fill, Cost_top, Cost_bottom, Cost_ink, "Computational cost",
-          "core-hours of sampling"),
+          "days per chain, and total days of one core"),
     nrow = 1, widths = c(0.42, 1, 1, 1)
   )
+}
+
+# The figure of the paper: that table over the predictive check.
+# Each half is wrapped whole, so that it keeps its own layout and legend, and
+# gets one tag
+plot_comparison_ppc <- function(fits, preds) {
+  wrap_plots(wrap_elements(full = plot_comparison(fits)),
+             wrap_elements(full = plot_ppc_paper(preds, zoom = TRUE)),
+             ncol = 1, heights = c(3.9, 3.2)) +
+    plot_annotation(tag_levels = "A") &
+    theme(plot.tag = element_text(face = "bold", size = 11))
 }
 ```
 
@@ -1979,7 +2096,16 @@ if (any(fits$Sampler == "stanli")) {
   message("In the paper's figure from a stanli stand-in: ",
           paste(fits$Model[fits$Sampler == "stanli"], fits$Illusion[fits$Sampler == "stanli"], collapse = ", "))
 }
-save_figure(plot_comparison(fits), "study1_comparison", width = 7.2, height = 3.9)
+plot_comparison(fits)
+```
+
+The figure of the paper: the table over the predictive check.
+
+```{r}
+#| fig-width: 7.2
+#| fig-height: 7.3
+
+save_figure(plot_comparison_ppc(fits, preds), "study1_comparison", width = 7.2, height = 7.3)
 ```
 
 The numbers behind it, which are the ones quoted in the text of the paper.
@@ -1990,14 +2116,15 @@ fits |>
   gt::gt() |>
   gt::fmt_number(columns = c(Rhat, Rhat_lp), decimals = 3) |>
   gt::fmt_number(columns = c(Divergent_pct, Pareto_k_pct), decimals = 2) |>
-  gt::fmt_number(columns = c(ESS, ELPD, ELPD_SE, ELPD_diff, ELPD_diff_SE, Core_hours, Chain_hours), decimals = 0)
+  gt::fmt_number(columns = c(ESS, ELPD, ELPD_SE, ELPD_diff, ELPD_diff_SE, Core_days, Core_hours), decimals = 0) |>
+  gt::fmt_number(columns = Chain_days, decimals = 1)
 
 # The total compute, for the text
 fits |>
-  summarise(Fits = n(), Converged = sum(Converged), Core_hours = sum(Core_hours),
-            Single_core_years = sum(Core_hours) / (24 * 365.25)) |>
+  summarise(Fits = n(), Converged = sum(Converged), Core_days = sum(Core_days),
+            Core_hours = sum(Core_hours), Single_core_years = sum(Core_hours) / (24 * 365.25)) |>
   gt::gt() |>
-  gt::fmt_number(columns = Core_hours, decimals = 0) |>
+  gt::fmt_number(columns = c(Core_days, Core_hours), decimals = 0) |>
   gt::fmt_number(columns = Single_core_years, decimals = 1)
 ```
 
@@ -2012,10 +2139,15 @@ fits |>
 # drift is positive towards the correct response, and the starting point is 0
 # at the error boundary and 1 at the correct one.
 plot_retained <- function(preds_curves, model = retained_model) {
-  panels <- c("Error Rate" = "Error rate", "Median RT" = "Median RT\n(correct, s)",
-              "Drift" = "Drift rate\n(+ towards correct)", "Drift Variability" = "Drift rate\nvariability",
-              "Boundary" = "Boundary\nseparation", "Bias" = "Starting point\n(0 error, 1 correct)",
-              "NDT" = "Non-decision\ntime (s)")
+  # The rows, in two groups: what can be observed, and what the model explains
+  # it with
+  groups <- list(
+    "Observable Outcomes" = c("Error Rate" = "Error rate", "Median RT" = "Median RT\n(correct, s)"),
+    "Model Parameters" = c("Drift" = "Drift rate\n(+ towards correct)", "Drift Variability" = "Drift rate\nvariability",
+                           "Boundary" = "Boundary\nseparation", "Bias" = "Starting point\n(0 error, 1 correct)",
+                           "NDT" = "Non-decision\ntime (s)")
+  )
+  panels <- unlist(unname(groups))
   d <- purrr::imap_dfr(preds_curves, \(x, illusion) {
     x |>
       filter(Model == model, Parameter %in% names(panels)) |>
@@ -2028,43 +2160,202 @@ plot_retained <- function(preds_curves, model = retained_model) {
     mutate(Predicted = case_when(Parameter == "Drift" ~ -Predicted,
                                  Parameter == "Bias" ~ 1 - Predicted,
                                  .default = Predicted),
-           Parameter = factor(panels[as.character(Parameter)], levels = panels),
+           Parameter = panels[as.character(Parameter)],
            Illusion = factor(paper_illusions[Illusion], levels = paper_illusions))
 
   # Reference lines: no drift, and a starting point half-way
-  refs <- data.frame(Parameter = factor(panels[c("Drift", "Bias")], levels = panels), y = c(0, 0.5))
+  refs <- data.frame(Parameter = panels[c("Drift", "Bias")], y = c(0, 0.5))
 
-  ggplot(d, aes(Illusion_Strength, Predicted)) +
-    geom_vline(xintercept = 0, colour = "grey70", linewidth = 0.3) +
-    geom_hline(data = refs, aes(yintercept = y), colour = "grey70", linewidth = 0.3, linetype = "dashed") +
-    geom_line(aes(colour = Difficulty, group = Difficulty), linewidth = 0.55, na.rm = TRUE) +
-    scale_colour_gradientn(colours = c("#D84315", "#FF9800", "#FFC107", "#8BC34A", "#2E7D32"),
-                           breaks = c(0, 1), labels = c("hardest", "easiest"),
-                           guide = guide_colourbar(title.position = "left", barwidth = grid::unit(6, "lines"),
-                                                   barheight = grid::unit(0.5, "lines"))) +
-    facet_grid(Parameter ~ Illusion, scales = "free", switch = "y") +
-    labs(x = "Illusion strength (negative: congruent, positive: incongruent)", y = NULL,
-         colour = "Task difficulty ") +
-    theme_minimal(base_size = 9) +
+  # One group of rows, under its name. The groups are plots of their own, one
+  # above the other, so that there is a gap between them. Their columns line
+  # up, so the illusions are named once, above the first, and the axis of
+  # illusion strength is drawn once, under the last.
+  block <- function(name) {
+    rows <- groups[[name]]
+    first <- name == names(groups)[1]
+    last <- name == names(groups)[length(groups)]
+    in_block <- \(x) mutate(filter(x, Parameter %in% rows), Parameter = factor(Parameter, levels = rows))
+    ggplot(in_block(d), aes(Illusion_Strength, Predicted)) +
+      geom_vline(xintercept = 0, colour = "grey70", linewidth = 0.3) +
+      geom_hline(data = in_block(refs), aes(yintercept = y), colour = "grey70", linewidth = 0.3,
+                 linetype = "dashed") +
+      geom_line(aes(colour = Difficulty, group = Difficulty), linewidth = 0.55, na.rm = TRUE) +
+      scale_colour_gradientn(colours = c("#D84315", "#FF9800", "#FFC107", "#8BC34A", "#2E7D32"),
+                             limits = c(0, 1), breaks = c(0, 1), labels = c("hardest", "easiest"),
+                             guide = guide_colourbar(title.position = "left", barwidth = grid::unit(6, "lines"),
+                                                     barheight = grid::unit(0.5, "lines"))) +
+      facet_grid(Parameter ~ Illusion, scales = "free", switch = "y") +
+      labs(title = name, y = NULL, colour = "Task difficulty ",
+           x = if (last) "Illusion strength (negative: congruent, positive: incongruent)") +
+      theme_minimal(base_size = 9) +
+      theme(plot.title = element_text(face = "bold", size = 10.5, margin = margin(b = 2)),
+            plot.title.position = "plot",
+            strip.placement = "outside",
+            strip.text.y.left = element_text(angle = 0, hjust = 1, size = 8, lineheight = 0.9),
+            strip.text.x = if (first) element_text(face = "bold", size = 9.5) else element_blank(),
+            panel.grid.minor = element_blank(),
+            panel.grid.major = element_line(linewidth = 0.25),
+            panel.spacing = grid::unit(7, "pt"),
+            axis.text = element_text(size = 7),
+            axis.text.x = if (last) element_text(size = 7) else element_blank(),
+            legend.title = element_text(size = 8, vjust = 0.9),
+            legend.margin = margin(t = -4),
+            plot.margin = margin(4, 4, 4, 4))
+  }
+
+  wrap_plots(lapply(names(groups), block), ncol = 1, heights = lengths(groups), guides = "collect") &
+    theme(legend.position = "bottom")
+}
+```
+
+```{r}
+#| fig-width: 7.2
+#| fig-height: 8.3
+#| warning: false
+
+save_figure(plot_retained(preds_curves), "study1_ddm5", width = 7.2, height = 8.3)
+```
+
+### Every Model
+
+The parameters of all seven models at once, as surfaces over the two
+manipulations. The models do not share their parameters, so the rows are the
+processes of the models figure, with the two accumulators of a race in
+separate rows. A model without a process leaves its cell empty. The drift and
+the starting point of the DDM are turned around as in the figure of the
+retained model. The fits that did not converge are drawn like the others:
+which ones they are is in the comparison figure, and in the note of this one
+in the manuscript.
+
+```{r}
+# The rows of the grid: a process and, for the rate and its variability, the
+# accumulator. A race model has a rate towards each response, one per
+# accumulator. The DDM has a single rate, its drift, which is the balance of
+# the evidence for the two responses: turned towards the correct response
+# (tidy_all_models()), it goes in the row of the rate towards correct, and its
+# variability in the row under it.
+all_models_rows <- c(
+  "rate correct" = "Evidence rate\ntowards correct", "rate error" = "Evidence rate\ntowards error",
+  "ratevar correct" = "Rate variability\ntowards correct", "ratevar error" = "Rate variability\ntowards error",
+  "boundary correct" = "Boundary", "start correct" = "Starting\npoint",
+  "startrange correct" = "Start-point\nrange", "ndt correct" = "Non-decision\ntime"
+)
+error_parameters <- c("nuone", "driftone", "sigmaone")
+
+# The heatmaps of every model of one illusion, with the row of each parameter
+tidy_all_models <- function(preds) {
+  purrr::imap_dfr(preds[intersect(paper_models, names(preds))], \(p, model) {
+    map <- family_components[[p$meta$family]]
+    ddm <- p$meta$family == "cogmod_ddm"
+    p$heatmaps |>
+      filter(Parameter %in% names(map)) |>
+      restore_units(illusion = p$meta$illusion) |>
+      mutate(Model = model,
+             Row = paste(map[Parameter], ifelse(Parameter %in% error_parameters, "error", "correct")),
+             Predicted = case_when(ddm & Parameter == "mu" ~ -Predicted,
+                                   ddm & Parameter == "bias" ~ 1 - Predicted,
+                                   .default = Predicted))
+  }) |>
+    mutate(Row = factor(all_models_rows[Row], levels = all_models_rows))
+}
+
+# Axis breaks strictly inside the range, so that the labels of neighbouring
+# panels do not run into each other
+inner_breaks <- function(n) {
+  \(limits) {
+    b <- scales::breaks_extended(n)(limits)
+    b[b > limits[1] + 0.02 * diff(limits) & b < limits[2] - 0.02 * diff(limits)]
+  }
+}
+
+# One column per model, on its colour, and one row per process, in its colour.
+# The parameters are on scales that cannot be compared, between models or
+# within one, so every panel has its own colour scale, from its lowest value
+# to its highest, and says what these are. What reads off the colours is the
+# shape of an effect: which way it runs and where it bends. Its size is in the
+# numbers. The contour lines mark every sixth of the panel's range.
+#
+# `palette` is the colours of that scale, from the lowest value to the highest.
+# Spectral, from blue through yellow to red (user's choice, 2026-11-24, out of
+# eight tried): it has more hues along it than viridis, and so shows more of
+# the relief, without the neon green and cyan of turbo, which the heatmaps
+# above use. Its pale yellow is only the middle of a panel's range, not a
+# reference value.
+plot_all_models <- function(preds, illusion = "MullerLyer",
+                            palette = grDevices::hcl.colors(256, "Spectral", rev = TRUE)) {
+  d <- tidy_all_models(preds[[illusion]]) |>
+    mutate(.by = c(Model, Row), Scaled = scales::rescale(Predicted))
+  shown <- intersect(paper_models, unique(d$Model))
+  d$Model <- factor(d$Model, levels = shown)
+  row_colours <- component_colours[sub(" .*", "", names(all_models_rows))]
+
+  # Two significant digits, and a plain 0 for what rounds to it (a rate of 7e-8)
+  short <- \(x) {
+    if (abs(x) < 0.005) return("0")
+    sub("^-", "−", format(signif(x, 2), drop0trailing = TRUE, trim = TRUE, scientific = FALSE))
+  }
+  ranges <- d |>
+    summarise(.by = c(Model, Row),
+              Label = paste(short(min(Predicted)), "to", short(max(Predicted))),
+              x = mean(range(Illusion_Strength)), y = max(Illusion_Difference))
+  border <- if (utils::packageVersion("ggplot2") >= "4.0.0") list(linewidth = 0) else list(label.size = 0)
+
+  # A process that a model does not estimate is a grey cell, the grey of the
+  # fixed parameters in the models figure, so that the grid reads as a table
+  # with holes in it and not as a scatter of panels
+  absent <- tidyr::expand_grid(Model = factor(shown, levels = shown),
+                               Row = factor(levels(d$Row), levels = levels(d$Row))) |>
+    anti_join(distinct(d, Model, Row), by = c("Model", "Row")) |>
+    mutate(xmin = -Inf, xmax = Inf, ymin = -Inf, ymax = Inf)
+
+  ggplot(d, aes(Illusion_Strength, Illusion_Difference)) +
+    geom_raster(aes(fill = Scaled)) +
+    geom_contour(aes(z = Scaled), breaks = (1:5) / 6, colour = "white", alpha = 0.45, linewidth = 0.2) +
+    geom_vline(xintercept = 0, colour = "white", linewidth = 0.3, linetype = "dashed") +
+    # After the line at no illusion, which would otherwise cross the grey cells
+    geom_rect(data = absent, aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+              inherit.aes = FALSE, fill = "#ECECEC") +
+    do.call(geom_label, c(list(data = ranges, mapping = aes(x = x, y = y, label = Label), vjust = 1.15,
+                               size = 1.75, fill = scales::alpha("white", 0.8),
+                               label.padding = grid::unit(1, "pt")), border)) +
+    scale_fill_gradientn(colours = palette, breaks = c(0, 1), labels = c("lowest", "highest"),
+                         guide = guide_colourbar(title.position = "left", barwidth = grid::unit(6, "lines"),
+                                                 barheight = grid::unit(0.5, "lines"))) +
+    scale_x_continuous(expand = c(0, 0), breaks = inner_breaks(4)) +
+    scale_y_continuous(expand = c(0, 0), breaks = inner_breaks(4)) +
+    ggh4x::facet_grid2(
+      Row ~ Model, switch = "y",
+      strip = ggh4x::strip_themed(
+        background_x = ggh4x::elem_list_rect(fill = model_colors[shown],
+                                             colour = rep("white", length(shown))),
+        text_x = ggh4x::elem_list_text(colour = rep("white", length(shown)),
+                                       face = rep("bold", length(shown))),
+        text_y = ggh4x::elem_list_text(colour = row_colours, face = rep("bold", length(row_colours)))
+      )
+    ) +
+    labs(x = "Illusion strength (negative: congruent, positive: incongruent)",
+         y = "Objective difference between the targets (larger is easier)",
+         fill = "Value, within each panel ") +
+    theme_minimal(base_size = 8) +
     theme(strip.placement = "outside",
-          strip.text.y.left = element_text(angle = 0, hjust = 1, size = 8, lineheight = 0.9),
-          strip.text.x = element_text(face = "bold", size = 9.5),
-          panel.grid.minor = element_blank(),
-          panel.grid.major = element_line(linewidth = 0.25),
-          panel.spacing = grid::unit(7, "pt"),
-          axis.text = element_text(size = 7),
+          strip.text.x = element_text(size = 8),
+          strip.text.y.left = element_text(angle = 0, hjust = 1, size = 7, lineheight = 0.9),
+          panel.grid = element_blank(),
+          panel.spacing = grid::unit(4, "pt"),
+          axis.text = element_text(size = 5),
           legend.position = "bottom",
-          legend.title = element_text(size = 8, vjust = 0.9),
+          legend.title = element_text(size = 7.5, vjust = 0.9),
+          legend.text = element_text(size = 7),
           legend.margin = margin(t = -4))
 }
 ```
 
 ```{r}
 #| fig-width: 7.2
-#| fig-height: 8
+#| fig-height: 8.4
 #| warning: false
 
-save_figure(plot_retained(preds_curves), "study1_ddm5", width = 7.2, height = 8)
+save_figure(plot_all_models(preds), "study1_allmodels", width = 7.2, height = 8.4)
 ```
 
 ## Appendix: stanli Against cmdstanr

@@ -92,8 +92,9 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   includes the files. Tables are drawn as figures too (coloured cells), not
   written as markdown or LaTeX tables. To change a number or a figure in the
   paper, change it there and re-render that script, then the manuscript. The
-  DDM figure of the paper turns the drift and the starting point around from
-  the fits' coding (`plot_retained()`), and the text follows the figure.
+  DDM panels of the paper's figures turn the drift and the starting point
+  around from the fits' coding (`plot_all_models()`, `plot_retained()`), and
+  the text follows the figures.
 - **`1_models.qmd` does not load fits either.** It reads the files that
   `./hpc priors` writes to `models/priors/` (fetched with
   `./hpc pull priors`): for every combined fit, its priors as brms resolved

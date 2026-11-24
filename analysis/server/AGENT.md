@@ -2416,6 +2416,44 @@ the stanli stand-ins in Table 1 of the paper once combined; and the
 remaining `gam_rdm5r` shards (ML 3, Ebbinghaus 3), only to complete the
 paper's one sentence on RDM-5r.
 
+### 6.13 `gam_lnr6_ebbinghaus` again, in stanli, to complete the grid (2026-11-24)
+
+**Submitted 2026-11-24 ~15:30 as 11819833** (user's request: "just so that we
+have the complete grid"). It is the one cell of the paper's 7 x 3 comparison
+with no complete fit of this generation: on the 2026-10-13 refit, shards 1-3
+of `asf25`'s cmdstanr run hit `long`'s 8-day wall at 72-96%, and shard 4 had
+the 4.10 C adaptation failure (6.5). This is the same model and run length,
+not a Study 1 variant, so 6.12 does not rule it out.
+
+- **stanli 0.25.0**, the user's choice, and an exception to 6.11 (every other
+  production fit is cmdstanr). The stanli developers have not run the LNR-6
+  program (6.10). The plain LNR agreed with cmdstanr within Monte Carlo error
+  (6.9).
+- `verylong`, `--constraint=amd_zen5 --mem=64G --time=14-00:00:00`, 4 shards x
+  16 CPUs, 1500 + 1000, into `models_stanli/`. `verylong` and not `long`: at
+  the cmdstanr rate these shards need 8.3-11 days (6.5), so 0.57-0.72x (6.9)
+  gives ~4.7-7.9 days, too close to 8. `verylong`'s 70 CPUs are `dmm56`'s own
+  and were idle, so `sussexneuro` was not needed.
+- Checked before submitting, in one SSH connection: the cluster's scripts
+  match the repo (md5, no push), `R_libs_0.25.0` and `runtime_v0.25.0` are in
+  place, `models_stanli/` has no `gam_lnr6` shard to be adopted, and `dmm56`
+  held `long` 48, `sussexneuro` 32 and `verylong` 0. All four tasks were
+  `PENDING (Priority)` at submission, waiting for a zen5 node.
+- **What to expect:** most likely the 4.10 C failure again (adapted step ~1e-4,
+  treedepth 10 on every draw, Rhat 3-5), which has shown on cogmod 0.3.3,
+  0.3.4 and 0.3.5 and with 1000 and 1500 warmup. `./hpc progress` cannot read
+  a stanli fit's step size mid-run (no CmdStan CSV), so the first sign is the
+  `REPORT` line of a finished shard.
+- **When it is done**, whatever the outcome: `IGC_BACKEND=stanli ./hpc combine
+  gam_lnr6_ebbinghaus`, then `predict` (`--dependency=afterok:<combine>`),
+  `IGC_BACKEND=stanli ./hpc pull predictions`, and re-render
+  `2_modelcomparison.qmd`. It already lists the model, so it takes the stanli
+  file as that model's fit, and the paper's comparison figure then fills the
+  cell from it rather than from `earlier_fits` (the 0.3.4 fit, which until
+  then supplies its convergence only). Then update the paper: Estimation
+  (one fit sampled with stanli), the counts (21 fits, 20 completed, 13
+  converged), the LNR-6 sentences under Convergence, and the note of Figure 2.
+
 ---
 
 ## 7. Open questions
