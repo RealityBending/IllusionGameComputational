@@ -231,9 +231,8 @@ shard_file <- file.path(models_dir, paste0(shard_name, ".rds"))
 # and the Stan CSVs were in the node's tempdir, deleted with the job. So:
 # - the Stan CSVs go to models/stan_csv/<shard>_<job>/ on Lustre and are only
 #   deleted once the shard is safely saved. After a failed save, rebuild the
-#   fit from them instead of resampling, the way brm() does after sampling:
-#   brm(..., empty = TRUE), then m$fit <- brms:::read_csv_as_stanfit(<csv
-#   files>, ...) and m <- brms:::rename_pars(m).
+#   fit from them instead of resampling: ./hpc rebuild <model> <shard> <job>
+#   runs this script with IGC_REBUILD_JOB set ("Rebuild" below).
 # - the shard is written to <shard>.rds.tmp and renamed, so a failed write
 #   never leaves a half-written file under the shard's name.
 save_shard <- function(m, file, keep_dir) {
@@ -290,6 +289,104 @@ csv_dir <- file.path(models_dir, "stan_csv",
                      paste0(shard_name, "_", Sys.getenv("SLURM_ARRAY_JOB_ID", unset = "local")))
 
 t0 <- Sys.time()
+
+# Rebuild ------------------------------------------------------------------
+# A shard whose save failed, rebuilt from the CSVs kept in
+# models/stan_csv/<shard>_<IGC_REBUILD_JOB>/ (added 2026-11-24, when
+# gam_rdm5r_mullerlyer shard 2 sampled for 8.8 days and then hit "error
+# writing to connection"). It does what brm() does after sampling, as brms
+# 2.21.0 writes it (brm() and .fit_model_cmdstanr()): the brmsfit from the
+# cmdstanr arm's own call with empty = TRUE, the draws from brms's
+# read_csv_as_stanfit(), then rename_pars(). No compile, no sampling. The
+# CmdStanModel attribute stays empty, which only update() without
+# recompilation would miss. Nothing is saved unless the result matches a
+# sibling shard of the same array (Stan code, data, Stan data, parameters, run
+# length, cogmod). The CSVs are kept: delete them once the model is combined.
+rebuild_job <- Sys.getenv("IGC_REBUILD_JOB", unset = "")
+if (nzchar(rebuild_job)) {
+  if (backend != "cmdstanr") stop("IGC_REBUILD_JOB rebuilds cmdstanr shards only", call. = FALSE)
+  if (!is.null(m)) stop(shard_file, " already exists: nothing to rebuild", call. = FALSE)
+  csv_dir <- file.path(models_dir, "stan_csv", paste0(shard_name, "_", rebuild_job))
+  csv_files <- sort(list.files(csv_dir, pattern = "[.]csv$", full.names = TRUE))
+  if (!length(csv_files)) stop("no Stan CSVs in ", csv_dir, call. = FALSE)
+  cat("rebuild: from", length(csv_files), "CSVs in", csv_dir, "\n")
+
+  # The run as CmdStan recorded it, which is what brm() was called with.
+  meta <- cmdstanr::read_cmdstan_csv(csv_files, variables = "", sampler_diagnostics = "")$metadata
+  if (!isTRUE(meta$iter_warmup == warmup && meta$iter_sampling == iter - warmup)) {
+    stop("the CSVs are ", meta$iter_warmup, " warmup + ", meta$iter_sampling,
+         " draws; this run is ", warmup, " + ", iter - warmup, call. = FALSE)
+  }
+  chains_per_task <- length(csv_files)
+  # threading() sets the grainsize from the thread count, and the grainsize is
+  # in the Stan data, so it has to be the sampling job's, not this one's.
+  threads_per_chain <- as.numeric(meta$threads_per_chain)
+  if (length(threads_per_chain) != 1 || is.na(threads_per_chain)) {
+    stop("the CSVs do not record the threads per chain", call. = FALSE)
+  }
+  cat("rebuild: chains", chains_per_task, " threads/chain", threads_per_chain, "\n")
+
+  # The cmdstanr arm's brm() below, argument for argument (output_dir included:
+  # brm() keeps it in stan_args), plus empty = TRUE. Keep the two in step.
+  m <- brm(f,
+    data = data,
+    prior = priors,
+    init = cogmod_inits(f, data),
+    stanvars = cogmod_stanvars(f),
+    backend = "cmdstanr",
+    warmup = warmup,
+    iter = iter,
+    algorithm = "sampling",
+    chains = chains_per_task,
+    cores = chains_per_task,
+    threads = threading(threads_per_chain),
+    stan_model_args = list(
+      stanc_options = list("O1"),
+      cpp_options = list(STAN_CPP_OPTIMS = TRUE, STAN_NO_RANGE_CHECKS = TRUE)
+    ),
+    output_dir = csv_dir,
+    empty = TRUE
+  )
+  m$fit <- brms:::read_csv_as_stanfit(csv_files, variables = meta$stan_variables,
+                                      model = NULL, exclude = brms:::exclude_pars(m),
+                                      algorithm = "sampling")
+  m <- brms:::rename_pars(m)
+
+  # Check against a sibling shard before saving anything. The shard takes the
+  # sibling's cogmod stamp: the array that sampled it loaded that cogmod, and
+  # the installed one only has to write the same program and priors.
+  sib <- list.files(models_dir, full.names = TRUE,
+                    pattern = paste0("^", spec$name, "_", spec$illusion, "_[0-9]+[.]rds$"))
+  sib <- setdiff(sib, shard_file)
+  if (!length(sib)) stop("no sibling shard of ", spec$name, " to check the rebuild against", call. = FALSE)
+  ref <- readRDS(sib[1])
+  checks <- c(
+    stancode = identical(brms::stancode(m), brms::stancode(ref)),
+    data = isTRUE(all.equal(m$data, ref$data)),
+    standata = isTRUE(all.equal(unclass(brms::standata(m)), unclass(brms::standata(ref)))),
+    variables = identical(brms::variables(m), brms::variables(ref)),
+    draws = brms::ndraws(m) == brms::ndraws(ref),
+    run = identical(c(m$fit@sim$warmup, m$fit@sim$iter), c(ref$fit@sim$warmup, ref$fit@sim$iter)),
+    cogmod = identical(format(utils::packageVersion("cogmod")), ref$cogmod$version)
+  )
+  m$cogmod <- ref$cogmod
+  cat("rebuild: checked against", basename(sib[1]), "- cogmod installed",
+      format(utils::packageVersion("cogmod")), utils::packageDescription("cogmod")$RemoteSha,
+      "/ sibling", ref$cogmod$version, ref$cogmod$sha, "\n")
+  print(checks)
+  if (!all(checks)) {
+    stop("the rebuilt shard differs from ", basename(sib[1]), " in: ",
+         paste(names(checks)[!checks], collapse = ", "), ". Nothing saved.", call. = FALSE)
+  }
+  rm(ref)
+
+  save_shard(m, shard_file, keep_dir = csv_dir)
+  chk <- readRDS(shard_file)
+  if (brms::ndraws(chk) != brms::ndraws(m)) stop(shard_file, " does not read back", call. = FALSE)
+  rm(chk)
+  cat("rebuild: saved", shard_file, "- the CSVs in", csv_dir, "are kept\n")
+}
+
 if (is.null(m) && backend == "stanli") {
   dir.create(csv_dir, recursive = TRUE, showWarnings = FALSE)
   # brm() up to the point where it would compile: the program, data and

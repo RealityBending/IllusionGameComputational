@@ -118,32 +118,36 @@ load_predictions <- function(name, sampler = "cmdstanr") {
 models <- list(
   MullerLyer = c(
     "LNR" = "gam_lnr_mullerlyer_MullerLyer",
-    "LNR-6" = "gam_lnr6_mullerlyer_MullerLyer",  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
+    "LNR-6" = "gam_lnr6_mullerlyer_MullerLyer",  # NOT CONVERGED: sigmabias modes, 4:4 on the 2026-10-13 refit (asf25, uploaded 2026-11-16; server/AGENT.md 4.10 B)
     "DDM-4" = "gam_ddm4_mullerlyer_MullerLyer",
-    "DDM-5" = "gam_ddm5_mullerlyer_MullerLyer",
-    "RDM" = "gam_rdm_mullerlyer_MullerLyer",
-    "RDM-5" = "gam_rdm5_mullerlyer_MullerLyer"  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
-    # "LBA" = "gam_lba_mullerlyer_MullerLyer"  # NOT CONVERGED (2026-10-01): its chains sit
-    # in two modes, max Rhat 13.8 (server/AGENT.md 4.9). No predictions made.
+    "DDM-5" = "gam_ddm5_mullerlyer_MullerLyer",  # converged (cc831, uploaded 2026-11-16)
+    "RDM" = "gam_rdm_mullerlyer_MullerLyer",  # converged, cmdstanr refit 11698239 (combined 2026-11-23; its stanli twin agrees, ELPD diff 0.2)
+    "RDM-5" = "gam_rdm5_mullerlyer_MullerLyer",  # NOT CONVERGED: sigmabias modes, 6:2 again on the 2026-10-13 refit (server/AGENT.md 4.10 B)
+    "LBA" = "gam_lba_mullerlyer_MullerLyer"  # NOT CONVERGED: the 2026-10-13 refit (oc236, delivered 2026-11-17) split 6:2, like the two before (server/AGENT.md 4.9, 4.10 B)
   ),
   VerticalHorizontal = c(
     "LNR" = "gam_lnr_verticalhorizontal_VerticalHorizontal",
-    "LNR-6" = "gam_lnr6_verticalhorizontal_VerticalHorizontal",  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
+    "LNR-6" = "gam_lnr6_verticalhorizontal_VerticalHorizontal",  # converged on the 2026-10-13 refit (asf25)
     "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal",
-    "DDM-5" = "gam_ddm5_verticalhorizontal_VerticalHorizontal",
-    "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal",
-    "RDM-5" = "gam_rdm5_verticalhorizontal_VerticalHorizontal"  # NOT CONVERGED: sigmabias modes (server/AGENT.md 4.10)
+    "DDM-5" = "gam_ddm5_verticalhorizontal_VerticalHorizontal",  # converged, cmdstanr refit 11698241 (combined 2026-11-23; its stanli twin agrees, ELPD diff 0.9)
+    "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal",  # stanli stand-in until the cmdstanr refit 11698240
+    "RDM-5" = "gam_rdm5_verticalhorizontal_VerticalHorizontal",  # NOT CONVERGED: sigmabias modes, 6:2 on the 2026-10-13 refit (server/AGENT.md 4.10 B)
+    "LBA" = "gam_lba_verticalhorizontal_VerticalHorizontal"  # NOT CONVERGED: four clusters on the 2026-10-13 refit (oc236, delivered 2026-11-17; server/AGENT.md 4.10 B)
   ),
   Ebbinghaus = c(
-    # "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the cogmod 0.3.5
-    # refit with 1500 warmup (11626373 on cc831, combined 2026-11-02) failed like
-    # the 0.3.4 one: step sizes 5e-5 to 8e-4, population Rhat 4.9, lp__ 4.4, one
-    # chain frozen (server/AGENT.md 4.10 C). Predicted all the same.
-    "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # NOT CONVERGED: the gam_lnr_ebbinghaus adaptation failure, Rhat 3.05 (server/AGENT.md 4.10 C); 11553384, combined 2026-10-13
+    # NOT CONVERGED, and worse than the others: warmup never reached the posterior.
+    # The cogmod 0.3.5 refit with 1500 warmup (11626373 on cc831, combined
+    # 2026-11-02) failed like the 0.3.3 and 0.3.4 ones: step sizes 5e-5 to 8e-4,
+    # population Rhat 4.9, lp__ 4.4, one chain frozen (server/AGENT.md 4.10 C).
+    # Its ELPD and curves are not even roughly meaningful. Listed so that the
+    # tables show it was fitted and failed.
+    "LNR" = "gam_lnr_ebbinghaus_Ebbinghaus",
+    "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # 1 of 4 shards on the 2026-10-13 refit, with the gam_lnr_ebbinghaus adaptation failure (server/AGENT.md 4.10 C)
     "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
-    "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",
-    "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus",
-    "RDM-5" = "gam_rdm5_ebbinghaus_Ebbinghaus"  # converged, unlike the other two (cogmod 0.3.4; server/AGENT.md 4.10)
+    "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",  # converged (cc831, uploaded 2026-11-16)
+    "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus",  # stanli stand-in until the cmdstanr refit 11698242
+    "RDM-5" = "gam_rdm5_ebbinghaus_Ebbinghaus",  # converged on the 2026-10-13 refit (oc236, delivered 2026-11-17)
+    "LBA" = "gam_lba_ebbinghaus_Ebbinghaus"  # NOT CONVERGED: 6:2 split on the 2026-10-13 refit (oc236, delivered 2026-11-17; server/AGENT.md 4.10 B)
   )
 )
 
@@ -177,6 +181,10 @@ standins <- unlist(Map(\(m, s) m[s %in% "stanli"], models, samplers))
 if (length(standins) > 0) {
   message("No cmdstanr fit yet, its stanli fit stands in: ", paste(standins, collapse = ", "))
 }
+# The same, for the table under "Fits Used"
+model_status <- purrr::imap_dfr(samplers, \(s, illusion) {
+  data.frame(Illusion = illusion, Model = names(s), Source = unname(s))
+})
 models <- Map(\(m, s) m[!is.na(s)], models, samplers)
 samplers <- lapply(samplers, \(s) s[!is.na(s)])
 preds <- Map(\(m, s) Map(load_predictions, m, s), models, samplers)
@@ -206,251 +214,44 @@ model_fill <- function(labels) {
 }
 ```
 
-```{r}
-#| eval: false
-#| echo: false
+## Fits Used
 
-# # Generate 'df' by running the make_models.R script start
-# warmstart <- rbind(
-#   cogmod::cogmod_warmstart(gam_ddm4_muller, data = df)$table |> 
-#     mutate(Model = "gam_ddm4_mullerlyer_MullerLyer"),
-#   cogmod::cogmod_warmstart(gam_lnr_muller, data = df)$table |> 
-#     mutate(Model = "gam_lnr_mullerlyer_MullerLyer")
-# )
-# 
-# write.csv(warmstart, "C:/Users/domma/Dropbox/RECHERCHE/Studies/IllusionGameComputational/analysis/warmstart.csv")
-```
-
-## Sampler: stanli Against cmdstanr
-
-Some models were fitted twice, once by cmdstanr, which samples the production
-fits, and once by stanli: one per family, all on the Muller-Lyer (LNR, RDM-5
-and DDM-4; stanli 0.21.0 for the LNR, 0.22.2 for the other two;
-`server/AGENT.md` 6.6-6.8). Only the sampler differs. Both run the Stan
-program that brms 2.21.0 writes, on the same data, with the same priors,
-inits, shards, chains and threads. Two samplers of one posterior should agree
-on everything but their speed. The loo, and the parameters behind it, should
-match to within Monte Carlo error. A larger difference means that one of them
-did not explore the whole posterior, for instance because some chains settled
-in a mode they never left. The convergence of each fit then says which one to
-trust, not the sampler.
-
-Everywhere else in this document a model is its cmdstanr fit. Its stanli fit
-stands in only while there is no cmdstanr fit, because that is still fitting or
-was too slow to finish. The convergence table and the cost plot mark the
-stand-ins.
+Every production fit is cmdstanr. A model that so far has only a stanli fit
+uses that fit as a stand-in until its cmdstanr refit is combined (the two
+samplers agree, see the appendix). "not yet": in the list, but no results on
+this machine. "—": not in that illusion's list (see the comments in `models`
+above).
 
 ```{r}
-# Both fits of every model that has a stanli one (`twins`, from the loading
-# chunk). A cmdstanr fit that is not there yet is NULL.
-twin_preds <- lapply(seq_len(nrow(twins)), \(i) list(
-  cmdstanr = if (twins$cmdstanr[i]) load_predictions(twins$Name[i], "cmdstanr"),
-  stanli = load_predictions(twins$Name[i], "stanli")
-))
-twins$Label <- paste0(twins$Model, " (", twins$Illusion, ")")
-names(twin_preds) <- twins$Label
-complete <- twins$cmdstanr
+status <- model_status |>
+  mutate(Source = case_when(Source == "cmdstanr" ~ "cmdstanr",
+                            Source == "stanli" ~ "stanli (stand-in)",
+                            .default = "not yet"),
+         Illusion = c(MullerLyer = "Muller-Lyer", VerticalHorizontal = "Vertical-Horizontal",
+                      Ebbinghaus = "Ebbinghaus")[Illusion]) |>
+  pivot_wider(names_from = Illusion, values_from = Source, values_fill = "—")
 
-sampler_colors <- c("cmdstanr" = "#455A64", "stanli" = "#F4511E")
-
-if (nrow(twins) == 0) {
-  cat("No model has a stanli fit.\n")
-} else {
-  tinytable::tt(data.frame(
-    Illusion = twins$Illusion,
-    Model = twins$Model,
-    cmdstanr = ifelse(twins$cmdstanr, "fitted", "not yet"),
-    stanli = "fitted",
-    "Used in this document" = ifelse(twins$cmdstanr, "cmdstanr", "stanli (stand-in)"),
-    check.names = FALSE
-  )) |>
-    fill_cells(2, model_fill(twins$Model))
-}
-```
-
-### Agreement
-
-```{r}
-# One row per fit, the two fits of a model one above the other. The ELPD
-# difference is stanli's minus cmdstanr's, with the SE that loo_compare() would
-# give it: both fits are of the same trials, so the pointwise values pair up
-# (`yhash`, loo's hash of the outcome, checks that they do). The Monte Carlo
-# SE is that of the difference, from every trial's own MCSE, and is the yardstick:
-# a difference within about twice it is what two runs of one sampler would give.
-# loo's mcse_loo() returns NA as soon as one trial has a Pareto k above 0.7,
-# which every fit here has, and those trials' MCSEs are underestimated, so read
-# it as a lower bound.
-table_sampler_agreement <- function(twin_preds) {
-  rows <- purrr::imap_dfr(twin_preds, \(pair, label) {
-    loo_c <- pair$cmdstanr$loo
-    loo_s <- pair$stanli$loo
-    if (!identical(attr(loo_c, "yhash"), attr(loo_s, "yhash"))) {
-      stop(label, ": the two fits are not of the same trials.")
-    }
-    d <- loo_s$pointwise[, "elpd_loo"] - loo_c$pointwise[, "elpd_loo"]
-    mcse <- sqrt(sum(loo_c$pointwise[, "mcse_elpd_loo"]^2, loo_s$pointwise[, "mcse_elpd_loo"]^2))
-    purrr::imap_dfr(pair, \(p, sampler) {
-      conv <- p$convergence
-      data.frame(
-        Model = label,
-        Family = sub(" .*", "", label),
-        Sampler = sampler,
-        ELPD = sprintf("%s ± %s", formatC(p$loo$estimates["elpd_loo", 1], format = "f", digits = 1, big.mark = ","),
-                       formatC(p$loo$estimates["elpd_loo", 2], format = "f", digits = 1, big.mark = ",")),
-        p_loo = formatC(p$loo$estimates["p_loo", 1], format = "f", digits = 1, big.mark = ","),
-        "ELPD diff ± SE" = if (sampler == "stanli") sprintf("%.1f ± %.1f", sum(d), sqrt(length(d)) * sd(d)) else "",
-        "Monte Carlo SE" = if (sampler == "stanli") sprintf("%.1f", mcse) else "",
-        "R-hat, population (max)" = formatC(conv$rhat_pop_max, format = "f", digits = 3),
-        "R-hat, lp__" = formatC(conv$rhat_lp, format = "f", digits = 3),
-        # Chains in different modes show here first: within a mode the chain
-        # means of lp__ sit within a few tens of each other (sd ~110)
-        "lp__, spread of the chain means" = formatC(diff(range(conv$lp_chain_mean)), format = "f", digits = 0, big.mark = ","),
-        check.names = FALSE
-      )
-    })
-  })
-  tinytable::tt(select(rows, -Family)) |>
-    tinytable::style_tt(j = 3:9, align = "r") |>
-    fill_cells(1, model_fill(rows$Family))
-}
-
-if (any(complete)) {
-  table_sampler_agreement(twin_preds[complete])
-} else {
-  cat("No model has both fits yet.\n")
-}
-```
-
-The parameters: each one's predicted curves along illusion strength, the
-cmdstanr fit solid and the stanli fit dashed, as in the parameter curves
-further down. Each panel gives the largest gap between the two over the grid,
-in posterior SDs of the cmdstanr fit.
-
-```{r}
-plot_sampler_curves <- function(pair, label) {
-  curves <- purrr::imap_dfr(pair, \(p, sampler) mutate(p$curves, Sampler = sampler)) |>
-    restore_units(illusion = pair$stanli$meta$illusion)
-
-  gap <- curves |>
-    select(Parameter, Type, Illusion_StrengthZ, Illusion_DifferenceZ, Sampler, Predicted, SE) |>
-    pivot_wider(names_from = Sampler, values_from = c(Predicted, SE)) |>
-    summarise(.by = Parameter,
-              Gap = max(abs(Predicted_stanli - Predicted_cmdstanr) / SE_cmdstanr, na.rm = TRUE))
-  curves <- curves |>
-    left_join(gap, by = "Parameter") |>
-    mutate(Panel = sprintf("%s (gap %.2f SD)", Parameter, Gap),
-           Illusion_Difference = factor(round(Illusion_Difference, 5)))
-
-  curve_cols <- colorRampPalette(
-    c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")
-  )(nlevels(curves$Illusion_Difference))
-
-  ggplot(curves, aes(Illusion_Strength, Predicted, colour = Illusion_Difference,
-                     group = interaction(Sampler, Illusion_Difference))) +
-    geom_line(aes(linetype = Sampler), linewidth = 0.9) +
-    facet_wrap(~Panel, scales = "free_y") +
-    scale_colour_manual(values = curve_cols) +
-    scale_linetype_manual(values = c("cmdstanr" = "solid", "stanli" = "dashed")) +
-    labs(title = label, x = "Illusion Strength", y = NULL, colour = "Task Difficulty") +
-    theme_minimal()
-}
-```
-
-```{r}
-#| fig-width: 10
-#| fig-height: 7
-#| warning: false
-
-# warning: false for the Mean RT, which is NA at the grid points where a fit
-# predicts no response of that kind, and ggplot says so
-if (any(complete)) {
-  for (label in names(twin_preds)[complete]) print(plot_sampler_curves(twin_preds[[label]], label))
-} else {
-  cat("No model has both fits yet.\n")
-}
-```
-
-### Speed
-
-Wall clock per chain, warmup and sampling apart. The shards of both fits ran
-on the same three nodes, which are shared with other users and do not run at
-the same speed (rtx-02 is the slow one). Neither fit's file says which node
-each chain ran on. So read a gap of a few tens of percent with caution:
-`server/AGENT.md` 6.6-6.8 compares the two samplers node by node.
-
-```{r}
-table_sampler_speed <- function(twin_preds) {
-  rows <- purrr::imap_dfr(twin_preds, \(pair, label) {
-    time_c <- median(pair$cmdstanr$efficiency$Time_total)
-    purrr::imap_dfr(pair, \(p, sampler) {
-      e <- p$efficiency
-      data.frame(
-        Model = label,
-        Family = sub(" .*", "", label),
-        Sampler = sampler,
-        Chains = nrow(e),
-        "Step size (median)" = formatC(median(p$convergence$stepsize_chain), format = "f", digits = 4),
-        "Warmup (h)" = sprintf("%.0f", median(e$Time_warmup) / 3600),
-        "Sampling (h)" = sprintf("%.0f", median(e$Time_sample) / 3600),
-        "Total (h)" = sprintf("%.0f", median(e$Time_total) / 3600),
-        "Against cmdstanr" = sprintf("%.2fx", median(e$Time_total) / time_c),
-        "Bulk ESS / h" = sprintf("%.1f", mean(e$ESS_per_hour)),
-        check.names = FALSE
-      )
-    })
-  })
-  tinytable::tt(select(rows, -Family)) |>
-    tinytable::style_tt(j = 3:9, align = "r") |>
-    fill_cells(1, model_fill(rows$Family)) |>
-    tinytable::group_tt(j = list("Per chain, median" = 4:7))
-}
-
-plot_sampler_speed <- function(twin_preds) {
-  d <- purrr::imap_dfr(twin_preds, \(pair, label) {
-    purrr::imap_dfr(pair, \(p, sampler) mutate(p$efficiency, Model = label, Sampler = sampler))
-  }) |>
-    pivot_longer(c(Time_warmup, Time_sample), names_to = "Phase", values_to = "Seconds") |>
-    mutate(Phase = factor(Phase, levels = c("Time_warmup", "Time_sample"), labels = c("Warmup", "Sampling")),
-           Model = factor(Model, levels = rev(names(twin_preds))))
-
-  ggplot(d, aes(x = Seconds / 3600, y = Model, colour = Sampler)) +
-    geom_point(position = position_dodge(width = 0.5), size = 2.5, alpha = 0.5) +
-    stat_summary(fun = median, geom = "point", shape = 18, size = 5,
-                 position = position_dodge(width = 0.5)) +
-    facet_wrap(~Phase, scales = "free_x") +
-    scale_colour_manual(values = sampler_colors) +
-    labs(x = "Hours per chain", y = NULL,
-         subtitle = "One point per chain, diamond is the median.") +
-    theme_minimal() +
-    theme(legend.position = "top")
-}
-```
-
-```{r}
-if (any(complete)) {
-  table_sampler_speed(twin_preds[complete])
-} else {
-  cat("No model has both fits yet.\n")
-}
-```
-
-```{r}
-#| fig-width: 9
-#| fig-height: 4
-
-if (any(complete)) plot_sampler_speed(twin_preds[complete])
+source_fill <- c("cmdstanr" = "#C8E6C9", "stanli (stand-in)" = "#FFE082",
+                 "not yet" = "#EEEEEE", "—" = "#FFFFFF")
+out <- tinytable::tt(status) |>
+  fill_cells(1, model_fill(status$Model))
+for (j in 2:ncol(status)) out <- fill_cells(out, j, unname(source_fill[status[[j]]]))
+out
 ```
 
 ## Convergence
 
-A model is only worth comparing if its chains agree. Each cell is coloured by
-how it fares against the usual thresholds, and the verdict is the worst of
-them. Population-level parameters are the smooth coefficients and their SDs and
-the group-level SDs; the participant offsets are in the "all parameters"
-columns, where a few participants can sit above 1.01 in a fit that is otherwise
-fine.
+A model is only worth comparing if its chains agree. "Population" is the
+smooth coefficients, their SDs and the group-level SDs. The participant
+offsets count only in the "all" columns, where a few participants above 1.01
+do not sink an otherwise sound fit. The verdict is the worst of the coloured
+cells. An acceptable fit can be interpreted at the population level. The ones
+here all have their 8 chains in one mode. They miss the strictest cut-offs by
+about what the maximum over some 40 parameters gives by chance, or by a
+handful of divergent draws out of 8,000. The fits that did not converge miss
+by far more, with R-hat around 1.5 or above.
 
-| | satisfactory | borderline | poor |
+| | satisfactory | acceptable | poor |
 |---|---|---|---|
 | R-hat (population, and lp__) | ≤ 1.01 | ≤ 1.05 (lp__: ≤ 1.1) | above |
 | Bulk ESS (population, minimum) | ≥ 400 | ≥ 100 | below |
@@ -479,7 +280,7 @@ show_convergence <- function(preds) {
   div <- get("divergent")
   div_pct <- get("divergent_pct")
 
-  # 1 = satisfactory, 2 = borderline, 3 = poor. A missing value (the sampler
+  # 1 = satisfactory, 2 = acceptable, 3 = poor. A missing value (the sampler
   # diagnostics could not be read) is not counted against the model.
   grade <- \(x, ok, warn, higher_is_worse = TRUE) {
     if (!higher_is_worse) { x <- -x; ok <- -ok; warn <- -warn }
@@ -492,7 +293,7 @@ show_convergence <- function(preds) {
   g_all <- pmax(g_rhat, g_lp, g_ess, g_div)
 
   palette <- c("#C8E6C9", "#FFE082", "#EF9A9A")
-  verdict <- c("Satisfactory", "Borderline", "Poor")
+  verdict <- c("Satisfactory", "Acceptable", "Poor")
 
   n_params <- get("n_params")
   tab <- data.frame(
@@ -547,16 +348,18 @@ show_convergence(preds$Ebbinghaus)
 
 ### Participants That Do Not Mix
 
-In the models that converge, the population terms agree between chains, but a
-few dozen participants do not mix. Their own parameters sit in one of two
-local solutions and no chain switches between them. Almost always it is the
-non-decision time, traded against the boundary or the outlier probability
-(`server/AGENT.md` 4.10). No participant is excluded for this. There is no
-a priori reason to: no rule on the data picks them out without also removing
-many participants that mix well. The participants that still do not mix after
-the longer refit are a result in themselves, a response profile these models
-cannot accommodate. The list is written by `server/mixing_participants.R` from
-the combined fits.
+Even in the models that converge, a few dozen participants do not mix. Their
+own parameters sit in one of two local solutions, and no chain switches
+between them. Almost always it is the non-decision time traded against the
+boundary or the outlier probability (`server/AGENT.md` 4.10). None is
+excluded: no rule on the data picks them out without also removing many
+participants who mix well. The list comes from `server/mixing_participants.R`.
+
+::: {.callout-warning}
+This list comes from the fits before the 2026-10-13 refit (its model names
+are the old `gam_<family>`). It is out of date until `mixing_participants.R`
+is re-run on the refit's combined fits.
+:::
 
 ```{r}
 mixing <- read.csv(if (dir.exists("server")) "server/poorly_mixing_participants.csv"
@@ -568,7 +371,13 @@ illu <- bind_rows(lapply(1:3, \(i) read.csv(file.path(data_dir, paste0("illusion
             by = c("Participant", "Illusion_Type")) |>
   mutate(Flagged = !is.na(Flagged),
          Response = ifelse(Error == 1, "Error", "Correct"))
+```
 
+::: {.panel-tabset}
+
+#### Participants
+
+```{r}
 mixing |>
   summarize(Models = n(),
             Fits = paste0(Model, " (", Illusion, ")", collapse = ", "),
@@ -581,10 +390,12 @@ mixing |>
   gt::opt_interactive(use_search = TRUE, page_size_default = 10)
 ```
 
-Compared participant by participant with everyone else who did the same
-illusion, they respond faster and more consistently, make more errors, and
-their errors are no slower than their correct responses. Each row gives the
-percentile of the median flagged participant among the others.
+#### Profile
+
+Compared with everyone else who did the same illusion, they respond faster
+and more consistently and make more errors, and their errors are no slower
+than their correct responses. Each row gives where the median flagged
+participant falls among the others (percentile).
 
 ```{r}
 mixing_profile <- illu |>
@@ -608,13 +419,15 @@ mixing_profile |>
   gt::fmt_number(columns = "Percentile", decimals = 0)
 ```
 
+#### RT Distributions
+
 ```{r}
 #| fig-width: 12
 #| fig-height: 8
 
 # Each of them as a density line, against the pooled RTs of everyone else
 # (grey). The pooled histogram also carries the between-participant spread, so
-# any single participant looks narrow against it: the table above is the fair
+# any single participant looks narrow against it: the profile table is the fair
 # comparison, this shows the shapes.
 illu |>
   filter(!Flagged) |>
@@ -629,11 +442,12 @@ illu |>
   theme_minimal()
 ```
 
+#### Each Participant
+
 ```{r}
 #| fig-width: 14
 #| fig-height: 22
 
-# Every one of them, by response
 illu |>
   filter(Flagged) |>
   mutate(Panel = paste0(str_remove(Participant, "IllusionGame"), "\n", Illusion_Type)) |>
@@ -647,6 +461,8 @@ illu |>
   theme(legend.position = "top", strip.text = element_text(size = 7),
         axis.text.y = element_blank())
 ```
+
+:::
 
 ## Computational Cost
 
@@ -668,7 +484,7 @@ plot_efficiency <- function(preds) {
               Time_total = mean(Time_total))
 
   # What each fit was: two models are only comparable here if these match. A
-  # stanli stand-in is a different sampler as well (see "Sampler" above).
+  # stanli stand-in is a different sampler as well (see the appendix).
   caption <- efficiency |>
     summarise(.by = Model,
               label = sprintf("%s: %d chains, %g threads/chain, n = %s%s",
@@ -1058,6 +874,7 @@ plot_ppc(preds$Ebbinghaus)
 param_labels <- function(family) {
   lvls <- c("Error Rate" = "Error Rate",
             "Mean RT" = "Mean RT",
+            "Median RT" = "Median RT",
             "mu" = "mu",
             "nuone" = "Nu (Errors)",
             "driftone" = "Drift (Errors)",
@@ -1082,7 +899,7 @@ param_labels <- function(family) {
       lvls[c("mu", "sigmazero", "sigmaone", "sigmabias")] <-
         c("Nu (Correct)", "Nu Variability (Correct)", "Nu Variability (Errors)",
           "Start Point Range")
-      first <- c("Error Rate", "Mean RT", "mu", "sigmazero", "nuone", "sigmaone")
+      first <- c("Error Rate", "Mean RT", "Median RT", "mu", "sigmazero", "nuone", "sigmaone")
       lvls <- lvls[c(first, setdiff(names(lvls), first))]
     },
     # Both racing families: mu is the drift of the accumulator for correct
@@ -1138,6 +955,17 @@ tidy_predictions <- function(preds, what) {
 # Parameters against illusion strength, one curve per illusion difficulty
 # (compute_curves() in server/predictions.R), one data frame per illusion
 preds_curves <- lapply(preds, tidy_predictions, what = "curves")
+
+# The curves are predicted at 9 difficulty levels since 2026-11-16 (5 before).
+# The Best Model draws all of them; the parameter curves of every model keep 5,
+# every other level, which are the 5 of before. So a file of either kind gives
+# the same parameter curves, and a mix of both works too. Pass the difference
+# rounded, as levels from the two grids differ in the last digits.
+coarse_levels <- function(x, n = 5) {
+  lv <- sort(unique(x))
+  if (length(lv) <= n) return(lv)
+  lv[round(seq(1, length(lv), length.out = n))]
+}
 ```
 
 
@@ -1241,9 +1069,11 @@ plot_parameter_grid <- function(data, panel,
 plot_curves <- function(preds_curves) {
   # Prepare data
   curves <- preds_curves |>
-    filter(!Parameter %in% c("Error Rate", "Mean RT")) |>
+    filter(!Parameter %in% c("Error Rate", "Mean RT", "Median RT")) |>
     # Rounded, or the levels print their floating-point error (0.0500000000001)
-    mutate(Illusion_Difference = factor(round(Illusion_Difference, 5)))
+    mutate(Illusion_Difference = round(Illusion_Difference, 5)) |>
+    filter(Illusion_Difference %in% coarse_levels(Illusion_Difference)) |>
+    mutate(Illusion_Difference = factor(Illusion_Difference))
 
   # Colour scale
   curve_cols <- colorRampPalette(
@@ -1284,16 +1114,17 @@ plot_curves <- function(preds_curves) {
 #### Muller-Lyer
 
 ```{r}
-#| fig-width: 9
+#| fig-width: !expr max(9, 1.5 * length(models$MullerLyer))
 #| fig-height: 10
 
+# One column per model, as for the heatmaps below: 9 in fits six
 plot_curves(preds_curves$MullerLyer)
 ```
 
 #### Vertical-Horizontal
 
 ```{r}
-#| fig-width: 9
+#| fig-width: !expr max(9, 1.5 * length(models$VerticalHorizontal))
 #| fig-height: 10
 
 plot_curves(preds_curves$VerticalHorizontal)
@@ -1302,7 +1133,7 @@ plot_curves(preds_curves$VerticalHorizontal)
 #### Ebbinghaus
 
 ```{r}
-#| fig-width: 9
+#| fig-width: !expr max(9, 1.5 * length(models$Ebbinghaus))
 #| fig-height: 10
 
 plot_curves(preds_curves$Ebbinghaus)
@@ -1329,18 +1160,37 @@ preds_heatmaps <- lapply(preds, tidy_predictions, what = "heatmaps")
 # makes the colour bars redundant, so they are dropped)
 heatmap_labels <- TRUE
 
-# The region of the space that might be psychometrically optimal, outlined on
-# every panel, in raw units. Only worked out for the Muller-Lyer so far: an
-# illusion without one gets no outline.
-optimal_regions <- list(
-  MullerLyer = list(strength = c(-30, 30), difference = c(0.1, 0.4))
+# The linear-approximation region: the part of the space, in raw units, where
+# the effects of the two predictors might be close enough to linear for a
+# simpler model (~ Task_Difficulty * Illusion_Strength) fitted there to
+# approximate the GAM, i.e. away from the extremes where they turn
+# non-monotonic. Outlined on every heatmap panel, and the range of the colour
+# gradient in the Best Model plots. An illusion without one gets no outline,
+# and its whole range on the gradient.
+#
+# The Muller-Lyer box was drawn by eye. The other two are PROPOSED (2026-11-16)
+# from it: the largest box, in trials kept, whose DDM-5 parameters are at least
+# as close to bilinear as they are in the Muller-Lyer box. Bilinear means fitted
+# by a + b*D + c*S + d*D*S on each parameter's link scale, over the
+# heatmap grid; the Muller-Lyer box gets R2 >= 0.85 for every parameter (drift
+# variability the worst) and keeps 63% of its trials. The curvature is almost
+# all at extreme strengths, so the boxes cut there first:
+# - Vertical-Horizontal: no difficulty cut, strengths beyond 45 dropped. 96% of
+#   trials, worst R2 0.87 (bias).
+# - Ebbinghaus: the two hardest levels (0.05, 0.07) and strengths beyond 1.5
+#   dropped. 88% of trials, worst R2 0.86 (drift variability). With no
+#   difficulty cut: 97.5%, R2 0.84.
+linear_regions <- list(
+  MullerLyer = list(strength = c(-30, 30), difference = c(0.1, 0.4)),
+  VerticalHorizontal = list(strength = c(-45, 45), difference = c(0.03, 0.30)),
+  Ebbinghaus = list(strength = c(-1.5, 1.5), difference = c(0.08, 0.70))
 )
 
 # Function for individual panels. The illusion is passed along for the
 # outline, which is in its raw units.
 make_heatmap <- function(preds_heatmaps, model, parameter, illusion) {
   d <- filter(preds_heatmaps, Model == model, Parameter == parameter)
-  region <- optimal_regions[[illusion]]
+  region <- linear_regions[[illusion]]
   contours <- if (heatmap_labels) {
     list(
       # Few enough lines that the labels have room: 20 would overlap in panels
@@ -1490,16 +1340,18 @@ plot_heatmaps <- function(preds_heatmaps, illusion) {
 #### Muller-Lyer
 
 ```{r}
-#| fig-width: 9
+#| fig-width: !expr max(9, 1.5 * length(models$MullerLyer))
 #| fig-height: 16.5
 
+# One column per model: 9 in was sized for six, so the width grows with the
+# list rather than squeezing the panel titles into each other
 plot_heatmaps(preds_heatmaps$MullerLyer, "MullerLyer")
 ```
 
 #### Vertical-Horizontal
 
 ```{r}
-#| fig-width: 9
+#| fig-width: !expr max(9, 1.5 * length(models$VerticalHorizontal))
 #| fig-height: 16.5
 
 plot_heatmaps(preds_heatmaps$VerticalHorizontal, "VerticalHorizontal")
@@ -1508,7 +1360,7 @@ plot_heatmaps(preds_heatmaps$VerticalHorizontal, "VerticalHorizontal")
 #### Ebbinghaus
 
 ```{r}
-#| fig-width: 9
+#| fig-width: !expr max(9, 1.5 * length(models$Ebbinghaus))
 #| fig-height: 16.5
 
 plot_heatmaps(preds_heatmaps$Ebbinghaus, "Ebbinghaus")
@@ -1519,38 +1371,109 @@ plot_heatmaps(preds_heatmaps$Ebbinghaus, "Ebbinghaus")
 
 ## Best Model
 
-A bespoke visualization of the best model.
+DDM-5, the one model that converged on all three illusions. Left: the error
+rate and the median RT of correct responses that it predicts. Right: its
+parameters. Every panel has every predicted difficulty level. The red to green
+gradient spans the linear-approximation region outlined on the heatmaps (where
+there is one). Beyond it the gradient carries on, faded: into purple for harder
+levels, into cyan for easier ones.
 
 ```{r}
-layout <- matrix(c(
-  rep(1, 5), rep(2, 5),  # Column 1 (Left): 5 units for the main outcomes
-  rep(3, 2),             # Column 2 (Right): 2 units each for remaining 5
-  rep(4, 2),
-  rep(5, 2),
-  rep(6, 2),
-  rep(7, 2)
-), ncol = 2, byrow = FALSE)
+# The colour and the transparency of each task difficulty level (`levels`,
+# sorted), each placed by its value on one gradient. Its red to green middle
+# runs over the difficulty range of the linear-approximation region
+# (linear_regions, with the heatmaps), red at the hard edge and green at the
+# easy one. Outside it the gradient carries on, faded: from the red through
+# pink to purple at the hardest level, and from the green through teal to cyan
+# at the easiest. An illusion with no region has its whole range on the middle.
+difficulty_scale <- function(levels, region = NULL) {
+  bounds <- if (is.null(region)) range(levels) else region$difference
+  # Tolerance for levels on the bounds, which carry floating-point error
+  below <- levels < bounds[1] - 1e-8
+  above <- levels > bounds[2] + 1e-8
+  inside <- !below & !above
 
-# One element of preds_curves, i.e. one illusion
-plot_best_model <- function(preds_curves, model = "LNR") {
+  middle <- grDevices::colorRamp(c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50"))
+  harder <- grDevices::colorRamp(c("#FF5722", "#E91E63", "#9C27B0"))
+  easier <- grDevices::colorRamp(c("#4CAF50", "#009688", "#00BCD4"))
+  hex <- \(m) grDevices::rgb(m, maxColorValue = 255)
+
+  cols <- hex(middle((pmin(pmax(levels, bounds[1]), bounds[2]) - bounds[1]) / diff(bounds)))
+  if (any(below)) {
+    cols[below] <- hex(harder((bounds[1] - levels[below]) / (bounds[1] - min(levels))))
+  }
+  if (any(above)) {
+    cols[above] <- hex(easier((levels[above] - bounds[2]) / (max(levels) - bounds[2])))
+  }
+  list(colour = setNames(cols, levels),
+       alpha = setNames(ifelse(inside, 1, 0.5), levels),
+       inside = setNames(inside, levels))
+}
+
+# One element of preds_curves, i.e. one illusion, whose name is passed along
+# for its linear-approximation region. A prediction file made before
+# 2026-11-16 has no median RT and 5 difficulty levels: it shows the mean RT
+# instead, at those 5 levels. Its chunks have warning: false for the RT, which
+# is NA where a level predicts (almost) no correct responses, and ggplot says
+# so once per layer.
+plot_best_model <- function(preds_curves, illusion, model = "DDM-5") {
   # A model left out of an illusion's list (not converged, still fitting) has
   # no curves there
   if (!model %in% preds_curves$Model) {
     return(cat(model, "is not among this illusion's models.\n"))
   }
-  preds_curves |>
+  d <- preds_curves |>
     filter(Model == model) |>
-    mutate(Illusion_Difference = as.factor(round(Illusion_Difference, 5))) |>
-    ggplot(aes(x = Illusion_Strength, y = Predicted)) +
-    # geom_ribbon(aes(ymin = CI_low, ymax = CI_high, group = Illusion_Difference), alpha = 0.1) +
-    geom_line(aes(color = Illusion_Difference, group = interaction(Type, Illusion_Difference), linetype = Type),
-              linewidth = 1.5) +
-    scale_color_manual(
-      values = colorRampPalette(c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50"))(length(unique(preds_curves$Illusion_Difference)))
-      ) +
-    scale_linetype_manual(values = c("GAM" = "solid", "LM" = "dashed")) +
-    # facet_wrap(~Parameter, scales = "free_y") +
-    ggh4x::facet_manual(vars(Parameter), design = layout, scales = "free_y") +
+    mutate(Illusion_Difference = round(Illusion_Difference, 5))
+  rt <- if ("Median RT" %in% d$Parameter) "Median RT" else "Mean RT"
+  d <- d |>
+    filter(!Parameter %in% setdiff(c("Mean RT", "Median RT"), rt)) |>
+    # Panels in canonical order, the two outcomes first
+    arrange(Parameter_Order) |>
+    mutate(Parameter = factor(as.character(Parameter), levels = unique(as.character(Parameter))))
+
+  # Left column: the error rate above the RT, half the height each. Right
+  # column: one row per parameter, however many the model has.
+  n_par <- nlevels(d$Parameter) - 2
+  design <- matrix(c(rep(1:2, each = n_par), rep(seq_len(n_par) + 2, each = 2)), ncol = 2)
+
+  region <- linear_regions[[illusion]]
+  lv <- sort(unique(d$Illusion_Difference))
+  sc <- difficulty_scale(lv, region)
+  d$Inside <- sc$inside[as.character(d$Illusion_Difference)]
+  d$Illusion_Difference <- factor(d$Illusion_Difference, levels = lv)
+
+  # Two layers, so that the faded lines are drawn under the others rather than
+  # over them. The colour and alpha scales share their title and levels, so
+  # ggplot merges them into one legend, with faded keys. The breaks are given,
+  # or the legend lists the levels in the order the layers bring them in, and
+  # the labels rounded (0.06375 otherwise, on the Vertical-Horizontal).
+  level_labels <- \(x) signif(as.numeric(x), 2)
+  # The strengths outside the region, shaded: the curves only show its
+  # difficulty bounds otherwise
+  outside <- if (!is.null(region)) {
+    data.frame(xmin = c(-Inf, region$strength[2]), xmax = c(region$strength[1], Inf)) |>
+      filter(xmax > min(d$Illusion_Strength), xmin < max(d$Illusion_Strength))
+  }
+  ggplot(d, aes(Illusion_Strength, Predicted, color = Illusion_Difference,
+                alpha = Illusion_Difference, group = Illusion_Difference)) +
+    (if (!is.null(outside) && nrow(outside) > 0) {
+      geom_rect(data = outside, aes(xmin = xmin, xmax = xmax, ymin = -Inf, ymax = Inf),
+                inherit.aes = FALSE, fill = "grey50", alpha = 0.12)
+    }) +
+    geom_line(data = \(x) filter(x, !Inside), linewidth = 1.1) +
+    geom_line(data = \(x) filter(x, Inside), linewidth = 1.1) +
+    scale_color_manual(values = sc$colour, breaks = names(sc$colour), labels = level_labels) +
+    scale_alpha_manual(values = sc$alpha, breaks = names(sc$alpha), labels = level_labels) +
+    ggh4x::facet_manual(vars(Parameter), design = design, scales = "free_y") +
+    labs(title = model,
+         subtitle = if (!is.null(region)) {
+           paste0("Linear-approximation region: task difficulty ", region$difference[1],
+                  " to ", region$difference[2], ", illusion strength ", region$strength[1],
+                  " to ", region$strength[2], " (shaded outside)")
+         },
+         x = "Illusion Strength", y = NULL,
+         color = "Task Difficulty", alpha = "Task Difficulty") +
     theme_minimal()
 }
 ```
@@ -1560,19 +1483,211 @@ plot_best_model <- function(preds_curves, model = "LNR") {
 ### Muller-Lyer
 
 ```{r}
-plot_best_model(preds_curves$MullerLyer)
+#| fig-width: 8.5
+#| fig-height: 8
+#| warning: false
+
+plot_best_model(preds_curves$MullerLyer, "MullerLyer")
 ```
 
 ### Vertical-Horizontal
 
 ```{r}
-plot_best_model(preds_curves$VerticalHorizontal)
+#| fig-width: 8.5
+#| fig-height: 8
+#| warning: false
+
+plot_best_model(preds_curves$VerticalHorizontal, "VerticalHorizontal")
 ```
 
 ### Ebbinghaus
 
 ```{r}
-plot_best_model(preds_curves$Ebbinghaus)
+#| fig-width: 8.5
+#| fig-height: 8
+#| warning: false
+
+plot_best_model(preds_curves$Ebbinghaus, "Ebbinghaus")
+```
+
+:::
+
+## Appendix: stanli Against cmdstanr
+
+Three models were fitted with both samplers on the Muller-Lyer: LNR (stanli
+0.21.0), and RDM-5 and DDM-4 (stanli 0.22.2) (`server/AGENT.md` 6.6-6.9). Only
+the sampler differs: the same Stan program, data, priors, inits, shards, chains
+and threads. Two samplers of one posterior should agree on everything but speed,
+to within Monte Carlo error. A larger difference means that one of them missed
+part of the posterior. Convergence then says which one to trust, not the
+sampler.
+
+```{r}
+# Both fits of every model that has a stanli one (`twins`, from the loading
+# chunk). A cmdstanr fit that is not there yet is NULL.
+twin_preds <- lapply(seq_len(nrow(twins)), \(i) list(
+  cmdstanr = if (twins$cmdstanr[i]) load_predictions(twins$Name[i], "cmdstanr"),
+  stanli = load_predictions(twins$Name[i], "stanli")
+))
+twins$Label <- paste0(twins$Model, " (", twins$Illusion, ")")
+names(twin_preds) <- twins$Label
+complete <- twins$cmdstanr
+
+# One row per fit, the two fits of a model one above the other. The ELPD
+# difference is stanli's minus cmdstanr's, with the SE that loo_compare() would
+# give it: both fits are of the same trials, so the pointwise values pair up
+# (`yhash`, loo's hash of the outcome, checks that they do). The Monte Carlo
+# SE is that of the difference, from every trial's own MCSE, and is the yardstick:
+# a difference within about twice it is what two runs of one sampler would give.
+# loo's mcse_loo() returns NA as soon as one trial has a Pareto k above 0.7,
+# which every fit here has, and those trials' MCSEs are underestimated, so read
+# it as a lower bound.
+table_sampler_agreement <- function(twin_preds) {
+  rows <- purrr::imap_dfr(twin_preds, \(pair, label) {
+    loo_c <- pair$cmdstanr$loo
+    loo_s <- pair$stanli$loo
+    if (!identical(attr(loo_c, "yhash"), attr(loo_s, "yhash"))) {
+      stop(label, ": the two fits are not of the same trials.")
+    }
+    d <- loo_s$pointwise[, "elpd_loo"] - loo_c$pointwise[, "elpd_loo"]
+    mcse <- sqrt(sum(loo_c$pointwise[, "mcse_elpd_loo"]^2, loo_s$pointwise[, "mcse_elpd_loo"]^2))
+    purrr::imap_dfr(pair, \(p, sampler) {
+      conv <- p$convergence
+      data.frame(
+        Model = label,
+        Family = sub(" .*", "", label),
+        Sampler = sampler,
+        ELPD = sprintf("%s ± %s", formatC(p$loo$estimates["elpd_loo", 1], format = "f", digits = 1, big.mark = ","),
+                       formatC(p$loo$estimates["elpd_loo", 2], format = "f", digits = 1, big.mark = ",")),
+        p_loo = formatC(p$loo$estimates["p_loo", 1], format = "f", digits = 1, big.mark = ","),
+        "ELPD diff ± SE" = if (sampler == "stanli") sprintf("%.1f ± %.1f", sum(d), sqrt(length(d)) * sd(d)) else "",
+        "Monte Carlo SE" = if (sampler == "stanli") sprintf("%.1f", mcse) else "",
+        "R-hat, population (max)" = formatC(conv$rhat_pop_max, format = "f", digits = 3),
+        "R-hat, lp__" = formatC(conv$rhat_lp, format = "f", digits = 3),
+        # Chains in different modes show here first: within a mode the chain
+        # means of lp__ sit within a few tens of each other (sd ~110)
+        "lp__, spread of the chain means" = formatC(diff(range(conv$lp_chain_mean)), format = "f", digits = 0, big.mark = ","),
+        check.names = FALSE
+      )
+    })
+  })
+  tinytable::tt(select(rows, -Family)) |>
+    tinytable::style_tt(j = 3:9, align = "r") |>
+    fill_cells(1, model_fill(rows$Family))
+}
+
+plot_sampler_curves <- function(pair, label) {
+  # The mean RT stands for the RT (the median has no SE to measure the gap
+  # in), and the 5 difficulty levels every file has (coarse_levels()). The Z
+  # difference is rounded so that the same level from a 5-level and a 9-level
+  # file pairs up.
+  curves <- purrr::imap_dfr(pair, \(p, sampler) mutate(p$curves, Sampler = sampler)) |>
+    restore_units(illusion = pair$stanli$meta$illusion) |>
+    filter(Parameter != "Median RT") |>
+    mutate(Illusion_Difference = round(Illusion_Difference, 5),
+           Illusion_DifferenceZ = round(Illusion_DifferenceZ, 6)) |>
+    filter(Illusion_Difference %in% coarse_levels(Illusion_Difference))
+
+  gap <- curves |>
+    select(Parameter, Type, Illusion_StrengthZ, Illusion_DifferenceZ, Sampler, Predicted, SE) |>
+    pivot_wider(names_from = Sampler, values_from = c(Predicted, SE)) |>
+    summarise(.by = Parameter,
+              Gap = max(abs(Predicted_stanli - Predicted_cmdstanr) / SE_cmdstanr, na.rm = TRUE))
+  curves <- curves |>
+    left_join(gap, by = "Parameter") |>
+    mutate(Panel = sprintf("%s (gap %.2f SD)", Parameter, Gap),
+           Illusion_Difference = factor(round(Illusion_Difference, 5)))
+
+  curve_cols <- colorRampPalette(
+    c("#FF5722", "#FFC107", "#8BC34A", "#4CAF50")
+  )(nlevels(curves$Illusion_Difference))
+
+  ggplot(curves, aes(Illusion_Strength, Predicted, colour = Illusion_Difference,
+                     group = interaction(Sampler, Illusion_Difference))) +
+    geom_line(aes(linetype = Sampler), linewidth = 0.9) +
+    facet_wrap(~Panel, scales = "free_y") +
+    scale_colour_manual(values = curve_cols) +
+    scale_linetype_manual(values = c("cmdstanr" = "solid", "stanli" = "dashed")) +
+    labs(title = label, x = "Illusion Strength", y = NULL, colour = "Task Difficulty") +
+    theme_minimal()
+}
+
+table_sampler_speed <- function(twin_preds) {
+  rows <- purrr::imap_dfr(twin_preds, \(pair, label) {
+    time_c <- median(pair$cmdstanr$efficiency$Time_total)
+    purrr::imap_dfr(pair, \(p, sampler) {
+      e <- p$efficiency
+      data.frame(
+        Model = label,
+        Family = sub(" .*", "", label),
+        Sampler = sampler,
+        Chains = nrow(e),
+        "Step size (median)" = formatC(median(p$convergence$stepsize_chain), format = "f", digits = 4),
+        "Warmup (h)" = sprintf("%.0f", median(e$Time_warmup) / 3600),
+        "Sampling (h)" = sprintf("%.0f", median(e$Time_sample) / 3600),
+        "Total (h)" = sprintf("%.0f", median(e$Time_total) / 3600),
+        "Against cmdstanr" = sprintf("%.2fx", median(e$Time_total) / time_c),
+        "Bulk ESS / h" = sprintf("%.1f", mean(e$ESS_per_hour)),
+        check.names = FALSE
+      )
+    })
+  })
+  tinytable::tt(select(rows, -Family)) |>
+    tinytable::style_tt(j = 3:9, align = "r") |>
+    fill_cells(1, model_fill(rows$Family)) |>
+    tinytable::group_tt(j = list("Per chain, median" = 4:7))
+}
+```
+
+::: {.panel-tabset}
+
+### Agreement
+
+The ELPD difference is stanli's minus cmdstanr's. A difference within about
+twice the Monte Carlo SE is what two runs of one sampler would give. Chains in
+different modes show first in the spread of the chain means of `lp__`.
+
+```{r}
+if (any(complete)) {
+  table_sampler_agreement(twin_preds[complete])
+} else {
+  cat("No model has both fits yet.\n")
+}
+```
+
+### Parameter Curves
+
+The predicted curves of each parameter along illusion strength, with cmdstanr
+solid and stanli dashed. Each panel gives the largest gap between the two over
+the grid, in posterior SDs of the cmdstanr fit.
+
+```{r}
+#| fig-width: 10
+#| fig-height: 7
+#| warning: false
+
+# warning: false for the Mean RT, which is NA at the grid points where a fit
+# predicts no response of that kind, and ggplot says so
+if (any(complete)) {
+  for (label in names(twin_preds)[complete]) print(plot_sampler_curves(twin_preds[[label]], label))
+} else {
+  cat("No model has both fits yet.\n")
+}
+```
+
+### Speed
+
+Wall clock per chain. Both fits ran on the same three nodes, which are shared
+with other users and do not run at the same speed, and neither fit records
+which node each chain ran on. So read a gap of a few tens of percent with
+caution: `server/AGENT.md` 6.6-6.8 compares the two samplers node by node.
+
+```{r}
+if (any(complete)) {
+  table_sampler_speed(twin_preds[complete])
+} else {
+  cat("No model has both fits yet.\n")
+}
 ```
 
 :::

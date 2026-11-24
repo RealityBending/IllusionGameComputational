@@ -235,6 +235,25 @@ says — which silently saved the *combined* fit over shard 1, after which the
 mini merged that with shard 2 and came out larger than the full fit. Found on
 2026-09-18 by running `combine` against real shards for the first time.
 
+### A shard that sampled but failed to save: `./hpc rebuild`
+
+If a fit job FAILs with `saveRDS failed: error writing to connection` after
+`Both chains finished`, its draws are not lost. Lustre was briefly
+unwritable (AGENT.md 5.3.1), and `fit_model.R` kept the Stan CSVs in
+`models/stan_csv/<model>_<Illusion>_<shard>_<jobid>/`. Rebuild the shard from
+them; do not sample it again:
+
+```bash
+./hpc rebuild gam_rdm5r_mullerlyer 2 11698290   # <model> <shard> <array job id that sampled it>
+```
+
+It is one short job on `general` (2 CPUs, 32G, 2 h; extra args go to
+`sbatch`), named `igc_rebuild_<model>`, with its log in
+`rebuild_<model>_<job>_<shard>.out`. It builds the brmsfit the way `brm()`
+does after sampling. It checks the result against a sibling shard (Stan code,
+data, Stan data, parameters, run length, cogmod) and saves nothing if they
+differ. The CSVs are kept; delete them once the model is combined.
+
 ## Predictions for the model comparison
 
 Everything in `2_modelcomparison.qmd` that needs a fitted model — sampling
@@ -268,7 +287,10 @@ The job is `general`, 8 CPUs, 64G: no pointwise log-likelihood as in
 `combine`, just the fit plus predictions over 10k trials and small grids, with
 the components and the parameters forked over the cores. It takes **about
 30 seconds** per model (`gam_rdm`, 2026-09-28), and 0.8-0.9 min at 23-25 GB
-for the 8,000-draw DDM-4 fits (2026-10-19).
+for the 8,000-draw DDM-4 fits (2026-10-19). Since 2026-11-16 the curves
+simulate 32,000 responses per grid point at 9 difficulty levels (4 per
+posterior draw, for a smooth median RT), which takes the DDM-5 jobs to
+1.7-5.2 min.
 
 ### Three traps, found 2026-09-28
 
@@ -379,7 +401,7 @@ the new `gam_lnr_mullerlyer_MullerLyer.rds`. The formulas did not change
 | `gam_rdm` | `cogmod_rdm()` | drift, `driftone`, `boundary`, `ndt` | `sigmabias = 0` |
 | `gam_rdm5` | `cogmod_rdm()` | all five: as RDM plus `sigmabias` | — | ⚠ **MullerLyer and VerticalHorizontal not converged, on the 2026-10-13 refit too: each has 2 of 8 chains in a separate `sigmabias` mode** (`AGENT.md` §4.10, §6.5) |
 | `gam_rdm5r` | `cogmod_rdm()` | as RDM; `sigmabias` free but `1 + (1 \| Participant)`, no smooth | — | the `gam_rdm5` fix of `AGENT.md` §4.10 B (option 1), first fitted 2026-11-15 (§6.11) |
-| `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **not converged: two modes, max Rhat 13.8, so no predictions. The 0.3.4 re-run (2026-10-07) replicated the split, and VerticalHorizontal splits too** (`AGENT.md` §4.9, §4.10, `cogmod_lba_modes_issue.md`) |
+| `gam_lba` | `cogmod_lba2()` | drift, `driftone`, `sigmaone`, `sigmabias`, `boundary`, `ndt` | `sigmazero = 1` | ⚠ **not converged: two modes, max Rhat 13.8, so no predictions. The 0.3.4 re-run (2026-10-07) replicated the split, and VerticalHorizontal splits too. The 0.3.5 refit (2026-11-17) splits on all three illusions, Ebbinghaus included** (`AGENT.md` §4.9, §4.10, §6.5, `cogmod_lba_modes_issue.md`) |
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =
 c("cr", "cr")) + (1 | Participant)`; `poutlier` is `1 + (1 | Participant)`.
@@ -752,7 +774,7 @@ belt and braces.
 
 | file | role |
 | --- | --- |
-| `hpc` | the driver — check/setup/push/install/precompile/models/fit/combine/predict/priors/archive/progress/queue/log/ls/pull/cancel/sh |
+| `hpc` | the driver — check/setup/push/install/precompile/models/fit/rebuild/combine/predict/priors/archive/progress/queue/log/ls/pull/cancel/sh |
 | `install_pkgs.R` | builds the project R library (`./hpc install`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model |

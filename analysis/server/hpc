@@ -10,6 +10,9 @@
 #   ./hpc precompile            pre-build the CmdStan precompiled header
 #   ./hpc models                list the models defined in models.R
 #   ./hpc fit <model|all> [..]  one array job per model (extra args -> sbatch)
+#   ./hpc rebuild <model> <shard> <jobid>
+#                               rebuild a shard whose save failed from the
+#                               Stan CSVs that job kept (no resampling)
 #   ./hpc combine <model|all>   merge a model's shards, add loo
 #   ./hpc predict <model|all>   posterior predictions of a combined model, for
 #                               2_modelcomparison.qmd (extra args -> sbatch)
@@ -280,7 +283,8 @@ submit_per_model() {
   #   IGC_CRITERION=waic IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_lnr_mullerlyer
   local extra="" v val
   for v in IGC_NPARTICIPANTS IGC_WARMUP IGC_SAMPLES IGC_CHAINS IGC_COGMOD_MIN \
-           IGC_CRITERION IGC_CRITERION_NDRAWS IGC_DELETE_SHARDS IGC_LOO_BLOCK; do
+           IGC_CRITERION IGC_CRITERION_NDRAWS IGC_DELETE_SHARDS IGC_LOO_BLOCK \
+           IGC_REBUILD_JOB; do
     eval "val=\${$v:-}"
     [ -n "$val" ] && extra="${extra},${v}='${val}'"
   done
@@ -311,6 +315,21 @@ sbatch \
 cmd_fit() {
   local want="${1:-}"; shift || true
   submit_per_model fit.slurm fit "$want" "$@"
+}
+
+# A shard that sampled to the end and then failed to save is rebuilt from the
+# Stan CSVs fit_model.R kept in models/stan_csv/<shard>_<job>/ rather than
+# sampled again (fit_model.R, "Rebuild"; AGENT.md 5.3.1). One short job on
+# `general`: no compile, no sampling; it saves nothing unless the result
+# matches a sibling shard, and it keeps the CSVs.
+cmd_rebuild() {
+  local model="${1:-}" task="${2:-}" job="${3:-}"
+  [[ -n "$model" && "$model" != all && "$model" != *,* && "$task" =~ ^[0-9]+$ && "$job" =~ ^[0-9]+$ ]] ||
+    die "usage: ./hpc rebuild <model> <shard> <array job id that sampled it> [extra sbatch args]"
+  shift 3
+  [ "$BACKEND" = cmdstanr ] || die "rebuild is for cmdstanr shards"
+  IGC_REBUILD_JOB="$job" submit_per_model fit.slurm rebuild "$model" \
+    --array="$task" --partition=general --cpus-per-task=2 --mem=32G --time=2:00:00 "$@"
 }
 
 cmd_combine() {
@@ -496,6 +515,7 @@ case "${1:-}" in
   precompile) shift; cmd_precompile "$@" ;;
   models)     shift; cmd_models "$@" ;;
   fit)        shift; cmd_fit "$@" ;;
+  rebuild)    shift; cmd_rebuild "$@" ;;
   combine)    shift; cmd_combine "$@" ;;
   predict)    shift; cmd_predict "$@" ;;
   priors)     shift; cmd_priors "$@" ;;
@@ -507,5 +527,5 @@ case "${1:-}" in
   pull)       shift; cmd_pull "$@" ;;
   cancel)     shift; cmd_cancel "$@" ;;
   sh)         shift; cmd_sh "$@" ;;
-  *) sed -n '2,41p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
 esac

@@ -48,10 +48,17 @@ igc_prediction_settings <- function(...) {
     # density over any range without recomputing.
     ppc_bin = 0.001,
     # Parameter curves: posterior predictive draws per grid point (for the
-    # error rate and mean RT), and the grid
-    curves_iterations = 500,
+    # error rate and the mean and median RT), and the grid. 9 difficulty levels
+    # rather than 5 since 2026-11-16: the error rate and RT panels of the qmd's
+    # Best Model section draw all of them, and the parameter curves every other
+    # one, which are the 5 levels of before. Simulated responses per grid point:
+    # 32,000 rather than 500, since the median RT rests on the correct ones
+    # alone, and at 500 and still at 2000 it zigzags by more than the gap
+    # between neighbouring levels wherever errors are frequent. That is more
+    # than a fit's draws, so compute_curves() simulates several per draw.
+    curves_iterations = 32000,
     curves_n_strength = 31,
-    curves_n_difference = 5,
+    curves_n_difference = 9,
     # Heatmaps: an n x n grid
     heatmap_n = 40,
     # Components run in parallel (forked, so not on Windows)
@@ -354,25 +361,55 @@ predict_parameters <- function(gam, datagrid, cores = 1) {
 compute_curves <- function(gam, s) {
   datagrid <- make_datagrid(gam, n_strength = s$curves_n_strength,
                             n_difference = s$curves_n_difference)
-  pred <- modelbased::estimate_prediction(gam, data = datagrid, centrality = "mean",
-                                          iterations = s$curves_iterations,
-                                          keep_iterations = TRUE)
-  pred <- as_plain_df(pred)
+  # One simulated response per posterior draw and grid point, so one call
+  # cannot simulate more responses than the fit has draws (8000 for every fit
+  # so far). curves_iterations beyond that repeats the call, each time with a
+  # fresh response for every draw, and pools the responses: 32,000 is 4 per
+  # draw. The point summaries are then recomputed over the pool.
+  per_call <- min(s$curves_iterations, brms::ndraws(gam))
+  n_calls <- ceiling(s$curves_iterations / per_call)
+  runs <- lapply(seq_len(n_calls), function(i) {
+    n <- min(per_call, s$curves_iterations - (i - 1) * per_call)
+    as_plain_df(modelbased::estimate_prediction(gam, data = datagrid, centrality = "mean",
+                                                iterations = n, keep_iterations = TRUE))
+  })
+  iters <- do.call(cbind, lapply(runs, \(r) as.matrix(r[, startsWith(names(r), "iter_")])))
+  pred <- runs[[1]][, !startsWith(names(runs[[1]]), "iter_")]
+  for (r in runs[-1]) stopifnot(identical(r$Component, pred$Component),
+                                identical(r$Illusion_StrengthZ, pred$Illusion_StrengthZ),
+                                identical(r$Illusion_DifferenceZ, pred$Illusion_DifferenceZ))
+  rm(runs)
+  if (n_calls > 1) {
+    pred$Predicted <- rowMeans(iters)
+    if ("SE" %in% names(pred)) pred$SE <- apply(iters, 1, stats::sd)
+    if ("CI_low" %in% names(pred)) pred$CI_low <- apply(iters, 1, stats::quantile, probs = 0.025, names = FALSE)
+    if ("CI_high" %in% names(pred)) pred$CI_high <- apply(iters, 1, stats::quantile, probs = 0.975, names = FALSE)
+  }
   pred$Parameter <- ifelse(pred$Component == "response", "Error Rate", "Mean RT")
   pred$Type <- "GAM"
   pred$Component <- NULL
   pred$Row <- NULL
 
-  # Only keep iterations of correct responses to compute mean
-  iter_cols <- startsWith(names(pred), "iter_")
+  # Only keep iterations of correct responses to compute the mean and the
+  # median RT. The median was added on 2026-11-16 as rows of its own, without a
+  # version bump: a file without them still has the mean, which the qmd falls
+  # back on. Its SE and CIs are left empty, since modelbased's are over every
+  # draw, errors included.
   is_rt <- pred$Parameter == "Mean RT"
   is_er <- pred$Parameter == "Error Rate"
-  iters_rt <- pred[is_rt, iter_cols]
-  iters_rt[pred[is_er, iter_cols] == 1] <- NA
+  iters_rt <- iters[is_rt, , drop = FALSE]
+  iters_rt[iters[is_er, , drop = FALSE] == 1] <- NA
+  rm(iters)
   pred[is_rt, "Predicted"] <- rowMeans(iters_rt, na.rm = TRUE)
-  # Remove mean RTs when only a few correct trials as it's noisy
-  pred[is_rt, "Predicted"][pred[is_er, "Predicted"] > 0.9] <- NA
-  pred <- pred[, !iter_cols]
+  median_rt <- pred[is_rt, ]
+  median_rt$Parameter <- "Median RT"
+  median_rt$Predicted <- apply(iters_rt, 1, stats::median, na.rm = TRUE)
+  median_rt[intersect(c("SE", "CI_low", "CI_high"), names(median_rt))] <- NA_real_
+  # Remove RTs when only a few correct trials as it's noisy
+  too_few <- pred[is_er, "Predicted"] > 0.9
+  pred[is_rt, "Predicted"][too_few] <- NA
+  median_rt$Predicted[too_few] <- NA
+  pred <- rbind(pred, median_rt)
 
   # Add the predictions for the parameters of the model itself
   params <- predict_parameters(gam, datagrid, cores = s$cores)
