@@ -2390,6 +2390,32 @@ finished shards' `REPORT` lines in `node_history.md`):
   VPN dropped). Running shards 3-4 sit within ~50 (-40,989 to -41,037).
   Shard 3 ~5.2 days to go against 6.3 left.
 
+### 6.12 Study 1 closed, DDM-5 retained (2026-11-24)
+
+**The model comparison is closed** (user's decision, 2026-11-24): most models
+are unstable across the three illusions, and DDM-5 has the best overall
+characteristics. It is the model of Study 2 (linear effects of difficulty x
+strength within the linear-approximation region). The write-up is in
+`paper/manuscript.qmd` ("Study 1"), with its numbers from the prediction
+files (`models/predictions/`). In brief:
+
+- 13 of 21 fits converged. Only DDM-4, DDM-5 and RDM converged on all three
+  illusions. Failures: the free start-point range splits into modes (LNR-6
+  ML, RDM-5 ML/VH, LBA x3, and `gam_rdm5r` VH), and LNR's adaptation fails
+  on Ebbinghaus (LNR-6 Ebbinghaus never completed).
+- DDM-5 has the best ELPD among converged models on ML (+2,244 ± 181 over LNR)
+  and Ebbinghaus (+6,541 ± 294 over RDM-5), but not on VH, where LNR-6
+  (+7,032 ± 189) and LNR (+4,115 ± 192) beat it.
+- Total sampling of the 20 completed fits: ~114,500 core-hours.
+
+**What this rules out:** no further Study 1 variant is fitted: no
+`sigmabias ~ 1` RDM, no simplified LBA or LNR-6, no LNR reparametrisation
+for Ebbinghaus, no DDM-7 subsample. Do not propose them. Still useful: the
+cmdstanr RDM VH / Ebbinghaus refits (11698240 / 11698242), which replace
+the stanli stand-ins in Table 1 of the paper once combined; and the
+remaining `gam_rdm5r` shards (ML 3, Ebbinghaus 3), only to complete the
+paper's one sentence on RDM-5r.
+
 ---
 
 ## 7. Open questions

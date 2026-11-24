@@ -54,6 +54,11 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
 - **Model names are `<family>_<illusion>`, MullerLyer included**
   (`gam_lnr_mullerlyer`, since 2026-10-13). Notes, logs and archived fits from
   before then call the MullerLyer models by the bare family name (`gam_lnr`).
+- **Study 1 (the model comparison) is closed** (2026-11-24): DDM-5 is
+  retained, and Study 2 fits it with linear effects within the
+  linear-approximation region. Do not propose further Study 1 variants
+  (`analysis/server/AGENT.md` §6.12). The write-up is in
+  `paper/manuscript.qmd`.
 - **Not every model in the registry should be submitted.**
   `gam_ddm7_mullerlyer` is known not to be viable **at full data**
   (README → "`gam_ddm7`: do not submit it at full data",
@@ -81,6 +86,14 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   `analysis/server/predictions.R`, which the qmd and the cluster job share;
   the qmd itself only relabels and plots. Bump `igc_predictions_version` when
   the structure of what that file returns changes.
+- **The paper's figures and tables are image files, and the manuscript
+  computes nothing.** `2_modelcomparison.qmd` → "Figures for the Paper" draws
+  them and saves them to `paper/figures/`, and `paper/manuscript.qmd` only
+  includes the files. Tables are drawn as figures too (coloured cells), not
+  written as markdown or LaTeX tables. To change a number or a figure in the
+  paper, change it there and re-render that script, then the manuscript. The
+  DDM figure of the paper turns the drift and the starting point around from
+  the fits' coding (`plot_retained()`), and the text follows the figure.
 - **`1_models.qmd` does not load fits either.** It reads the files that
   `./hpc priors` writes to `models/priors/` (fetched with
   `./hpc pull priors`): for every combined fit, its priors as brms resolved
