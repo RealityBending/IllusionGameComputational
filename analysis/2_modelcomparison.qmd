@@ -103,9 +103,17 @@ load_predictions <- function(name, sampler = "cmdstanr") {
     warning(name, ": the predictions were made from another fit than ", fit_file,
             ". Re-run `", hpc, " predict`, or delete ", file, " to recompute locally.")
   }
-  if (!identical(plot_ranges[[rez$meta$illusion]], rez$meta$plot_range)) {
-    warning(name, ": plot_ranges has changed since the predictions were made.")
+  # Every curve and heatmap is drawn over the reliable predictor space
+  # (plot_ranges in server/predictions.R), whatever range the file was made
+  # over: a wider one is cropped to it. A file that does not cover it all (the
+  # Müller-Lyer files made before 2026-11-25 start at a difference of 0.05,
+  # not 0.045) is drawn over what it has.
+  if (!covers_plot_range(rez$meta$plot_range, rez$meta$illusion)) {
+    message(name, " (", sampler, "): the predictions do not cover all of plot_ranges. Re-run `",
+            hpc, " predict` for the whole reliable space.")
   }
+  rez$curves <- crop_to_plot_range(rez$curves, rez$meta$illusion)
+  rez$heatmaps <- crop_to_plot_range(rez$heatmaps, rez$meta$illusion)
   rez$meta$sampler <- sampler
   rez
 }
@@ -130,7 +138,7 @@ models <- list(
     "LNR-6" = "gam_lnr6_verticalhorizontal_VerticalHorizontal",  # converged on the 2026-10-13 refit (asf25)
     "DDM-4" = "gam_ddm4_verticalhorizontal_VerticalHorizontal",
     "DDM-5" = "gam_ddm5_verticalhorizontal_VerticalHorizontal",  # converged, cmdstanr refit 11698241 (combined 2026-11-23; its stanli twin agrees, ELPD diff 0.9)
-    "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal",  # stanli stand-in until the cmdstanr refit 11698240
+    "RDM" = "gam_rdm_verticalhorizontal_VerticalHorizontal",  # converged, cmdstanr refit 11698240 (combined 2026-11-25; its stanli twin agrees, ELPD diff 1.3)
     "RDM-5" = "gam_rdm5_verticalhorizontal_VerticalHorizontal",  # NOT CONVERGED: sigmabias modes, 6:2 on the 2026-10-13 refit (server/AGENT.md 4.10 B)
     "LBA" = "gam_lba_verticalhorizontal_VerticalHorizontal"  # NOT CONVERGED: four clusters on the 2026-10-13 refit (oc236, delivered 2026-11-17; server/AGENT.md 4.10 B)
   ),
@@ -190,8 +198,10 @@ samplers <- lapply(samplers, \(s) s[!is.na(s)])
 preds <- Map(\(m, s) Map(load_predictions, m, s), models, samplers)
 
 # One colour per model, whatever the illusion, so a model looks the same in
-# every tab
-model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#212121", "DDM-4" = "#FB8C00", "DDM-5" = "#6D4C41",
+# every tab. A hue per family of models, and within a family the variant with
+# more parameters is the darker one (DDM: orange to dark red, LNR: blue, RDM:
+# green). 1_models.qmd has the same colours.
+model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#0D47A1", "DDM-4" = "#FB8C00", "DDM-5" = "#B71C1C",
                   "RDM" = "#43A047", "RDM-5" = "#1B5E20", "LBA" = "#8E24AA")
 
 # For the tables: the same colours behind the model names, and a way to fill
@@ -1816,8 +1826,8 @@ save_figure(plot_models(preds), "study1_models", width = 7.2, height = 5.6)
 # - `y_scale`: "square" stretches the high densities (and flattens the errors
 #   and the tails), "sqrt" does the opposite, "linear" leaves the axis alone.
 #   The transform is of the size of the density, so that errors stay mirrored.
-# - `zoom`: an inset with the peak enlarged, in the empty corner of the panel,
-#   and a frame around what it enlarges.
+# - `zoom`: two insets, with the peak of the correct responses and that of the
+#   errors enlarged, and a frame around what each enlarges.
 signed_power <- function(power) {
   scales::new_transform(paste0("signed_power_", power),
                         transform = \(x) sign(x) * abs(x)^power,
@@ -1849,29 +1859,53 @@ plot_ppc_paper <- function(preds, y_scale = c("linear", "square", "sqrt"), zoom 
     }
     if (!zoom) return(p)
 
-    # The peak of the correct responses: the observed mode, 0.12 s either
-    # side, and the top quarter of the densities there. The inset is the same
-    # plot cut to that window, on a plain axis.
+    # An inset is the same plot cut to a window, on a plain axis
     observed <- p$layers[[1]]$data
     predicted <- p$layers[[2]]$data
-    mode <- observed$x[which.max(observed$y)]
-    window_x <- mode + c(-0.12, 0.12)
     top <- max(observed$y, predicted$y)
-    window_y <- c(0.72, 1.03) * top
-    inset <- suppressMessages(
-      p + scale_y_continuous(labels = abs) +
-        coord_cartesian(xlim = window_x, ylim = window_y, expand = FALSE) +
-        labs(title = NULL, x = NULL, y = NULL) +
-        theme(legend.position = "none", axis.text = element_blank(),
-              panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-              panel.border = element_rect(fill = NA, colour = "grey30", linewidth = 0.4),
-              plot.background = element_rect(fill = "white", colour = NA),
-              plot.margin = margin(0, 0, 0, 0))
-    )
+    inset <- function(window_x, window_y) {
+      ggplotGrob(suppressMessages(
+        p + scale_y_continuous(labels = abs) +
+          coord_cartesian(xlim = window_x, ylim = range(window_y), expand = FALSE) +
+          labs(title = NULL, x = NULL, y = NULL) +
+          theme(legend.position = "none", axis.text = element_blank(),
+                panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+                panel.border = element_rect(fill = NA, colour = "grey30", linewidth = 0.4),
+                plot.background = element_rect(fill = "white", colour = NA),
+                plot.margin = margin(0, 0, 0, 0))
+      ))
+    }
+    frame <- function(window_x, window_y) {
+      annotate("rect", xmin = window_x[1], xmax = window_x[2], ymin = min(window_y), ymax = max(window_y),
+               fill = NA, colour = "grey30", linewidth = 0.3)
+    }
+
+    # The peak of the correct responses: the observed mode, 0.12 s either
+    # side, and the top quarter of the densities there. Its inset is in the
+    # empty corner above the tail.
+    correct_x <- observed$x[which.max(observed$y)] + c(-0.12, 0.12)
+    correct_y <- c(0.72, 1.03) * top
+
+    # The peak of the errors, which is wider and where the models differ more
+    # in proportion: 0.15 s either side of where the models put it (the
+    # observed histogram of the errors is too rough to give a mode), and the
+    # lower half of the densities there. Its inset is under the axis, which is
+    # extended to make room for it.
+    errors <- filter(predicted, y < 0)
+    error_mode <- errors |>
+      summarise(x = x[which.min(y)], .by = Model) |>
+      pull(x) |>
+      median()
+    error_x <- error_mode + c(-0.15, 0.15)
+    depth <- min(errors$y, observed$y[observed$x > error_x[1] & observed$x < error_x[2]])
+    error_y <- c(0.5, 1.04) * depth
+
     p +
-      annotate("rect", xmin = window_x[1], xmax = window_x[2], ymin = window_y[1], ymax = window_y[2],
-               fill = NA, colour = "grey30", linewidth = 0.3) +
-      annotation_custom(ggplotGrob(inset), xmin = 0.95, xmax = 2.05, ymin = 0.42 * top, ymax = 1.03 * top)
+      expand_limits(y = -0.59 * top) +
+      frame(correct_x, correct_y) +
+      frame(error_x, error_y) +
+      annotation_custom(inset(correct_x, correct_y), xmin = 0.95, xmax = 2.05, ymin = 0.42 * top, ymax = 1.03 * top) +
+      annotation_custom(inset(error_x, error_y), xmin = 0.95, xmax = 2.05, ymin = -0.58 * top, ymax = -0.13 * top)
   })
   wrap_plots(panels, nrow = 1, guides = "collect") &
     theme(legend.position = "bottom", legend.box = "vertical", legend.margin = margin(t = -2),
@@ -1884,7 +1918,7 @@ It is the lower half of the paper's comparison figure, saved with it below.
 
 ```{r}
 #| fig-width: 7.2
-#| fig-height: 3.3
+#| fig-height: 3.7
 
 # The paper has the zoom. A squared axis pulls the lines apart at the peak too,
 # but flattens the errors and the tails to nothing; a square-root or log axis
@@ -2039,14 +2073,14 @@ plot_comparison <- function(fits, earlier = earlier_fits) {
            Perf_ink = case_when(!Fitted | !Converged ~ "grey45",
                                 abs(signed_sqrt(ELPD_diff)) / limit > 0.75 ~ "white", .default = "black"))
 
-  # Computational cost, in days, darker when dearer: how long a chain took,
-  # which is what one waits for, and under it the total in days of one core
+  # Computational cost, darker when dearer: how long a chain took, in days,
+  # which is what one waits for, and under it the total in months of one core
   cost <- scales::colour_ramp(c("#F3F0F7", "#7E6BAD"))
   d <- d |>
     mutate(Cost_fill = ifelse(Fitted, cost(scales::rescale(Core_days, from = c(0, max(Core_days, na.rm = TRUE)))),
                               "#E0E0E0"),
            Cost_top = ifelse(Fitted, paste(num(Chain_days, 1), "days"), "–"),
-           Cost_bottom = ifelse(Fitted, paste(num(Core_days), "total days"), ""),
+           Cost_bottom = ifelse(Fitted, paste(num(Core_days / (365.25 / 12), 1), "months"), ""),
            Cost_ink = ifelse(Fitted & Core_days > 0.8 * max(Core_days, na.rm = TRUE), "white", "black"))
 
   # The model names, on their colours, once for the three panels
@@ -2070,7 +2104,7 @@ plot_comparison <- function(fits, earlier = earlier_fits) {
     panel(Perf_fill, Perf_top, Perf_bottom, Perf_ink, "Predictive performance",
           expression(Delta * "ELPD from DDM-5 (higher is better)")),
     panel(Cost_fill, Cost_top, Cost_bottom, Cost_ink, "Computational cost",
-          "days per chain, and total days of one core"),
+          "days per chain, and total months of one core"),
     nrow = 1, widths = c(0.42, 1, 1, 1)
   )
 }
@@ -2081,7 +2115,7 @@ plot_comparison <- function(fits, earlier = earlier_fits) {
 plot_comparison_ppc <- function(fits, preds) {
   wrap_plots(wrap_elements(full = plot_comparison(fits)),
              wrap_elements(full = plot_ppc_paper(preds, zoom = TRUE)),
-             ncol = 1, heights = c(3.9, 3.2)) +
+             ncol = 1, heights = c(3.9, 3.6)) +
     plot_annotation(tag_levels = "A") &
     theme(plot.tag = element_text(face = "bold", size = 11))
 }
@@ -2103,9 +2137,9 @@ The figure of the paper: the table over the predictive check.
 
 ```{r}
 #| fig-width: 7.2
-#| fig-height: 7.3
+#| fig-height: 7.7
 
-save_figure(plot_comparison_ppc(fits, preds), "study1_comparison", width = 7.2, height = 7.3)
+save_figure(plot_comparison_ppc(fits, preds), "study1_comparison", width = 7.2, height = 7.7)
 ```
 
 The numbers behind it, which are the ones quoted in the text of the paper.
@@ -2166,10 +2200,10 @@ plot_retained <- function(preds_curves, model = retained_model) {
   # Reference lines: no drift, and a starting point half-way
   refs <- data.frame(Parameter = panels[c("Drift", "Bias")], y = c(0, 0.5))
 
-  # One group of rows, under its name. The groups are plots of their own, one
-  # above the other, so that there is a gap between them. Their columns line
-  # up, so the illusions are named once, above the first, and the axis of
-  # illusion strength is drawn once, under the last.
+  # One group of rows. The groups are plots of their own, one above the other,
+  # so that there is a gap between them. Their columns line up, so the
+  # illusions are named once, above the first, and the axis of illusion
+  # strength is drawn once, under the last.
   block <- function(name) {
     rows <- groups[[name]]
     first <- name == names(groups)[1]
@@ -2185,12 +2219,10 @@ plot_retained <- function(preds_curves, model = retained_model) {
                              guide = guide_colourbar(title.position = "left", barwidth = grid::unit(6, "lines"),
                                                      barheight = grid::unit(0.5, "lines"))) +
       facet_grid(Parameter ~ Illusion, scales = "free", switch = "y") +
-      labs(title = name, y = NULL, colour = "Task difficulty ",
+      labs(y = NULL, colour = "Task difficulty ",
            x = if (last) "Illusion strength (negative: congruent, positive: incongruent)") +
       theme_minimal(base_size = 9) +
-      theme(plot.title = element_text(face = "bold", size = 10.5, margin = margin(b = 2)),
-            plot.title.position = "plot",
-            strip.placement = "outside",
+      theme(strip.placement = "outside",
             strip.text.y.left = element_text(angle = 0, hjust = 1, size = 8, lineheight = 0.9),
             strip.text.x = if (first) element_text(face = "bold", size = 9.5) else element_blank(),
             panel.grid.minor = element_blank(),
@@ -2200,20 +2232,38 @@ plot_retained <- function(preds_curves, model = retained_model) {
             axis.text.x = if (last) element_text(size = 7) else element_blank(),
             legend.title = element_text(size = 8, vjust = 0.9),
             legend.margin = margin(t = -4),
-            plot.margin = margin(4, 4, 4, 4))
+            plot.margin = margin(if (first) 4 else 9, 4, 4, 2))
   }
 
-  wrap_plots(lapply(names(groups), block), ncol = 1, heights = lengths(groups), guides = "collect") &
+  # The name of a group, written upwards on a band at the left of its rows.
+  # patchwork lines its panel up with the panels of the group, so the band is
+  # as tall as the rows and no taller.
+  band <- function(name) {
+    first <- name == names(groups)[1]
+    ggplot() +
+      annotate("text", x = 0, y = 0, label = name, angle = 90, fontface = "bold", size = 3.3, colour = "grey15") +
+      theme_void() +
+      theme(panel.background = element_rect(fill = "grey91", colour = NA),
+            plot.margin = margin(if (first) 4 else 9, 0, 4, 2))
+  }
+
+  wrap_plots(unlist(lapply(names(groups), \(name) list(band(name), block(name))), recursive = FALSE),
+             ncol = 2, widths = c(0.035, 1), heights = lengths(groups), guides = "collect") &
     theme(legend.position = "bottom")
 }
 ```
+
+The paper's version of this figure has the linear models of Study 2 drawn over
+it, and is made by `3_linearmodels.qmd` (`plot_approximation()`, saved as
+`study2_approximation.png`). This one is no longer saved (it was
+`study1_ddm5.png` until 2026-11-25).
 
 ```{r}
 #| fig-width: 7.2
 #| fig-height: 8.3
 #| warning: false
 
-save_figure(plot_retained(preds_curves), "study1_ddm5", width = 7.2, height = 8.3)
+plot_retained(preds_curves)
 ```
 
 ### Every Model

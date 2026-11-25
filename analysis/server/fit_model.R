@@ -51,6 +51,26 @@ if (backend == "stanli") {
   }
 }
 
+# Sampler, within stanli (2026-11-24, the Study 2 test): "nuts", stanli's own
+# NUTS (sample_model(), the default and what every stanli fit so far used), or
+# "nutpie", the nuts-rs sampler through nutpieR (stanli::sample_nutpie(), from
+# stanli 0.31.0), whose mass-matrix adaptation can be low-rank
+# (IGC_NUTPIE_ADAPTATION, "low_rank" or "diag"). nutpieR is installed in the
+# stanli library, and loaded from there. nutpie drives stanli's runtime over
+# its BridgeStan interface, one thread per chain: brms's reduce_sum is not
+# parallelised, so its chains run on one core each (cores = chains).
+sampler <- Sys.getenv("IGC_SAMPLER", unset = "nuts")
+if (!sampler %in% c("nuts", "nutpie")) {
+  stop("IGC_SAMPLER must be 'nuts' or 'nutpie', not '", sampler, "'", call. = FALSE)
+}
+if (sampler == "nutpie" && backend != "stanli") {
+  stop("IGC_SAMPLER=nutpie needs IGC_BACKEND=stanli", call. = FALSE)
+}
+nutpie_adaptation <- Sys.getenv("IGC_NUTPIE_ADAPTATION", unset = "low_rank")
+if (sampler == "nutpie") {
+  loadNamespace("nutpieR", lib.loc = Sys.getenv("IGC_STANLI_LIB"))
+}
+
 source("models.R")
 
 spec <- igc_model(Sys.getenv("IGC_MODEL", unset = ""))
@@ -99,13 +119,17 @@ warmup <- as.integer(Sys.getenv("IGC_WARMUP", unset = "1500"))
 iter <- warmup + as.integer(Sys.getenv("IGC_SAMPLES", unset = "1000"))
 
 cat(sprintf(
-  "config: model=%s illusion=%s shard=%d warmup=%d samples=%d chains=%d threads/chain=%g refit=%s backend=%s\n",
+  "config: model=%s illusion=%s shard=%d warmup=%d samples=%d chains=%d threads/chain=%g refit=%s backend=%s sampler=%s\n",
   spec$name, spec$illusion, task_id, warmup, iter - warmup,
-  chains_per_task, threads_per_chain, file_refit, backend
+  chains_per_task, threads_per_chain, file_refit, backend,
+  if (sampler == "nutpie") paste0("nutpie (", nutpie_adaptation, ")") else sampler
 ))
 if (backend == "stanli") {
   cat("stanli", format(utils::packageVersion("stanli")), "from", find.package("stanli"),
       "- brms", format(utils::packageVersion("brms")), "from", find.package("brms"), "\n")
+}
+if (sampler == "nutpie") {
+  cat("nutpieR", format(utils::packageVersion("nutpieR")), "from", find.package("nutpieR"), "\n")
 }
 
 
@@ -146,14 +170,41 @@ df <- mutate(df,
   .by = "Illusion_Type"
 )
 
+# The centre of each study's ISI window, from all of its trials and before any
+# subsetting below: the linear models (Study 2) centre the ISI on it. The
+# window is a design constant of the study (0.5-1.0, 0.6-1.1 or 1.0-1.5 s), so
+# it must not depend on which participants a test draws.
+df$ISI_centre <- stats::ave(df$ISI, df$Dataset, FUN = function(x) (min(x) + max(x)) / 2)
+
 # Subset size. Production is "all"; set IGC_NPARTICIPANTS=30 for a smoke test.
+# The subset is the first N participants of the files, who all come from one
+# study (Validation), unless IGC_PARTICIPANT_SEED is set: then N participants
+# of this model's illusion are drawn at random with that seed, which spreads
+# them over the studies.
 n_participants <- Sys.getenv("IGC_NPARTICIPANTS", unset = "all")
+participant_seed <- Sys.getenv("IGC_PARTICIPANT_SEED", unset = "")
 if (!identical(tolower(n_participants), "all")) {
-  keep <- unique(df$Participant)[seq_len(as.integer(n_participants))]
+  if (nzchar(participant_seed)) {
+    set.seed(as.integer(participant_seed))
+    keep <- sample(unique(df$Participant[df$Illusion_Type == spec$illusion]),
+                   as.integer(n_participants))
+    set.seed(NULL)
+  } else {
+    keep <- unique(df$Participant)[seq_len(as.integer(n_participants))]
+  }
   df <- df[df$Participant %in% keep, ]
 }
 
 data <- df[df$Illusion_Type == spec$illusion, ]
+
+# Study 2's linear models: the range of stimuli and the predictors of the
+# registry entry (models.R, igc_linear_data())
+if (!is.null(spec$linear)) {
+  data <- igc_linear_data(data, spec$linear)
+  cat("linear: difference", spec$linear$difference, "(", spec$linear$transform_difference, ")",
+      "strength +-", spec$linear$strength, "(", spec$linear$transform_strength, ") | studies:",
+      paste(sort(unique(data$Study)), collapse = ", "), "\n")
+}
 cat("participants:", length(unique(data$Participant)), " rows:", nrow(data), "\n")
 
 
@@ -162,7 +213,10 @@ cat("participants:", length(unique(data$Participant)), " rows:", nrow(data), "\n
 f <- spec$formula()
 
 # cogmod's family-aware priors, plus normal(0, 2) on the slopes brms would
-# otherwise leave flat. poutlier keeps cogmod's own prior.
+# otherwise leave flat. poutlier keeps cogmod's own prior on its intercept; it
+# had no slopes until Study 2's linear models gave it the ISI's, which are
+# filled like any other's (for every other model poutlier has no `b` row, and
+# the loop skips it).
 #
 # 2, not 1: until 2026-10-12 this was normal(0, 1), and DDM-5's first `mu`
 # smooth column sat at +-2.2-2.5, past the 99th percentile in two illusions
@@ -181,7 +235,7 @@ f <- spec$formula()
 # tightened. Measured over gam_ddm7: `mu`, `bias` and `boundary` arrive flat and
 # want filling; the other four arrive set and must be left alone.
 priors <- cogmod_priors(f, data)
-for (par in c("", setdiff(unique(priors$dpar), c("poutlier", "")))) {
+for (par in c("", setdiff(unique(priors$dpar), ""))) {
   # The blanket `b` row for this dpar: class "b" with no coef, no group.
   blanket <- priors$class == "b" & priors$dpar == par &
     !nzchar(priors$coef) & !nzchar(priors$group)
@@ -270,9 +324,12 @@ if (file_refit == "never" && file.exists(shard_file)) {
 if (!is.null(m)) {
   old_cogmod <- if (is.null(m$cogmod$version)) "unrecorded" else m$cogmod$version
   old_run <- c(m$fit@sim$warmup, m$fit@sim$iter)
-  old_sampler <- if (is.null(m$stanli$version)) "cmdstanr" else paste("stanli", m$stanli$version)
+  # A stanli shard made before the sampler was recorded is stanli's own NUTS
+  old_sampler <- if (is.null(m$stanli$version)) "cmdstanr" else
+    paste("stanli", m$stanli$version, if (is.null(m$stanli$sampler)) "nuts" else m$stanli$sampler)
   this_sampler <- if (backend == "stanli") {
-    paste("stanli", format(utils::packageVersion("stanli")))
+    paste("stanli", format(utils::packageVersion("stanli")),
+          if (sampler == "nutpie") paste0("nutpie-", nutpie_adaptation) else "nuts")
   } else "cmdstanr"
   if (old_cogmod == "unrecorded" || package_version(old_cogmod) < cogmod_min ||
       !isTRUE(all(old_run == c(warmup, iter))) || old_sampler != this_sampler) {
@@ -407,30 +464,50 @@ if (is.null(m) && backend == "stanli") {
     data = lapply(unclass(brms::standata(m)), identity),
     threads_per_chain = threads_per_chain
   )
-  # The same cogmod_inits() as the cmdstanr arm, one row per chain on the
-  # unconstrained scale; partial = TRUE draws anything they leave out in
-  # (-2, 2), as CmdStan does.
+  # The same cogmod_inits() as the cmdstanr arm
   inits <- cogmod_inits(f, data)
-  init_u <- do.call(rbind, lapply(seq_len(chains_per_task), function(i) {
-    stanli::unconstrain(sm, inits(i), partial = TRUE)
-  }))
   # brm() leaves cmdstanr's seed random; stanli's default is 1 for every shard.
   seed <- sample.int(.Machine$integer.max, 1)
   cat("stanli seed", seed, "\n")
-  sfit <- stanli::sample_model(sm,
-    chains = chains_per_task,
-    parallel_chains = chains_per_task,
-    threads_per_chain = threads_per_chain,
-    seed = seed,
-    warmup = warmup,
-    samples = iter - warmup,
-    init = init_u,
-    refresh = 100
-  )
+  if (sampler == "nutpie") {
+    # nutpie takes the inits as they are, on the constrained scale, one call
+    # of the function per chain, and draws in (-2, 2) on the unconstrained
+    # scale whatever they leave out. Its warmup is the same length as NUTS's
+    # here, rather than nutpie's own default (400, or 800 for low-rank), so
+    # that the two samplers are compared on the same run.
+    sfit <- stanli::sample_nutpie(sm,
+      chains = chains_per_task,
+      seed = seed,
+      warmup = warmup,
+      samples = iter - warmup,
+      adaptation = nutpie_adaptation,
+      init = inits,
+      cores = chains_per_task,
+      refresh = 100,
+      progress = "text"
+    )
+  } else {
+    # One row per chain on the unconstrained scale; partial = TRUE draws
+    # anything the inits leave out in (-2, 2), as CmdStan does.
+    init_u <- do.call(rbind, lapply(seq_len(chains_per_task), function(i) {
+      stanli::unconstrain(sm, inits(i), partial = TRUE)
+    }))
+    sfit <- stanli::sample_model(sm,
+      chains = chains_per_task,
+      parallel_chains = chains_per_task,
+      threads_per_chain = threads_per_chain,
+      seed = seed,
+      warmup = warmup,
+      samples = iter - warmup,
+      init = init_u,
+      refresh = 100
+    )
+  }
   # Whether the threading took: brms's reduce_sum kept as a reduction, or
   # refused and run serially.
-  cat("stanli reduce_sum retained:", format(sfit$model$reduce_sum_count),
-      " fallbacks:", format(sfit$model$reduce_sum_fallbacks), "\n")
+  tryCatch(cat("stanli reduce_sum retained:", format(sfit$model$reduce_sum_count),
+               " fallbacks:", format(sfit$model$reduce_sum_fallbacks), "\n"),
+           error = function(e) cat("stanli reduce_sum: not reported\n"))
   # Without `exclude` the shard keeps the z_ / zs_ latents brm() leaves out
   # (the smoke test: 621 parameters against cmdstanr's 336). Names the
   # program does not have are ignored. as_stanfit() returns stanli's own
@@ -443,8 +520,12 @@ if (is.null(m) && backend == "stanli") {
   saveRDS(sf, file.path(csv_dir, "stanfit.rds"))
   m$fit <- sf
   m <- brms:::rename_pars(m) # what brm() does after sampling
+  # nutpie times warmup and sampling together (sample_nutpie()'s help), so its
+  # elapsed time may come back without the split, or not at all
   m$stanli <- list(version = format(utils::packageVersion("stanli")), seed = seed,
-                   elapsed = stanli::get_elapsed_time(sfit))
+                   sampler = if (sampler == "nutpie") paste0("nutpie-", nutpie_adaptation) else "nuts",
+                   nutpieR = if (sampler == "nutpie") format(utils::packageVersion("nutpieR")) else NULL,
+                   elapsed = tryCatch(stanli::get_elapsed_time(sfit), error = function(e) NULL))
   rm(sfit, sf)
 
   sha <- utils::packageDescription("cogmod")$RemoteSha

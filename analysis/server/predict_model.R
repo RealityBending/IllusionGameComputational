@@ -46,6 +46,9 @@ str(do.call(igc_prediction_settings, settings))
 
 m <- readRDS(in_file)
 attr(m, "illusion") <- spec$illusion
+# A linear model of Study 2: its range and transformations, for its grid
+# (make_linear_datagrid() in predictions.R). NULL for every other model.
+attr(m, "linear") <- spec$linear
 cat("** read", in_file, "with", brms::ndraws(m), "draws\n")
 
 t0 <- Sys.time()

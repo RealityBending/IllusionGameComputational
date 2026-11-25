@@ -19,6 +19,10 @@
 #                 Each entry is
 #                   illusion  the Illusion_Type the model is fitted to
 #                   formula   the family's function from igc_formulas
+#                   linear    (Study 2's linear models only) the range of
+#                             stimuli fitted and the transformations of the
+#                             predictors, which igc_linear_data() below
+#                             turns into the model's data
 #
 # Until 2026-10-13 the MullerLyer models were named after the bare family
 # (gam_lnr, gam_lba, ...) and held the formulas, which the other illusions
@@ -43,6 +47,25 @@ igc_t2 <- function(lhs) {
 # Response side of every formula: RT, with the accuracy coding brms needs for
 # the two-accumulator families.
 igc_rt <- function() igc_t2("RT | dec(Error)")
+
+# Study 2's linear models (analysis/3_linearmodels.qmd): every distributional
+# parameter gets the same linear effects of difficulty x absolute strength,
+# with a slope of its own on each side of the illusion, a quadratic in the ISI,
+# all of them varying by participant, and an intercept varying by study. The
+# side (Effect) enters only multiplied by Strength, so the two sides meet at
+# zero strength: Difference * Strength * Effect without Effect and
+# Difference:Effect, which would let them jump there (dropped 2026-11-25,
+# AGENT.md 6.15). The predictors are made by igc_linear_data() below.
+igc_lin <- function(lhs) {
+  terms <- "Difference * Strength + Strength:Effect + Difference:Strength:Effect"
+  stats::as.formula(
+    paste0(
+      lhs, " ~ ", terms, " + poly(ISI, 2, raw = TRUE) + ",
+      "(1 + ", terms, " | Participant) + (1 | Study)"
+    ),
+    env = globalenv()
+  )
+}
 
 
 igc_formulas <- list(
@@ -252,6 +275,29 @@ igc_formulas <- list(
       poutlier ~ 1 + (1 | Participant),
       family = cogmod::cogmod_lba2()
     )
+  },
+
+  # Linear DDM-5 (Study 2) --------------------------------------------------
+  # DDM-5, the model retained in Study 1 (AGENT.md 6.12), with linear effects
+  # instead of the t2() smooths (igc_lin above). Specified in
+  # analysis/3_linearmodels.qmd: the coding of strength (absolute value, with
+  # a slope per side, Effect = +-0.5, the sides meeting at zero strength), the
+  # range of stimuli, the ISI centred on its study's window, and the
+  # transformations of the predictors, which are the registry entry's
+  # (`linear`), not the formula's. Every effect varies by participant: 6 terms
+  # on each of five parameters, with their correlations.
+  lin_ddm5 = function() {
+    brms::bf(
+      igc_lin("RT | dec(Error)"),
+      igc_lin("boundary"),
+      igc_lin("bias"),
+      igc_lin("ndt"),
+      igc_lin("sigmadrift"),
+      sigmabias = 0,
+      sigmandt = 0,
+      poutlier ~ poly(ISI, 2, raw = TRUE) + (1 | Participant) + (1 | Study),
+      family = cogmod::cogmod_ddm()
+    )
   }
 )
 
@@ -401,8 +447,65 @@ igc_models <- list(
   gam_lba_ebbinghaus = list(
     illusion = "Ebbinghaus",
     formula = igc_formulas$gam_lba
+  ),
+
+  # Study 2: linear models ----------------------------------------------------
+  # `linear`: the range of stimuli fitted (difference from-to and the largest
+  # absolute strength, in raw units) and the transformations of the two
+  # predictors (names in igc_transforms). Untransformed first; the transformed
+  # variants are compared with it once fitted (3_linearmodels.qmd).
+  # The range is each illusion's reliable predictor space (plot_ranges in
+  # predictions.R: the extreme values holding less than 5% of the trials left
+  # out at each end; since 2026-11-25, before which Müller-Lyer started at 0.05,
+  # where its Study 1 surfaces did). A narrower one would be a subrange.
+
+  lin_ddm5_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$lin_ddm5,
+    linear = list(difference = c(0.045, 0.45), strength = 30,
+                  transform_difference = "identity", transform_strength = "identity")
   )
 )
+
+
+# Study 2's predictors --------------------------------------------------------
+# The transformations a `linear` entry can name
+igc_transforms <- list(identity = identity, sqrt = sqrt, log = log, log1p = log1p)
+
+# The data of a linear model, from the rows fit_model.R has read (one illusion,
+# with ISI_centre already set from every trial of each study, before any
+# subsetting). Keeps the stimuli in the entry's range and adds:
+#   Difference  the (transformed) difference, from -1 to 1 over the range
+#   Strength    the (transformed) absolute strength, from 0 to 1 over the range
+#   Effect      +0.5 conflicting, -0.5 facilitating, 0 with no illusion (the
+#               formula only has it multiplied by Strength, which is then 0, so
+#               its value there does not matter)
+#   ISI        its position in its study's window, from -1 to 1 (in steps of
+#               0.25 s from the window's centre); the raw value is kept as
+#               ISI_seconds
+#   Study       the study (Dataset)
+# The rescaling is over the entry's nominal range, not the values in the data,
+# so that a subset (a test on a few participants) has the same predictors.
+igc_linear_data <- function(data, linear) {
+  tol <- 1e-9
+  keep <- data$Illusion_Difference >= linear$difference[1] - tol &
+    data$Illusion_Difference <= linear$difference[2] + tol &
+    abs(data$Illusion_Strength) <= linear$strength + tol
+  data <- data[keep, ]
+  td <- igc_transforms[[linear$transform_difference]]
+  ts <- igc_transforms[[linear$transform_strength]]
+  if (is.null(td) || is.null(ts)) stop("unknown transformation in `linear`", call. = FALSE)
+  lo <- td(linear$difference[1])
+  hi <- td(linear$difference[2])
+  data$Difference <- 2 * (td(data$Illusion_Difference) - lo) / (hi - lo) - 1
+  data$Strength <- ts(abs(data$Illusion_Strength)) / ts(linear$strength)
+  data$Effect <- 0.5 * sign(data$Illusion_Strength)
+  if (is.null(data$ISI_centre)) stop("ISI_centre is not set", call. = FALSE)
+  data$ISI_seconds <- data$ISI
+  data$ISI <- (data$ISI - data$ISI_centre) / 0.25
+  data$Study <- data$Dataset
+  data
+}
 
 
 # Look one up, with an error that says what the alternatives are rather than

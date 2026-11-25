@@ -9,7 +9,9 @@
 #     IGC_MODELS_DIR/predictions/<model>_<illusion>.rds, and
 #   - 2_modelcomparison.qmd, which reads those files and only relabels and
 #     plots -- or, for a fit that has no predictions file yet, calls
-#     run_predictions() itself as a fallback.
+#     run_predictions() itself as a fallback, and
+#   - 3_linearmodels.qmd, which reads those of Study 1's DDM-5 and of Study
+#     2's linear models (lin_*), whose grid is make_linear_datagrid() below.
 #
 # What goes in here is what depends on the fit; what stays in the qmd is what
 # depends on taste (labels, orders, colours, ranges drawn). The one exception
@@ -129,17 +131,63 @@ model_illusion <- function(gam) {
   illusion
 }
 
-# The range of the space the curves and heatmaps are drawn over, per illusion
-# and in raw units: strength signed, difference absolute (see normalize_units).
-# An illusion not listed here is drawn over its full fitted range.
-# TODO: custom ranges for the other illusions
+# The reliable predictor space: the range the curves and heatmaps are drawn
+# over, per illusion and in raw units, strength signed and difference absolute
+# (see normalize_units). The rule (2026-11-25, the same for the three
+# illusions): at each end of each predictor, leave out the most extreme values
+# that together hold less than 5% of the illusion's trials, i.e. keep the
+# difference from its 5th to its 95th percentile and the absolute strength up
+# to its 95th percentile (quantile type 1, over every trial of the illusion).
+# What is left out is, in every illusion, the edge of the widest stimulus grid,
+# which only the Validation study used (~250 participants, ~4,000 trials per
+# level, against 10,000 to 27,000 elsewhere). Any threshold from 4% to 8% gives
+# the same space. 3_linearmodels.qmd ("The Reliable Predictor Space")
+# recomputes it from the data and stops if it differs from this list.
+#
+# The fits cover each illusion's whole range; only what is drawn is limited.
+# Until 2026-11-25 only Müller-Lyer had a range here (0.05-0.45 x +-30), and
+# the other two were drawn over their whole range. A prediction file made over
+# a wider range is cropped to this one when read (crop_to_plot_range()).
 plot_ranges <- list(
-  MullerLyer = list(strength = c(-30, 30), difference = c(0.05, 0.45))
+  MullerLyer = list(strength = c(-30, 30), difference = c(0.045, 0.45)),
+  VerticalHorizontal = list(strength = c(-45, 45), difference = c(0.03, 0.30)),
+  Ebbinghaus = list(strength = c(-1.5, 1.5), difference = c(0.05, 0.50))
 )
 
+# Whether raw (difference, strength) points are within an illusion's
+# plot_ranges, with a tolerance for grid values computed in floating point
+in_plot_range <- function(illusion, difference, strength) {
+  r <- plot_ranges[[illusion]]
+  if (is.null(r)) return(rep(TRUE, length(difference)))
+  tol <- 1e-6
+  abs(difference) >= r$difference[1] - tol & abs(difference) <= r$difference[2] + tol &
+    strength >= r$strength[1] - tol & strength <= r$strength[2] + tol
+}
+
+# The rows of a prediction file's curves or heatmaps within plot_ranges. A
+# GAM's are on the Z scale, a linear model's in raw units as well.
+crop_to_plot_range <- function(df, illusion) {
+  if (is.null(df) || nrow(df) == 0) return(df)
+  raw <- if ("Illusion_Difference" %in% names(df)) df else restore_units(df, illusion)
+  df[in_plot_range(illusion, raw$Illusion_Difference, raw$Illusion_Strength), , drop = FALSE]
+}
+
+# Whether a file's grid, made over `made` (its meta$plot_range; NULL for the
+# whole range), covers the current plot_ranges of its illusion
+covers_plot_range <- function(made, illusion) {
+  now <- plot_ranges[[illusion]]
+  if (is.null(made)) return(TRUE)
+  if (is.null(now)) return(FALSE)
+  tol <- 1e-6
+  made$difference[1] <= now$difference[1] + tol && made$difference[2] >= now$difference[2] - tol &&
+    made$strength[1] <= now$strength[1] + tol && made$strength[2] >= now$strength[2] - tol
+}
+
 # Prediction grid of n_strength x n_difference points over that range,
-# converted to the Z scale the models were fitted on
+# converted to the Z scale the models were fitted on. A linear model of Study 2
+# has predictors of its own, and a grid of its own (below).
 make_datagrid <- function(gam, n_strength = 31, n_difference = 5) {
+  if (!is.null(attr(gam, "linear"))) return(make_linear_datagrid(gam, n_strength, n_difference))
   illusion <- model_illusion(gam)
   range <- plot_ranges[[illusion]]
   if (is.null(range)) {
@@ -155,6 +203,87 @@ make_datagrid <- function(gam, n_strength = 31, n_difference = 5) {
   insight::get_datagrid(gam, by = list(Illusion_DifferenceZ = difference,
                                        Illusion_StrengthZ = strength))
 }
+
+# The linear models of Study 2 (lin_* in models.R) are fitted on their own
+# predictors (igc_linear_data() there): the difference rescaled from -1 to 1
+# over the range fitted, the absolute strength from 0 to 1, the side of the
+# illusion as Effect = +-0.5 (which the formula has only multiplied by the
+# strength), and the ISI. A fit does not know its range or
+# transformations: like the illusion, they are attached by whoever loads it,
+# as attr(m, "linear") (the registry entry's `linear`, by predict_model.R).
+#
+# Its grid has the same points in raw units as the GAM's of the same illusion,
+# so that the two can be drawn together, restricted to the range the linear
+# model was fitted on. Each strength is predicted on its own side, and zero on
+# both, so its curves are two half-lines, one per side, that meet at zero
+# strength. (In the fits of the coding before 2026-11-25, with Effect and
+# Difference:Effect, the model jumped there by the Effect coefficient, and the
+# two half-lines need not meet.) The ISI is at the centre of its study's window
+# (0), and the participant and the study at the population level (NA), as the
+# GAMs' participant. Needs igc_linear_data(), so models.R sourced first.
+make_linear_datagrid <- function(gam, n_strength = 31, n_difference = 5) {
+  illusion <- model_illusion(gam)
+  linear <- attr(gam, "linear")
+  if (!exists("igc_linear_data", mode = "function")) {
+    stop("make_linear_datagrid() needs igc_linear_data(): source models.R first.", call. = FALSE)
+  }
+  # The GAM's grid (make_datagrid() above), in raw units
+  range <- plot_ranges[[illusion]]
+  if (is.null(range)) {
+    difference <- restore_units(data.frame(Illusion_DifferenceZ = seq(-1, 1, length.out = n_difference),
+                                           Illusion_StrengthZ = 0), illusion)$Illusion_Difference
+    strength <- restore_units(data.frame(Illusion_DifferenceZ = 0,
+                                         Illusion_StrengthZ = seq(-1, 1, length.out = n_strength)),
+                              illusion)$Illusion_Strength
+  } else {
+    difference <- seq(range$difference[1], range$difference[2], length.out = n_difference)
+    strength <- seq(range$strength[1], range$strength[2], length.out = n_strength)
+  }
+  # Coded as the fit's data were. igc_linear_data() drops what is outside the
+  # range fitted. Rounded before unique(): mirrored points of a seq() can
+  # differ in their last bits, and would then be predicted twice.
+  raw <- expand.grid(Illusion_Difference = difference,
+                     Illusion_Strength = unique(round(abs(strength), 10)))
+  raw$ISI <- 0
+  raw$ISI_centre <- 0
+  raw$Dataset <- NA
+  coded <- igc_linear_data(raw, linear)
+  if (nrow(coded) == 0) stop("No point of the grid is in the range of the linear model.", call. = FALSE)
+
+  grid <- insight::get_datagrid(gam, by = list(Difference = sort(unique(coded$Difference)),
+                                               Strength = sort(unique(coded$Strength)),
+                                               Effect = c(-0.5, 0.5),
+                                               ISI = 0))
+  # The raw values of the coded ones, for restore_linear_units()
+  attr(grid, "raw_units") <- list(
+    difference = unique(coded[c("Difference", "Illusion_Difference")]),
+    strength = unique(data.frame(Strength = coded$Strength, Illusion_Strength = abs(coded$Illusion_Strength)))
+  )
+  grid
+}
+
+# The raw units of a linear model's predictions, from the grid they were made
+# on: Illusion_Difference, and Illusion_Strength signed by its side (Effect).
+# The predictions keep the coded predictors too, and Effect tells the two
+# sides of zero strength apart. Values are matched to the nearest grid value,
+# which they are copies of.
+restore_linear_units <- function(pred, datagrid) {
+  units <- attr(datagrid, "raw_units")
+  if (is.null(units)) stop("The grid has no raw units: not a make_linear_datagrid() grid.", call. = FALSE)
+  nearest <- function(x, table) {
+    i <- vapply(x, function(v) which.min(abs(table - v)), integer(1))
+    if (any(abs(table[i] - x) > 1e-8)) stop("A prediction is not on the grid.", call. = FALSE)
+    i
+  }
+  pred$Illusion_Difference <- units$difference$Illusion_Difference[nearest(pred$Difference, units$difference$Difference)]
+  pred$Illusion_Strength <- sign(pred$Effect) *
+    units$strength$Illusion_Strength[nearest(pred$Strength, units$strength$Strength)]
+  pred
+}
+
+# "GAM" for the Study 1 models, "Linear" for those of Study 2, in the Type
+# column of the curves
+model_type <- function(gam) if (is.null(attr(gam, "linear"))) "GAM" else "Linear"
 
 # A plain data frame. modelbased's outputs carry attributes (the call, the
 # model's data, ...) that would otherwise be saved into the file with them.
@@ -375,9 +504,11 @@ compute_curves <- function(gam, s) {
   })
   iters <- do.call(cbind, lapply(runs, \(r) as.matrix(r[, startsWith(names(r), "iter_")])))
   pred <- runs[[1]][, !startsWith(names(runs[[1]]), "iter_")]
-  for (r in runs[-1]) stopifnot(identical(r$Component, pred$Component),
-                                identical(r$Illusion_StrengthZ, pred$Illusion_StrengthZ),
-                                identical(r$Illusion_DifferenceZ, pred$Illusion_DifferenceZ))
+  # Every call on the same rows in the same order: the component and the
+  # grid's predictors (the Z-scored two of a GAM, the coded ones of a linear
+  # model)
+  keys <- intersect(c("Component", names(datagrid)), names(pred))
+  for (r in runs[-1]) for (k in keys) stopifnot(identical(r[[k]], pred[[k]]))
   rm(runs)
   if (n_calls > 1) {
     pred$Predicted <- rowMeans(iters)
@@ -386,7 +517,7 @@ compute_curves <- function(gam, s) {
     if ("CI_high" %in% names(pred)) pred$CI_high <- apply(iters, 1, stats::quantile, probs = 0.975, names = FALSE)
   }
   pred$Parameter <- ifelse(pred$Component == "response", "Error Rate", "Mean RT")
-  pred$Type <- "GAM"
+  pred$Type <- model_type(gam)
   pred$Component <- NULL
   pred$Row <- NULL
 
@@ -413,15 +544,18 @@ compute_curves <- function(gam, s) {
 
   # Add the predictions for the parameters of the model itself
   params <- predict_parameters(gam, datagrid, cores = s$cores)
-  params$Type <- "GAM"
-  rbind(pred, params[, names(pred)])
+  params$Type <- model_type(gam)
+  out <- rbind(pred, params[, names(pred)])
+  # A linear model's in raw units too (a GAM's are restored by the qmd)
+  if (is.null(attr(gam, "linear"))) out else restore_linear_units(out, datagrid)
 }
 
 # The same parameters as the curves, but over the full 2-D grid of illusion
 # strength x illusion difference rather than five difficulty levels
 compute_heatmaps <- function(gam, s) {
   datagrid <- make_datagrid(gam, n_strength = s$heatmap_n, n_difference = s$heatmap_n)
-  predict_parameters(gam, datagrid, cores = s$cores)
+  out <- predict_parameters(gam, datagrid, cores = s$cores)
+  if (is.null(attr(gam, "linear"))) out else restore_linear_units(out, datagrid)
 }
 
 
@@ -503,6 +637,9 @@ run_predictions <- function(m, name, fit_file = NULL, settings = list()) {
     # What the grid was built over, so the qmd can tell when plot_ranges has
     # changed since
     plot_range = plot_ranges[[model_illusion(m)]],
+    # A linear model's range and transformations (NULL for a GAM). Added
+    # without a version bump: nothing reads it from a GAM's file.
+    linear = attr(m, "linear"),
     packages = vapply(c("brms", "cogmod", "modelbased", "insight"),
                       \(p) as.character(utils::packageVersion(p)), character(1)),
     fit_brms = fit_brms,

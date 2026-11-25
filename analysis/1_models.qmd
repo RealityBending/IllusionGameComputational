@@ -34,7 +34,7 @@ igc_priors_version <- "1"
 # Model and illusion from the file name, <model>[_<illusion lowercase>]_<Illusion>.rds
 model_labels <- c(gam_lnr = "LNR", gam_lnr6 = "LNR-6", gam_ddm4 = "DDM-4", gam_ddm5 = "DDM-5",
                   gam_rdm = "RDM", gam_rdm5 = "RDM-5", gam_lba = "LBA")
-model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#212121", "DDM-4" = "#FB8C00", "DDM-5" = "#6D4C41",
+model_colors <- c("LNR" = "#1E88E5", "LNR-6" = "#0D47A1", "DDM-4" = "#FB8C00", "DDM-5" = "#B71C1C",
                   "RDM" = "#43A047", "RDM-5" = "#1B5E20", "LBA" = "#8E24AA")
 illusions <- c("MullerLyer", "VerticalHorizontal", "Ebbinghaus")
 

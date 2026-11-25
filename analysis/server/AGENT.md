@@ -350,7 +350,7 @@ grouping factor), not `gp()` terms, and only for fits with
 | --- | --- |
 | `2_modelcomparison.qmd` | **no.** It reads prediction files only. All 11 in `analysis/models/predictions/` are format 2 and were made on the cluster with brms 2.21.0 (their `$meta$packages`). The local fallback, `run_predictions()`, refuses a brms other than the fit's. |
 | `combine_model.R` (`loo`) | **no.** It runs on the cluster under 2.21.0. |
-| `3_analysis.qmd` | **yes:** `estimate_relation()` at ~116 (the density plots) and ~307 (the heatmaps), on whatever fit it loads. It currently reads `models/gam_lnr_muller.rds`, which no longer exists, and nothing has been rendered from it, so no wrong output exists yet. Before reviving it, move its predictions into `predictions.R`, or patch the fit right after `readRDS()`. |
+| `4_analysis.qmd` (`3_analysis.qmd` until 2026-11-24) | **yes:** `estimate_relation()` at ~116 (the density plots) and ~307 (the heatmaps), on whatever fit it loads. It currently reads `models/gam_lnr_muller.rds`, which no longer exists, and nothing has been rendered from it, so no wrong output exists yet. Before reviving it, move its predictions into `predictions.R`, or patch the fit right after `readRDS()`. |
 | `server/lba_modes/` | **no.** Computed by hand from `standata(m)` and validated against `lp__` (`lba_decompose.R`). |
 | `0_preprocessing.qmd` | **no.** Its `estimate_relation()` calls are on `mgcv::bam` models fitted in the same session. |
 | summaries of the draws (`summary()`, `fixef()`, `as_draws_*()`, Rhat, `lp__`) | **no.** No basis is involved. |
@@ -2390,6 +2390,19 @@ finished shards' `REPORT` lines in `node_history.md`):
   VPN dropped). Running shards 3-4 sit within ~50 (-40,989 to -41,037).
   Shard 3 ~5.2 days to go against 6.3 left.
 
+**2026-11-25: `gam_rdm_verticalhorizontal` processed.** Shard 4 made the
+wall (saved 2026-11-24 16:53). Combined as 11838994 (43 min on
+general-01), predicted (11838997) and prior-checked (11839000) behind it,
+pulled at ~10:25 and checked by md5; the laptop's priors file, until then a
+copy of the stanli one, is now the cmdstanr one. **Converged and matches its
+stanli twin:** 8 chains in one mode (`lp__` -19,285 to -19,311), population
+Rhat 1.007, all ≤ 1.010, bulk ESS ≥ 929, 0 divergent, treedepth at the cap on
+every draw. `elpd_loo` -8,931.2 (SE 835) against stanli -8,932.5; the curves
+agree within 0.006 on every parameter. A chain took 6.05 days on average (max
+7.75) against stanli's 2.01, a third of the time rather than 6.9's 0.57-0.72,
+so the cost in Table 1 of the paper triples for this cell. Only RDM
+Ebbinghaus (11698242) is still a stand-in.
+
 ### 6.12 Study 1 closed, DDM-5 retained (2026-11-24)
 
 **The model comparison is closed** (user's decision, 2026-11-24): most models
@@ -2406,7 +2419,8 @@ files (`models/predictions/`). In brief:
 - DDM-5 has the best ELPD among converged models on ML (+2,244 ± 181 over LNR)
   and Ebbinghaus (+6,541 ± 294 over RDM-5), but not on VH, where LNR-6
   (+7,032 ± 189) and LNR (+4,115 ± 192) beat it.
-- Total sampling of the 20 completed fits: ~114,500 core-hours.
+- Total sampling of the 20 completed fits: ~114,500 core-hours (120,700
+  once the cmdstanr RDM VH replaced its stanli stand-in, 2026-11-25).
 
 **What this rules out:** no further Study 1 variant is fitted: no
 `sigmabias ~ 1` RDM, no simplified LBA or LNR-6, no LNR reparametrisation
@@ -2453,6 +2467,231 @@ not a Study 1 variant, so 6.12 does not rule it out.
   then supplies its convergence only). Then update the paper: Estimation
   (one fit sampled with stanli), the counts (21 fits, 20 completed, 13
   converged), the LNR-6 sentences under Convergence, and the note of Figure 2.
+
+### 6.14 Study 2: `lin_ddm5`, and a test in stanli 0.31.0 with nutpie (2026-11-24)
+
+**The model.** `lin_ddm5` (`models.R`) is DDM-5 with linear effects instead
+of the `t2()` smooths, specified in `analysis/3_linearmodels.qmd`:
+`Difference * Strength * Effect + poly(ISI, 2, raw = TRUE)` on the five
+parameters, every one of those effects varying by participant (8 terms per
+parameter, with their correlations; since 2026-11-25 without `Effect` and
+`Difference:Effect`, 6 terms, §6.15: the test below has the old coding), an
+intercept varying by study, and
+`poly(ISI, 2, raw = TRUE) + (1 | Participant) + (1 | Study)` on `poutlier`.
+The predictors come from `igc_linear_data()` and the registry entry's
+`linear` field:
+- strength in absolute value, with `Effect` its side (+0.5 / −0.5, 0 with no
+  illusion);
+- the range of stimuli (Müller-Lyer 0.05–0.45 x ±30, what its Study 1
+  surfaces cover; Vertical-Horizontal and Ebbinghaus whole; since §6.16 the
+  reliable predictor space of each, and the test below had the old range);
+- the ISI centred on its study's window (`fit_model.R` sets `ISI_centre` from
+  every trial of a study before any subsetting), from −1 to 1. ISI is a
+  foreperiod, and its effect is within the window.
+
+The transformations are named in the entry. The untransformed model is
+fitted first; the best transformation per illusion, and `log1p` of the
+difference on all three, are variants to fit and compare after it.
+
+Two changes to `fit_model.R`'s defaults that leave every older model as it
+was:
+- the flat-slope prior loop no longer skips `poutlier`. It had no `b` row
+  before Study 2, so the loop did nothing for it. cogmod puts normal(0, 0.2)
+  on its ISI slopes, which the loop keeps.
+- `IGC_PARTICIPANT_SEED` draws `IGC_NPARTICIPANTS` at random over the
+  studies. Without it the first N are taken, as before (all from Validation).
+
+**The sampler.** stanli 0.31.0 (released 2026-11-24) has
+`stanli::sample_nutpie()`: nuts-rs through nutpieR, driving the stanli
+runtime over BridgeStan, with an optional low-rank mass matrix
+(`IGC_SAMPLER=nutpie`, `IGC_NUTPIE_ADAPTATION=low_rank|diag`). nutpie runs
+each chain on one thread: brms's `reduce_sum` is not parallelised under it,
+which matters at full data, not for a test. Its inits are `cogmod_inits()`, as
+they are (constrained, one call per chain). The shard records
+`m$stanli$sampler` (`nuts` or `nutpie-<adaptation>`), and the reuse check
+refuses a shard of another sampler.
+
+**Installed** like 0.25.0 (6.10), never through `stanli_install()`:
+- stanli 0.31.0 and its linux-x86_64 runtime, and the nutpieR 1.9.2 source
+  (r-universe), were fetched into `cogmod_stanli/src_0.31.0/` and checked
+  against their sha256 (`SHA256SUMS` there). The runtime is unpacked in
+  `runtime_v0.31.0/`.
+- `src_0.31.0/install_stanli_0.31.0.sh` builds both into `R_libs_0.31.0`.
+  nutpieR is Rust, with `CARGO_HOME` in `cogmod_stanli/cargo_home`. Its
+  DESCRIPTION asks for rustc >= 1.85, but its `nuts-derive` dependency uses
+  `if let` chains, stable only from 1.88: the first try (job 11837232, module
+  `Rust/1.86.0-GCCcore-13.3.0`) failed on that, and its script is kept as
+  `install_stanli_0.31.0_try1_rust186.sh`. The second (job 11837239) builds
+  stanli with the R module alone (GCCcore 12.3.0, as the fit jobs), then
+  loads `Rust/1.88.0-GCCcore-14.3.0` for nutpieR only (loading it swaps
+  GCCcore, and OpenSSL 1.1 for 3), and checks both samplers on a toy model
+  with the R module alone, as a fit job sees them. **Both installed.** The
+  check failed only on its init, and job 11837250 (`nutpie_init_diag.sh`) found
+  why: nutpie rejects a starting point where a gradient component is exactly 0
+  ("Invalid initial point"; there μ = 0, σ = 1 on the toy model). Every other
+  init works, including a function of the chain, as `fit_model.R` passes
+  `cogmod_inits()`, whose jitter keeps it off such points. All variants
+  recover the toy posterior, and the stanfit has the sampler parameters
+  `report_fit()` reads. `get_elapsed_time()` gives NA for warmup, as
+  documented.
+
+**The test (job 11837255).** `lin_ddm5_mullerlyer`, 50 participants drawn with
+seed 2026 (6 studies, 6,442 trials), nutpie low-rank, 4 chains in one task,
+1000 warmup + 1000 draws, `long` zen5, 4 CPUs, 16G, 2 days, into
+`IGComputational/test_lin_ddm5_20261124_nutpie/`:
+
+```bash
+MSYS_NO_PATHCONV=1 IGC_BACKEND=stanli \
+  IGC_STANLI_LIB=/mnt/lustre/users/psych/dmm56/cogmod_stanli/R_libs_0.31.0 \
+  IGC_STANLI_RUNTIME=/mnt/lustre/users/psych/dmm56/cogmod_stanli/runtime_v0.31.0/libstanli.so \
+  IGC_SAMPLER=nutpie IGC_NUTPIE_ADAPTATION=low_rank IGC_NPARTICIPANTS=50 IGC_PARTICIPANT_SEED=2026 \
+  IGC_CHAINS=4 IGC_WARMUP=1000 IGC_SAMPLES=1000 \
+  IGC_MODELS_DIR=/mnt/lustre/users/psych/dmm56/IGComputational/test_lin_ddm5_20261124_nutpie \
+  ./hpc fit lin_ddm5_mullerlyer --array=1 --partition=long --constraint=amd_zen5 \
+    --cpus-per-task=4 --mem=16G --time=2-00:00:00
+```
+
+The user's fallback, if nutpie does not work: stanli's own NUTS
+(`IGC_SAMPLER=nuts`), on the same 0.31.0.
+
+**Result (2026-11-25).** Done in 1h44m on rtx-01 (22:28 to 00:12), 1.7 GB.
+REPORT: treedepth 6.0, step size 0.099, 26 divergences (0.65%, 19 of them in
+chain 1), max Rhat 1.018, min neff ratio 0.071, 2,336 parameters. Chains 1-3
+finished by about 1h14. Chain 4 spent about an hour in its first ~200 warmup
+iterations at ~1,000 gradients per draw, the cold-start transient, and set the
+wall. nutpie works: the NUTS fallback was not needed. Not yet compared with
+stanli NUTS on the same participants.
+
+**Predictions of a linear model.** `predictions.R` builds a linear model's
+grid with `make_linear_datagrid()`: the GAM's points in raw units (so the two
+can be drawn together), coded by `igc_linear_data()`, each strength on its own
+side and zero on both (the test's coding jumps there by `Effect`; since §6.15
+the two sides meet), the ISI at the
+centre of its study's window, participant and study at the population level.
+The curves and heatmaps then carry `Illusion_Difference` and
+`Illusion_Strength` in raw units (`restore_linear_units()`), and `Type` is
+`"Linear"`. `predict_model.R` attaches the entry's `linear` as
+`attr(m, "linear")`, as it does the illusion. No version bump: a GAM's file
+is unchanged. The test was combined (11838915, 1 min: loo with 56 of 6,442
+Pareto k > 0.7) and predicted (11838916) in its own directory, with the fit's
+environment plus small requests (combine asks for 320G by default):
+
+```bash
+MSYS_NO_PATHCONV=1 IGC_BACKEND=stanli IGC_STANLI_LIB=... IGC_STANLI_RUNTIME=... \
+  IGC_MODELS_DIR=/mnt/lustre/users/psych/dmm56/IGComputational/test_lin_ddm5_20261124_nutpie \
+  ./hpc combine lin_ddm5_mullerlyer --mem=24G --time=02:00:00
+# then ./hpc predict lin_ddm5_mullerlyer --dependency=afterok:<combine> --mem=24G --time=03:00:00
+```
+
+The shard and the prediction file are pulled into
+`analysis/models/test_lin_ddm5_20261124_nutpie/` (`IGC_LOCAL_MODELS`), which
+`3_linearmodels.qmd` reads for its figure of the linear approximation over
+DDM-5 (`paper/figures/study2_approximation.png`). That figure replaced Study
+1's figure of DDM-5 (`study1_ddm5.png`, deleted) in the manuscript on
+2026-11-25, as the link between the two studies.
+- `./hpc` still defaults to 0.25.0. A run on 0.31.0 passes
+  `IGC_STANLI_LIB` and `IGC_STANLI_RUNTIME`.
+
+### 6.15 Study 2: the two sides of the illusion meet at zero strength (2026-11-25)
+
+**The change.** `igc_lin` (`models.R`) is now
+`Difference * Strength + Strength:Effect + Difference:Strength:Effect`, on
+the five parameters and in their participant terms: the full product of 6.14
+without `Effect` and `Difference:Effect`. `Effect` (±0.5) only enters
+multiplied by `Strength`, so each side keeps its own slope and the two meet
+at zero strength, with a kink there. Its value on no-illusion trials no longer
+matters (it is multiplied by 0). 6 participant terms per parameter instead of
+8. `igc_linear_data()` is unchanged. `Strength:Effect` is half the signed
+strength, so the model is Study 1's signed coding plus a V in |strength|.
+Decided by the user; no transformation yet (the untransformed model first,
+as before).
+
+**Why.** The 50-participant test of 6.14 (old coding) drew a jarring jump at
+zero strength. At difference 0.10, facilitating vs conflicting end: boundary
+2.17 vs 1.45, drift variability 1.11 vs 0.46, error rate 2% vs 17%. The same
+coding regressed on the Study 1 surfaces implies only 2.14 vs 1.88 and 1.12
+vs 0.76: the fit's gap was 2-3 times what the curvature needs (wide
+intervals at 50 participants). And a weak illusion on either side is nearly
+the same stimulus, so no parameter can jump between them: the gap only stood
+in for the steep rise of the surfaces at weak strengths.
+
+**Cost and what gives it back** (`3_linearmodels.qmd`, worst-parameter R² at
+the stimuli, gap → no gap, untransformed): Müller-Lyer .936 → .917,
+Vertical-Horizontal .903 → .859 (the bias, the one surface that wants a gap),
+Ebbinghaus .868 → .844. A concave strength transformation recovers it on
+Müller-Lyer: no gap with √|strength| is .935. The transformation search now
+runs on the coding without a gap, and its best per illusion changed:
+√|strength| on Müller-Lyer, √difference on Vertical-Horizontal, and
+log(difference) with √|strength| on Ebbinghaus (was √difference), gains
+0.019-0.035. On Ebbinghaus that one costs the drift 0.03 of R².
+
+**Not tried.** Coding strength 0 as "conflicting" (two values of `Effect`)
+keeps the gap: the conflicting line then runs through the no-illusion trials
+(1% of the Müller-Lyer trials), and the facilitating end is as before. A
+tight prior on `Effect` would only half-close the gap, and a smooth step
+(`tanh(S / k)`) adds an arbitrary width.
+
+**What follows.** The figure of the linear approximation still shows the old
+test, with its gap (noted in `3_linearmodels.qmd` and the manuscript). Re-run
+the 50-participant test with the new formula, in its own `IGC_MODELS_DIR`
+(e.g. `test_lin_ddm5_20261125_nutpie`), then point `linear_files` in the qmd
+at it.
+
+### 6.16 The reliable predictor space, for every figure and the linear fits (2026-11-25)
+
+**The rule** (the user's: one rule for the three illusions, on a share of
+trials). At each end of each predictor, the most extreme values that together
+hold less than 5% of an illusion's trials are left out: the difference from
+its 5th to its 95th percentile, the absolute strength up to its 95th (quantile
+type 1, every trial). Any threshold from 4% to 8% gives the same space.
+
+| Illusion | Difference | Strength | Trials kept |
+|---|---|---|---|
+| Müller-Lyer | 0.045–0.45 | ±30 | 94.8% |
+| Vertical-Horizontal | 0.03–0.30 | ±45 | 96.3% |
+| Ebbinghaus | 0.05–0.50 | ±1.5 | 95.6% |
+
+**Why.** Three stimulus designs: Validation (256 participants) the widest
+grid, EEG + Reliability a narrower one, the four later studies the main one.
+Every value left out comes from Validation alone (~250 participants, ~4,000
+trials per level against 10,000-27,000 elsewhere): the Müller-Lyer differences
+0.04 and 0.46 and strengths 35/42/49, the Vertical-Horizontal strengths
+47.5/57/66.5, the Ebbinghaus differences 0.55/0.70 and strengths 1.74/2.03.
+The Study 1 GAMs have no study term, so their edges mix in whatever was
+particular to that study. Until now only Müller-Lyer was limited (0.05-0.45 x
+±30, by chance almost this space, minus the 0.045 level that four studies
+used: 26,941 trials); the other two were drawn, and to be fitted, over their
+whole range.
+
+**Where it lives.** `plot_ranges` in `predictions.R` is this space for the
+three illusions (it was Müller-Lyer only). `3_linearmodels.qmd` ("The
+Reliable Predictor Space") recomputes it from the data and stops if the two
+differ. Prediction files made over a wider range are cropped to it when read
+(`crop_to_plot_range()`, in `load_predictions()` of `2_modelcomparison.qmd`
+and in `3_linearmodels.qmd`), so every Study 1 heatmap and curve and the
+Study 2 figure use it now, without re-predicting. A file that does not cover
+it all prints a message (`covers_plot_range()`; the old Müller-Lyer files
+start at 0.05). The GAM fits themselves are unchanged (every trial).
+
+**The linear fits** are over the whole reliable space: `lin_ddm5_mullerlyer`
+is now 0.045-0.45 x ±30 (307,686 trials, was 280,745), and the qmd's
+`linear_ranges` is `plot_ranges` for all three. A model fitted on a narrower
+subrange would show in the figure as dashed lines stopping short of the edges.
+The linearity numbers changed with the ranges (worst R² of the coding
+retained: .887 / .893 / .874; best transformations now log1p(d) + √|S| on
+Müller-Lyer, √d on Vertical-Horizontal, √d + √|S| on Ebbinghaus). The
+Müller-Lyer ones are provisional: its surfaces start at 0.05, so the 0.045
+stimuli take them extended linearly by half a grid step, and that is where the
+R² drops (.917 without them).
+
+**To do on the cluster** (after `./hpc push`): re-predict over the new
+`plot_ranges`. `gam_ddm5` on the three illusions first (the Study 2 figure,
+and its linearity numbers; Ebbinghaus then has 9 difficulty curves again, not
+the 6 that survive cropping), then the other Study 1 models for their
+heatmaps at full resolution and Müller-Lyer's 0.045 row. The linear test is
+re-predicted when it is re-run (6.15). A last-minute `curves_strength` /
+±49 setting for the Müller-Lyer curves was written and removed the same day:
+the figure's axis is this space, not the whole range.
 
 ---
 

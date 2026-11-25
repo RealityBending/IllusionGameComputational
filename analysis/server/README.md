@@ -347,6 +347,11 @@ by its name in capitals:
 IGC_PRED_CURVES_ITERATIONS=2000 IGC_PRED_PPC_NDRAWS=1000 ./hpc predict gam_lnr_mullerlyer
 ```
 
+The grid is `plot_ranges`, each illusion's **reliable predictor space** (since
+2026-11-25: at each end of each predictor, the values holding less than 5% of
+the trials left out; `AGENT.md` §6.16). The qmds crop a file made over a wider
+range to it, and say so when a file does not cover all of it.
+
 The job needs `modelbased`, which `install_pkgs.R` has installed only since
 predictions moved to the cluster (2026-09-25): run `./hpc install` once. If
 `modelbased` refuses to load because an older `insight` / `datawizard` /
@@ -382,7 +387,7 @@ size changed is redone, `IGC_PRIORS_FORCE=1` redoes them all.
 `fit_model.R` fits the entry named by `IGC_MODEL`, `combine_model.R` merges the
 same one, and `./hpc` reads the *names* straight out of the file (which is why
 the declaration lines must stay in the form `  <name> = list(`). `./hpc models`
-lists all 22.
+lists all of them (26 on 2026-11-24).
 
 **Renamed on 2026-10-13.** The MullerLyer models used to be the bare family
 name (`gam_lnr`, `gam_lba`, ...). They now carry `_mullerlyer` like every
@@ -405,6 +410,21 @@ the new `gam_lnr_mullerlyer_MullerLyer.rds`. The formulas did not change
 
 Every smooth is `t2(Illusion_DifferenceZ, Illusion_StrengthZ, k = c(5, 5), bs =
 c("cr", "cr")) + (1 | Participant)`; `poutlier` is `1 + (1 | Participant)`.
+
+**Study 2's linear models** (`lin_*`, from 2026-11-24) are specified in
+`analysis/3_linearmodels.qmd`. `lin_ddm5` is DDM-5 with `Difference * Strength
++ Strength:Effect + Difference:Strength:Effect + poly(ISI, 2, raw = TRUE) +
+(1 + Difference * Strength + Strength:Effect + Difference:Strength:Effect |
+Participant) + (1 | Study)` on its five parameters, and `poly(ISI, 2, raw =
+TRUE) + (1 | Participant) + (1 | Study)` on `poutlier`. `Effect` only enters
+multiplied by `Strength`, so the two sides of the illusion each have a slope
+and meet at zero strength (since 2026-11-25, `AGENT.md` §6.15). Its registry
+entries carry a `linear` field (the range of stimuli and the transformations),
+from which `igc_linear_data()` in `models.R` makes the predictors: strength in
+absolute value, `Effect` its side (+0.5 conflicting, -0.5 facilitating, 0
+none), and the ISI centred on its study's window. Only
+`lin_ddm5_mullerlyer` (untransformed, difference 0.045–0.45 x strength ±30, its reliable predictor space) is
+defined so far, for a 50-participant test (`AGENT.md` §6.14).
 Two modelling choices in that table are worth knowing about before reading any
 output:
 
@@ -554,6 +574,17 @@ via `--output/--error/--chdir/--export`, and the scripts read them from
 | `IGC_USERS_DIR` | `/mnt/lustre/users/$IGC_HPC_GROUP/$IGC_HPC_USER/IGComputational` |
 | `IGC_SCRATCH_DIR` | `/mnt/lustre/scratch/$IGC_HPC_GROUP/$IGC_HPC_USER/IGComputational` |
 | `IGC_MODELS_DIR` | `$IGC_USERS_DIR/models` |
+| `IGC_LOCAL_MODELS` | `analysis/models` (`analysis/models_stanli` under `IGC_BACKEND=stanli`): where `./hpc pull` puts what it fetches |
+
+A test run pulled back to the laptop goes in a directory of its own too, such
+as `analysis/models/test_<name>/`, which the qmds' non-recursive reads of
+`models/` do not see. Windows' `scp` needs that path in Windows form when
+`MSYS_NO_PATHCONV=1` is set (which a remote path in `IGC_MODELS_DIR` needs):
+
+```bash
+MSYS_NO_PATHCONV=1 IGC_MODELS_DIR=/mnt/lustre/users/psych/dmm56/IGComputational/test_<name> \
+  IGC_LOCAL_MODELS="$(cygpath -m "$PWD/../models")/test_<name>" ./hpc pull predictions
+```
 
 `IGC_HPC_USER` and `IGC_HPC_GROUP` rewrite all four paths at once, which is
 what makes a second account cheap — see the next section. Note it changes the
@@ -653,7 +684,10 @@ the script default.
 
 | variable | default | purpose |
 | --- | --- | --- |
-| `IGC_NPARTICIPANTS` | `all` | subset size for tests, e.g. `30` |
+| `IGC_NPARTICIPANTS` | `all` | subset size for tests, e.g. `30` (the first N, all from one study) |
+| `IGC_PARTICIPANT_SEED` | unset | with `IGC_NPARTICIPANTS`: draw the N at random with this seed, over every study |
+| `IGC_SAMPLER` | `nuts` | with `IGC_BACKEND=stanli`: `nutpie` samples with nutpie (stanli >= 0.31.0 and nutpieR, `AGENT.md` §6.14) |
+| `IGC_NUTPIE_ADAPTATION` | `low_rank` | nutpie's mass matrix: `low_rank` or `diag` |
 | `IGC_WARMUP` | `1500` | warmup iterations (1000 until 2026-10-13) |
 | `IGC_SAMPLES` | `1000` | post-warmup draws per chain (500 until 2026-10-09) |
 | `IGC_CHAINS` | `2` | chains per array task; threads per chain is `cpus / chains` |

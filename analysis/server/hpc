@@ -114,7 +114,10 @@ COGMOD_REF="${IGC_COGMOD_REF:-dev}"
 FILE_REFIT="${IGC_FILE_REFIT:-never}"
 
 # models_stanli/ for IGC_BACKEND=stanli, whose fits have the production names.
-LOCAL_MODELS="${HERE}/../models${BACKEND_SUFFIX}"
+# A test run (its own IGC_MODELS_DIR) is pulled into a directory of its own
+# too, with IGC_LOCAL_MODELS, e.g. analysis/models/test_<name>/: models/ is
+# read non-recursively, so a subdirectory stays out of the comparison.
+LOCAL_MODELS="${IGC_LOCAL_MODELS:-${HERE}/../models${BACKEND_SUFFIX}}"
 
 # Prefer Windows OpenSSH when present (Git Bash's ssh also works).
 if [ -x /c/Windows/System32/OpenSSH/ssh.exe ]; then
@@ -282,7 +285,9 @@ submit_per_model() {
   #   IGC_NPARTICIPANTS=30 IGC_WARMUP=300 ./hpc fit gam_lnr_mullerlyer
   #   IGC_CRITERION=waic IGC_CRITERION_NDRAWS=1500 ./hpc combine gam_lnr_mullerlyer
   local extra="" v val
-  for v in IGC_NPARTICIPANTS IGC_WARMUP IGC_SAMPLES IGC_CHAINS IGC_COGMOD_MIN \
+  #   IGC_BACKEND=stanli IGC_SAMPLER=nutpie IGC_PARTICIPANT_SEED=2026 ./hpc fit ...
+  for v in IGC_NPARTICIPANTS IGC_PARTICIPANT_SEED IGC_WARMUP IGC_SAMPLES IGC_CHAINS \
+           IGC_COGMOD_MIN IGC_SAMPLER IGC_NUTPIE_ADAPTATION \
            IGC_CRITERION IGC_CRITERION_NDRAWS IGC_DELETE_SHARDS IGC_LOO_BLOCK \
            IGC_REBUILD_JOB; do
     eval "val=\${$v:-}"

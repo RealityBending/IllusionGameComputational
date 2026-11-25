@@ -93,14 +93,28 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   written as markdown or LaTeX tables. To change a number or a figure in the
   paper, change it there and re-render that script, then the manuscript. The
   DDM panels of the paper's figures turn the drift and the starting point
-  around from the fits' coding (`plot_all_models()`, `plot_retained()`), and
+  around from the fits' coding (`plot_all_models()`, and `plot_approximation()`
+  in `3_linearmodels.qmd`, which draws the paper's DDM-5 figure with the
+  linear models of Study 2 over it since 2026-11-25), and
   the text follows the figures.
+- **Every figure is drawn over the reliable predictor space**, the same for
+  Study 1 and Study 2: `plot_ranges` in `analysis/server/predictions.R`, the
+  values holding less than 5% of an illusion's trials left out at each end of
+  each predictor (they all come from the Validation study alone). The fits of
+  Study 1 use every trial; those of Study 2 are fitted over that space or a
+  subrange of it. `analysis/server/AGENT.md` §6.16.
 - **`1_models.qmd` does not load fits either.** It reads the files that
   `./hpc priors` writes to `models/priors/` (fetched with
   `./hpc pull priors`): for every combined fit, its priors as brms resolved
   them, and where each population-level posterior sits in its prior. The code
   is `analysis/server/priors.R`. Bump `igc_priors_version` there and in the
   qmd when what it returns changes.
+- **`3_linearmodels.qmd` (Study 2) does not load fits either.** Its model
+  specification reads the DDM-5 prediction files of Study 1, and is where
+  the coding of the linear models' predictors (|strength| x its direction,
+  the range of stimuli, the per-illusion transformations) is decided and
+  drawn for the paper. The old `3_analysis.qmd` is `4_analysis.qmd` since
+  2026-11-24.
 - **Never run brms post-processing on a cluster fit with the laptop's brms.**
   The fits are brms 2.21.0, and the laptop's 2.23.1 rebuilds their smooth
   bases with the wrong signs. `log_lik()`, `loo()`, `posterior_*()`,
