@@ -347,10 +347,13 @@ by its name in capitals:
 IGC_PRED_CURVES_ITERATIONS=2000 IGC_PRED_PPC_NDRAWS=1000 ./hpc predict gam_lnr_mullerlyer
 ```
 
-The grid is `plot_ranges`, each illusion's **reliable predictor space** (since
-2026-11-25: at each end of each predictor, the values holding less than 5% of
-the trials left out; `AGENT.md` §6.16). The qmds crop a file made over a wider
-range to it, and say so when a file does not cover all of it.
+The grid is `plot_ranges`, each illusion's **reliable subrange** (the paper's
+"reliable predictor space"; since 2026-11-25: at each end of each predictor,
+the values holding less than 5% of the trials left out; `AGENT.md` §6.16), not
+the full range the Study 1 models are fitted on. The qmds crop a file made over
+a wider range to it, and say so when a file does not cover all of it. The
+three ranges of the predictors (full, reliable, and Study 2's linear subrange)
+are in `AGENT.md` §6.17.
 
 The job needs `modelbased`, which `install_pkgs.R` has installed only since
 predictions moved to the cluster (2026-09-25): run `./hpc install` once. If
@@ -422,9 +425,11 @@ and meet at zero strength (since 2026-11-25, `AGENT.md` §6.15). Its registry
 entries carry a `linear` field (the range of stimuli and the transformations),
 from which `igc_linear_data()` in `models.R` makes the predictors: strength in
 absolute value, `Effect` its side (+0.5 conflicting, -0.5 facilitating, 0
-none), and the ISI centred on its study's window. Only
-`lin_ddm5_mullerlyer` (untransformed, difference 0.045–0.45 x strength ±30, its reliable predictor space) is
-defined so far, for a 50-participant test (`AGENT.md` §6.14).
+none), and the ISI centred on its study's window. The range is the illusion's
+**linear subrange**, `igc_linear_ranges` in `models.R`. It is still to be
+refined, and for now it is the whole reliable subrange (`AGENT.md` §6.17).
+Only `lin_ddm5_mullerlyer` (untransformed, difference 0.045–0.45 x strength
+±30) is defined so far, for a 50-participant test (`AGENT.md` §6.14).
 Two modelling choices in that table are worth knowing about before reading any
 output:
 

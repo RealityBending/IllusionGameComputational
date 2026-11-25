@@ -20,9 +20,11 @@
 #                   illusion  the Illusion_Type the model is fitted to
 #                   formula   the family's function from igc_formulas
 #                   linear    (Study 2's linear models only) the range of
-#                             stimuli fitted and the transformations of the
-#                             predictors, which igc_linear_data() below
-#                             turns into the model's data
+#                             stimuli fitted (its illusion's linear subrange,
+#                             igc_linear_ranges below) and the
+#                             transformations of the predictors, which
+#                             igc_linear_data() below turns into the model's
+#                             data
 #
 # Until 2026-10-13 the MullerLyer models were named after the bare family
 # (gam_lnr, gam_lba, ...) and held the formulas, which the other illusions
@@ -302,6 +304,40 @@ igc_formulas <- list(
 )
 
 
+# Study 2's linear subrange ---------------------------------------------------
+# The range of stimuli the linear models are fitted on, per illusion, in raw
+# units: the difference from-to and the largest absolute strength. It is the
+# third of the project's three ranges of the predictors (AGENT.md 6.17):
+#   - the full range: every trial of every study, what the Study 1 GAMs are
+#     fitted on (the bounds of restore_units() in predictions.R);
+#   - the reliable subrange: the full range less the values that only the
+#     Validation study showed (the extremes holding < 5% of the trials),
+#     over which every prediction and figure is made (plot_ranges in
+#     predictions.R; "the reliable predictor space" in the paper);
+#   - this linear subrange, within the reliable one: where the effects of the
+#     two predictors are taken to be close enough to linear for the linear
+#     models to stand in for the GAMs.
+#
+# STILL TO BE REFINED. For now it is the whole reliable subrange, on all three
+# illusions (2026-11-25): with the coding of 3_linearmodels.qmd (|strength|
+# with a slope per side), the least linear parameter keeps R2 .87-.89 over it.
+# A narrower one would trade trials for linearity, and the criterion for that
+# is not decided. The boxes drawn in Study 1 (linear_regions in
+# 2_modelcomparison.qmd until 2026-11-25; Müller-Lyer 0.1-0.4 x +-30 by eye)
+# were for the signed coding of strength, and are candidates, not this.
+#
+# The registry's lin_* entries take their range from here, so changing it here
+# changes what they fit. 3_linearmodels.qmd stops if it is not within
+# plot_ranges, and 2_modelcomparison.qmd outlines it on its heatmaps wherever
+# it is narrower than the reliable subrange. One entry per line: ./hpc reads
+# model names from lines that end in "= list(".
+igc_linear_ranges <- list(
+  MullerLyer = list(difference = c(0.045, 0.45), strength = 30),
+  VerticalHorizontal = list(difference = c(0.03, 0.30), strength = 45),
+  Ebbinghaus = list(difference = c(0.05, 0.50), strength = 1.5)
+)
+
+
 # Registry -----------------------------------------------------------------
 # One entry per family x illusion, named <family>_<illusion in lower case>.
 # Shard and fit names add the illusion again, e.g.
@@ -454,16 +490,38 @@ igc_models <- list(
   # absolute strength, in raw units) and the transformations of the two
   # predictors (names in igc_transforms). Untransformed first; the transformed
   # variants are compared with it once fitted (3_linearmodels.qmd).
-  # The range is each illusion's reliable predictor space (plot_ranges in
-  # predictions.R: the extreme values holding less than 5% of the trials left
-  # out at each end; since 2026-11-25, before which Müller-Lyer started at 0.05,
-  # where its Study 1 surfaces did). A narrower one would be a subrange.
+  # The range is the illusion's linear subrange (igc_linear_ranges above), for
+  # now its whole reliable subrange. Until 2026-11-25 it was written out here,
+  # and before that day Müller-Lyer started at 0.05, where its Study 1
+  # surfaces did. A variant fitted on another range would write its own, which
+  # must lie within plot_ranges (3_linearmodels.qmd checks).
 
   lin_ddm5_mullerlyer = list(
     illusion = "MullerLyer",
     formula = igc_formulas$lin_ddm5,
-    linear = list(difference = c(0.045, 0.45), strength = 30,
-                  transform_difference = "identity", transform_strength = "identity")
+    linear = c(igc_linear_ranges$MullerLyer,
+               list(transform_difference = "identity", transform_strength = "identity"))
+  ),
+
+  # The same with the square root of the absolute strength: the transformation
+  # that recovers most of what the coding without a gap costs on Müller-Lyer
+  # (worst R² .917 -> .935 on the Study 1 surfaces, 3_linearmodels.qmd), and
+  # the answer to the V at zero strength of the untransformed test (AGENT.md
+  # 6.15). "sqrt" is on the strength only.
+  lin_ddm5sqrt_mullerlyer = list(
+    illusion = "MullerLyer",
+    formula = igc_formulas$lin_ddm5,
+    linear = c(igc_linear_ranges$MullerLyer,
+               list(transform_difference = "identity", transform_strength = "sqrt"))
+  ),
+
+  # The second illusion, untransformed like Müller-Lyer's retained test
+  # (2026-11-25)
+  lin_ddm5_verticalhorizontal = list(
+    illusion = "VerticalHorizontal",
+    formula = igc_formulas$lin_ddm5,
+    linear = c(igc_linear_ranges$VerticalHorizontal,
+               list(transform_difference = "identity", transform_strength = "identity"))
   )
 )
 

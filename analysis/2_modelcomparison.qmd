@@ -32,6 +32,9 @@ library(ggdist)
 # predictions`). This script only reads its results, relabels them and plots,
 # so it never has to hold the fits in memory.
 source(if (dir.exists("server")) "server/predictions.R" else "analysis/server/predictions.R")
+# The model registry, for Study 2's linear subrange (igc_linear_ranges), which
+# the heatmaps outline where it is narrower than what they draw
+source(if (dir.exists("server")) "server/models.R" else "analysis/server/models.R")
 ```
 
 
@@ -103,9 +106,10 @@ load_predictions <- function(name, sampler = "cmdstanr") {
     warning(name, ": the predictions were made from another fit than ", fit_file,
             ". Re-run `", hpc, " predict`, or delete ", file, " to recompute locally.")
   }
-  # Every curve and heatmap is drawn over the reliable predictor space
-  # (plot_ranges in server/predictions.R), whatever range the file was made
-  # over: a wider one is cropped to it. A file that does not cover it all (the
+  # Every curve and heatmap is drawn over the reliable subrange (plot_ranges
+  # in server/predictions.R; the paper's "reliable predictor space", AGENT.md
+  # 6.17), although the fits cover the full range. A file made over a wider
+  # range is cropped to it. A file that does not cover it all (the
   # Müller-Lyer files made before 2026-11-25 start at a difference of 0.05,
   # not 0.045) is drawn over what it has.
   if (!covers_plot_range(rez$meta$plot_range, rez$meta$illusion)) {
@@ -1170,37 +1174,36 @@ preds_heatmaps <- lapply(preds, tidy_predictions, what = "heatmaps")
 # makes the colour bars redundant, so they are dropped)
 heatmap_labels <- TRUE
 
-# The linear-approximation region: the part of the space, in raw units, where
-# the effects of the two predictors might be close enough to linear for a
-# simpler model (~ Task_Difficulty * Illusion_Strength) fitted there to
-# approximate the GAM, i.e. away from the extremes where they turn
-# non-monotonic. Outlined on every heatmap panel, and the range of the colour
-# gradient in the Best Model plots. An illusion without one gets no outline,
-# and its whole range on the gradient.
+# Study 2's linear subrange (igc_linear_ranges in server/models.R, AGENT.md
+# 6.17): the part of the reliable subrange that the linear models are fitted
+# on, where the effects of the two predictors are taken to be close enough to
+# linear for them to stand in for the GAM. Each panel draws the reliable
+# subrange (plot_ranges), so the linear subrange is outlined only where it is
+# narrower than that; there it is also the range of the colour gradient in the
+# Best Model plots. It is still to be refined, and for now it is the whole
+# reliable subrange on all three illusions: no outline, and the gradient spans
+# every difficulty level.
 #
-# The Muller-Lyer box was drawn by eye. The other two are PROPOSED (2026-11-16)
-# from it: the largest box, in trials kept, whose DDM-5 parameters are at least
-# as close to bilinear as they are in the Muller-Lyer box. Bilinear means fitted
-# by a + b*D + c*S + d*D*S on each parameter's link scale, over the
-# heatmap grid; the Muller-Lyer box gets R2 >= 0.85 for every parameter (drift
-# variability the worst) and keeps 63% of its trials. The curvature is almost
-# all at extreme strengths, so the boxes cut there first:
-# - Vertical-Horizontal: no difficulty cut, strengths beyond 45 dropped. 96% of
-#   trials, worst R2 0.87 (bias).
-# - Ebbinghaus: the two hardest levels (0.05, 0.07) and strengths beyond 1.5
-#   dropped. 88% of trials, worst R2 0.86 (drift variability). With no
-#   difficulty cut: 97.5%, R2 0.84.
-linear_regions <- list(
-  MullerLyer = list(strength = c(-30, 30), difference = c(0.1, 0.4)),
-  VerticalHorizontal = list(strength = c(-45, 45), difference = c(0.03, 0.30)),
-  Ebbinghaus = list(strength = c(-1.5, 1.5), difference = c(0.08, 0.70))
-)
+# Until 2026-11-25 the outline was the boxes of Study 1 (`linear_regions`:
+# Müller-Lyer 0.1-0.4 x +-30 drawn by eye; Vertical-Horizontal 0.03-0.30 x +-45
+# and Ebbinghaus 0.08-0.70 x +-1.5 proposed on 2026-11-16, as the largest boxes
+# whose DDM-5 surfaces were as bilinear as Müller-Lyer's), which were chosen
+# for the signed coding of strength. They are candidates for the linear
+# subrange, in AGENT.md 6.17, not part of this script.
+linear_subrange <- function(illusion) {
+  l <- igc_linear_ranges[[illusion]]
+  if (is.null(l)) return(NULL)
+  box <- list(strength = c(-l$strength, l$strength), difference = l$difference)
+  drawn <- plot_ranges[[illusion]]
+  if (!is.null(drawn) && isTRUE(all.equal(box, drawn[c("strength", "difference")]))) return(NULL)
+  box
+}
 
 # Function for individual panels. The illusion is passed along for the
 # outline, which is in its raw units.
 make_heatmap <- function(preds_heatmaps, model, parameter, illusion) {
   d <- filter(preds_heatmaps, Model == model, Parameter == parameter)
-  region <- linear_regions[[illusion]]
+  region <- linear_subrange(illusion)
   contours <- if (heatmap_labels) {
     list(
       # Few enough lines that the labels have room: 20 would overlap in panels
@@ -1383,19 +1386,22 @@ plot_heatmaps(preds_heatmaps$Ebbinghaus, "Ebbinghaus")
 
 DDM-5, the one model that converged on all three illusions. Left: the error
 rate and the median RT of correct responses that it predicts. Right: its
-parameters. Every panel has every predicted difficulty level. The red to green
-gradient spans the linear-approximation region outlined on the heatmaps (where
-there is one). Beyond it the gradient carries on, faded: into purple for harder
-levels, into cyan for easier ones.
+parameters. Every panel has every predicted difficulty level, over the
+reliable subrange. The red to green gradient spans the difficulty range of
+Study 2's linear subrange. Where that is narrower than the reliable subrange,
+it is outlined on the heatmaps, and beyond it the gradient carries on, faded:
+into purple for harder levels, into cyan for easier ones. For now the linear
+subrange is the whole reliable subrange, so the gradient spans every level.
 
 ```{r}
 # The colour and the transparency of each task difficulty level (`levels`,
 # sorted), each placed by its value on one gradient. Its red to green middle
-# runs over the difficulty range of the linear-approximation region
-# (linear_regions, with the heatmaps), red at the hard edge and green at the
-# easy one. Outside it the gradient carries on, faded: from the red through
-# pink to purple at the hardest level, and from the green through teal to cyan
-# at the easiest. An illusion with no region has its whole range on the middle.
+# runs over the difficulty range of the linear subrange (linear_subrange(),
+# with the heatmaps), red at the hard edge and green at the easy one. Outside
+# it the gradient carries on, faded: from the red through pink to purple at the
+# hardest level, and from the green through teal to cyan at the easiest. With
+# no outline (the linear subrange is the whole reliable subrange) every level
+# is on the middle.
 difficulty_scale <- function(levels, region = NULL) {
   bounds <- if (is.null(region)) range(levels) else region$difference
   # Tolerance for levels on the bounds, which carry floating-point error
@@ -1421,7 +1427,7 @@ difficulty_scale <- function(levels, region = NULL) {
 }
 
 # One element of preds_curves, i.e. one illusion, whose name is passed along
-# for its linear-approximation region. A prediction file made before
+# for its linear subrange. A prediction file made before
 # 2026-11-16 has no median RT and 5 difficulty levels: it shows the mean RT
 # instead, at those 5 levels. Its chunks have warning: false for the RT, which
 # is NA where a level predicts (almost) no correct responses, and ggplot says
@@ -1447,7 +1453,7 @@ plot_best_model <- function(preds_curves, illusion, model = "DDM-5") {
   n_par <- nlevels(d$Parameter) - 2
   design <- matrix(c(rep(1:2, each = n_par), rep(seq_len(n_par) + 2, each = 2)), ncol = 2)
 
-  region <- linear_regions[[illusion]]
+  region <- linear_subrange(illusion)
   lv <- sort(unique(d$Illusion_Difference))
   sc <- difficulty_scale(lv, region)
   d$Inside <- sc$inside[as.character(d$Illusion_Difference)]
@@ -1478,7 +1484,7 @@ plot_best_model <- function(preds_curves, illusion, model = "DDM-5") {
     ggh4x::facet_manual(vars(Parameter), design = design, scales = "free_y") +
     labs(title = model,
          subtitle = if (!is.null(region)) {
-           paste0("Linear-approximation region: task difficulty ", region$difference[1],
+           paste0("Linear subrange: task difficulty ", region$difference[1],
                   " to ", region$difference[2], ", illusion strength ", region$strength[1],
                   " to ", region$strength[2], " (shaded outside)")
          },

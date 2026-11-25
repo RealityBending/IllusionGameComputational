@@ -11,7 +11,8 @@
 #     plots -- or, for a fit that has no predictions file yet, calls
 #     run_predictions() itself as a fallback, and
 #   - 3_linearmodels.qmd, which reads those of Study 1's DDM-5 and of Study
-#     2's linear models (lin_*), whose grid is make_linear_datagrid() below.
+#     2's linear models (lin_*), whose grid is make_linear_datagrid() below,
+#     and whose files also have the effect of the ISI (compute_isi_curves()).
 #
 # What goes in here is what depends on the fit; what stays in the qmd is what
 # depends on taste (labels, orders, colours, ranges drawn). The one exception
@@ -63,6 +64,10 @@ igc_prediction_settings <- function(...) {
     curves_n_difference = 9,
     # Heatmaps: an n x n grid
     heatmap_n = 40,
+    # The ISI curves of a linear model (compute_isi_curves()): points along
+    # each study's window, from its start (-1) to its end (1). The responses
+    # per point are curves_iterations, as for the curves.
+    isi_n = 21,
     # Components run in parallel (forked, so not on Windows)
     cores = 1
   )
@@ -131,18 +136,24 @@ model_illusion <- function(gam) {
   illusion
 }
 
-# The reliable predictor space: the range the curves and heatmaps are drawn
-# over, per illusion and in raw units, strength signed and difference absolute
-# (see normalize_units). The rule (2026-11-25, the same for the three
+# The reliable subrange ("the reliable predictor space" in the paper): the
+# range the curves and heatmaps are drawn over, per illusion and in raw units,
+# strength signed and difference absolute (see normalize_units). It is the
+# second of the three ranges of the predictors (AGENT.md 6.17). It lies within
+# the full range (the bounds of restore_units() above: every trial, what the
+# Study 1 fits cover). It contains Study 2's linear subrange (igc_linear_ranges
+# in models.R: what the linear models are fitted on, still to be refined, for
+# now this whole subrange). The rule (2026-11-25, the same for the three
 # illusions): at each end of each predictor, leave out the most extreme values
 # that together hold less than 5% of the illusion's trials, i.e. keep the
 # difference from its 5th to its 95th percentile and the absolute strength up
 # to its 95th percentile (quantile type 1, over every trial of the illusion).
-# What is left out is, in every illusion, the edge of the widest stimulus grid,
-# which only the Validation study used (~250 participants, ~4,000 trials per
-# level, against 10,000 to 27,000 elsewhere). Any threshold from 4% to 8% gives
-# the same space. 3_linearmodels.qmd ("The Reliable Predictor Space")
-# recomputes it from the data and stops if it differs from this list.
+# What is left out is, in every illusion, the levels that only the Validation
+# study showed (~250 participants, ~4,000 trials per level, against 10,000 to
+# 27,000 elsewhere), and what is kept is exactly the range of the main design
+# (International, Suggestibility, PCS, Self-Association). Any threshold from 4%
+# to 8% gives the same space. 3_linearmodels.qmd ("The Reliable Predictor
+# Space") recomputes it from the data and stops if it differs from this list.
 #
 # The fits cover each illusion's whole range; only what is drawn is limited.
 # Until 2026-11-25 only Müller-Lyer had a range here (0.05-0.45 x +-30), and
@@ -559,6 +570,277 @@ compute_heatmaps <- function(gam, s) {
 }
 
 
+# The interval before the stimulus (linear models) -----------------------------
+
+# The effect of the ISI in a linear model of Study 2, for 3_linearmodels.qmd:
+# the parameters and the observable outcomes along each study's window, at
+# three stimuli. Only linear models have the ISI (a GAM gets NULL).
+#
+# The grid: the ISI from the start of the window (-1) to its end (1), in each
+# study the fit has, for no illusion (strength 0) at the hardest, the middle
+# and the easiest difficulty of the range fitted. The ISI is the same
+# quadratic on every parameter at every stimulus, on the link scale, so the
+# parameters' curves only move up or down from one stimulus to the next; the
+# observable outcomes depend on the stimulus too. The ISI stays coded: its
+# seconds are the study's window centre + 0.25 x ISI (fit_model.R), which the
+# qmd adds.
+make_isi_datagrid <- function(gam, n_isi = 21) {
+  linear <- attr(gam, "linear")
+  if (!exists("igc_linear_data", mode = "function")) {
+    stop("make_isi_datagrid() needs igc_linear_data(): source models.R first.", call. = FALSE)
+  }
+  raw <- data.frame(Illusion_Difference = c(linear$difference[1], mean(linear$difference),
+                                            linear$difference[2]),
+                    Illusion_Strength = 0, ISI = 0, ISI_centre = 0, Dataset = NA)
+  coded <- igc_linear_data(raw, linear)
+  studies <- sort(unique(as.character(insight::get_data(gam)$Study)))
+  grid <- expand.grid(Difference = coded$Difference, Strength = 0, Effect = 0,
+                      ISI = seq(-1, 1, length.out = n_isi), Study = studies,
+                      stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE)
+  attr(grid, "raw_units") <- unique(coded[c("Difference", "Illusion_Difference")])
+  grid
+}
+
+# Each study is predicted with its own random intercept and the participant at
+# the population level: brms's re_formula = ~ (1 | Study), on every parameter.
+# brms is called directly, not through modelbased as for the curves: insight
+# 1.5.4 cannot pass a formula as include_random (`is.na()` of a formula fails in
+# .get_predicted_args(), seen on the cluster 2026-11-25). The parameters are the
+# posterior median and 95% interval at each point. The outcomes are simulated,
+# curves_iterations responses per point as for the curves (all the draws, as
+# many times as needed, each time with fresh responses), one point at a time
+# so that nothing depends on how cogmod orders draws and observations.
+compute_isi_curves <- function(gam, s) {
+  if (is.null(attr(gam, "linear"))) return(NULL)
+  grid <- make_isi_datagrid(gam, n_isi = s$isi_n)
+  re <- ~ (1 | Study)
+  # The response is never used for predictions, but brms reads it
+  newdata <- grid
+  newdata$RT <- 1
+  newdata$Error <- 0
+  keys <- grid[c("Difference", "ISI", "Study")]
+
+  params <- names(brms::brmsterms(stats::formula(gam))$dpars)
+  params <- params[params != "poutlier"]
+  par_rows <- do.call(rbind, par_lapply(params, function(p) {
+    draws <- brms::posterior_epred(gam, newdata = newdata, dpar = p, re_formula = re)
+    data.frame(keys, Parameter = p,
+               Predicted = apply(draws, 2, stats::median),
+               CI_low = apply(draws, 2, stats::quantile, probs = 0.025, names = FALSE),
+               CI_high = apply(draws, 2, stats::quantile, probs = 0.975, names = FALSE))
+  }, cores = s$cores))
+
+  simulate <- get(paste0("posterior_predict_", gam$family$name), envir = asNamespace("cogmod"))
+  per_call <- min(s$curves_iterations, brms::ndraws(gam))
+  n_calls <- ceiling(s$curves_iterations / per_call)
+  sims <- lapply(seq_len(n_calls), function(k) {
+    n <- min(per_call, s$curves_iterations - (k - 1) * per_call)
+    prep <- brms::prepare_predictions(gam, newdata = newdata, ndraws = n, re_formula = re)
+    for (dp in names(prep$dpars)) prep$dpars[[dp]] <- brms::get_dpar(prep, dp)
+    # (rt, response) per simulated trial, response 1 the error boundary
+    lapply(seq_len(prep$nobs), function(j) simulate(j, prep = prep))
+  })
+  out_rows <- do.call(rbind, lapply(seq_len(nrow(grid)), function(j) {
+    x <- do.call(rbind, lapply(sims, `[[`, j))
+    stopifnot(all(x[, 2] %in% c(0, 1)))
+    error <- mean(x[, 2] == 1)
+    rt <- x[x[, 2] == 0, 1]
+    # No RT where few responses are correct, as in the curves
+    few <- error > 0.9
+    data.frame(keys[j, ], Parameter = c("Error Rate", "Mean RT", "Median RT"),
+               Predicted = c(error, if (few) NA else mean(rt), if (few) NA else stats::median(rt)),
+               CI_low = NA_real_, CI_high = NA_real_, row.names = NULL)
+  }))
+  rm(sims)
+
+  curves <- rbind(out_rows, par_rows)
+  curves$Type <- model_type(gam)
+  units <- attr(grid, "raw_units")
+  curves$Illusion_Difference <- units$Illusion_Difference[
+    match(round(curves$Difference, 8), round(units$Difference, 8))]
+
+  # The study intercepts must be in: if they were dropped, every study would
+  # have the same curve. A check rather than a silent population-level file.
+  mu <- curves[curves$Parameter == "mu", ]
+  spread <- tapply(mu$Predicted, paste(mu$Difference, mu$ISI), function(x) diff(range(x)))
+  if (length(unique(curves$Study)) > 1 && all(spread < 1e-8)) {
+    stop("compute_isi_curves(): the studies' curves are identical, so their intercepts were not included.",
+         call. = FALSE)
+  }
+
+  # The ISI coefficients themselves (linear and quadratic, per parameter) and
+  # the SDs of the study intercepts, as posterior summaries
+  draws <- posterior::as_draws_df(gam, variable = c("polyISI", "^sd_Study__"), regex = TRUE)
+  coefficients <- as.data.frame(posterior::summarise_draws(
+    draws, "median", ~ stats::quantile(.x, probs = c(0.025, 0.975)), "rhat", "ess_bulk"))
+
+  list(curves = curves, coefficients = coefficients)
+}
+
+
+# The participants' effects (linear models) ----------------------------------
+
+# The participant-level effects of a linear model of Study 2, for
+# 4_reliability.qmd, which computes their reliability
+# (performance::performance_dvour()) without loading the fit. Two tables in the
+# format of modelbased::estimate_grouplevel(), one row per participant, model
+# parameter and effect:
+#   Component  the model parameter ("conditional" for the drift, as
+#              estimate_grouplevel() has it)
+#   Group      "Participant"
+#   Level      the participant
+#   Parameter  the effect
+#   Median, MAD, CI, CI_low, CI_high   the posterior median, its MAD and its
+#              95% equal-tailed interval
+# with class estimate_grouplevel and coef_name "Median", which is all
+# performance_dvour() reads. estimate_grouplevel() itself is not used: its
+# result carries the whole model in its attributes (55 MB for the
+# 50-participant test), and it summarises every random effect at once, which
+# for a full fit means all ~70,000 of them in memory together. Here they are
+# done one model parameter at a time, from the draws. The numbers are the same:
+# checked against estimate_grouplevel() on the 50-participant test (2026-11-25).
+#
+#   terms    the participants' random effects as fitted (the deviations from
+#            the population, `r_Participant`), every term of every parameter
+#   effects  the interpretable ones, made from them draw by draw. The
+#            strength is |strength| scaled from 0 to 1 over the range fitted,
+#            and the difference -1 to 1, so a slope is the change over the
+#            range (half of it for the difference):
+#     Baseline                     Intercept: the parameter with no illusion,
+#                                  at the middle difficulty of the range and
+#                                  the centre of the ISI window, relative to
+#                                  the participant's study (added 2026-11-25;
+#                                  the only one the outlier proportion has)
+#     Difficulty                   Difference: the effect of the difference
+#                                  with no illusion
+#     Strength (incongruent)       Strength + 0.5 Strength:Effect: the slope of
+#                                  |strength| when the illusion is incongruent
+#                                  (Effect = +0.5)
+#     Strength (congruent)         Strength - 0.5 Strength:Effect
+#     Difficulty x Strength (...)  the same two for Difference:Strength and
+#                                  Difference:Strength:Effect: how the
+#                                  difference changes that slope
+igc_grouplevel_effects <- list(
+  "Baseline" = c("Intercept" = 1),
+  "Difficulty" = c("Difference" = 1),
+  "Strength (incongruent)" = c("Strength" = 1, "Strength:Effect" = 0.5),
+  "Strength (congruent)" = c("Strength" = 1, "Strength:Effect" = -0.5),
+  "Difficulty x Strength (incongruent)" = c("Difference:Strength" = 1, "Difference:Strength:Effect" = 0.5),
+  "Difficulty x Strength (congruent)" = c("Difference:Strength" = 1, "Difference:Strength:Effect" = -0.5)
+)
+
+# And one that is not a sum of random effects: the model-based point of
+# subjective equality (PSE) of the drift (added 2026-11-25, at the user's
+# request). It is the physical difference between the targets at which the
+# participant's drift is zero (the evidence favours neither target) under an
+# incongruent illusion of `igc_pse_strength` times the strongest strength of
+# the range, the strength at which 4_reliability.qmd takes the behavioural
+# PSE. It is computed draw by draw from the participant's *total*
+# coefficients (population + study intercept + participant), at the centre of
+# the ISI window:
+#   a = Intercept + (Strength + 0.5 Strength:Effect) s     the drift at D = 0
+#   g = Difference + (Difference:Strength + 0.5 Difference:Strength:Effect) s
+#   PSE = the raw difference of the coded D = -a / g
+# A gain common to all of a participant's drift coefficients cancels out of
+# it, so unlike the raw strength slope it does not carry how precisely the
+# participant sees differences. In raw units of the difference, like the
+# behavioural PSE. Under an illusion the drift reaches zero beyond the
+# hardest difference of the range for most participants, so it is
+# extrapolated from the linear model, as the behavioural one is from the
+# logistic.
+igc_pse_strength <- 0.5
+igc_grouplevel_effect_names <- c(names(igc_grouplevel_effects), "PSE")
+
+# The inverse of each transformation in igc_transforms (models.R)
+igc_transforms_inverse <- list(identity = identity, sqrt = \(x) x^2, log = exp, log1p = expm1)
+
+compute_grouplevel <- function(m, group = "Participant") {
+  if (is.null(attr(m, "linear"))) return(NULL)
+  vars <- grep(paste0("^r_", group, "(__[A-Za-z]+)?[[]"), brms::variables(m), value = TRUE)
+  info <- data.frame(
+    variable = vars,
+    Component = sub(paste0("^r_", group, "(__([A-Za-z]+))?[[].*$"), "\\2", vars),
+    # The level is everything up to the last comma, the term after it
+    Level = sub("^[^[]*[[](.*),[^,]*[]]$", "\\1", vars),
+    Term = sub("^.*,([^,]*)[]]$", "\\1", vars)
+  )
+  info$Component[info$Component == ""] <- "conditional"
+
+  # The summaries of each column of a draws x levels matrix
+  summarise_columns <- function(x, levels, component, parameter) {
+    data.frame(Component = component, Group = group, Level = levels, Parameter = parameter,
+               Median = apply(x, 2, stats::median),
+               MAD = apply(x, 2, stats::mad),
+               CI = 0.95,
+               CI_low = apply(x, 2, stats::quantile, probs = 0.025, names = FALSE),
+               CI_high = apply(x, 2, stats::quantile, probs = 0.975, names = FALSE))
+  }
+
+  terms <- list()
+  effects <- list()
+  for (component in unique(info$Component)) {
+    here <- info[info$Component == component, ]
+    levels <- unique(here$Level)
+    draws <- posterior::as_draws_matrix(m, variable = here$variable)
+    # One draws x levels matrix per term, its columns in the order of `levels`
+    by_term <- lapply(stats::setNames(nm = unique(here$Term)), function(term) {
+      v <- here$variable[here$Term == term][match(levels, here$Level[here$Term == term])]
+      unclass(draws[, v, drop = FALSE])
+    })
+    rm(draws)
+    for (term in names(by_term)) {
+      terms[[length(terms) + 1]] <- summarise_columns(by_term[[term]], levels, component, term)
+    }
+    for (effect in names(igc_grouplevel_effects)) {
+      weights <- igc_grouplevel_effects[[effect]]
+      if (!all(names(weights) %in% names(by_term))) next   # e.g. poutlier: an intercept only
+      x <- Reduce(`+`, lapply(names(weights), \(t) weights[[t]] * by_term[[t]]))
+      effects[[length(effects) + 1]] <- summarise_columns(x, levels, component, effect)
+    }
+    if (component == "conditional" && group == "Participant") {
+      effects[[length(effects) + 1]] <- summarise_columns(drift_pse(m, by_term, levels), levels, component, "PSE")
+    }
+  }
+  as_grouplevel <- function(d) {
+    structure(do.call(rbind, d), class = c("estimate_grouplevel", "data.frame"), coef_name = "Median")
+  }
+  list(terms = as_grouplevel(terms), effects = as_grouplevel(effects))
+}
+
+# The model-based PSE (above igc_pse_strength), a draws x participants matrix,
+# from the participants' drift deviations (`by_term`, draws x `levels`, as in
+# compute_grouplevel()) and the model's population and study draws.
+drift_pse <- function(m, by_term, levels) {
+  linear <- attr(m, "linear")
+  terms <- c("Intercept", "Difference", "Strength", "Strength:Effect", "Difference:Strength",
+             "Difference:Strength:Effect")
+  if (!all(terms %in% names(by_term))) stop("drift_pse(): the drift lacks a participant term.", call. = FALSE)
+  fixed <- unclass(posterior::as_draws_matrix(m, variable = paste0("b_", terms)))
+  # Each participant's total coefficient: population + participant (a vector
+  # of draws added to every column of the draws x participants matrix)
+  total <- function(term) by_term[[term]] + as.vector(fixed[, paste0("b_", term)])
+  # ... and the intercept of the participant's study
+  data <- insight::get_data(m, verbose = FALSE)
+  study_of <- as.character(data$Study[match(levels, as.character(data$Participant))])
+  study <- unclass(posterior::as_draws_matrix(m, variable = paste0("r_Study[", unique(study_of), ",Intercept]")))
+  study <- study[, paste0("r_Study[", study_of, ",Intercept]"), drop = FALSE]
+
+  ts <- igc_transforms[[linear$transform_strength]]
+  s <- ts(igc_pse_strength * linear$strength) / ts(linear$strength)
+  a <- total("Intercept") + study + (total("Strength") + 0.5 * total("Strength:Effect")) * s
+  g <- total("Difference") + (total("Difference:Strength") + 0.5 * total("Difference:Strength:Effect")) * s
+  coded <- -a / g
+  # Back to the raw difference: the coded D runs from -1 to 1 over the
+  # transformed range (igc_linear_data())
+  td <- igc_transforms[[linear$transform_difference]]
+  lo <- td(linear$difference[1])
+  hi <- td(linear$difference[2])
+  pse <- igc_transforms_inverse[[linear$transform_difference]](lo + (coded + 1) / 2 * (hi - lo))
+  dimnames(pse) <- NULL
+  pse
+}
+
+
 # Everything, for one model -----------------------------------------------
 
 # lapply, forked over `cores` where forking exists
@@ -605,6 +887,12 @@ run_predictions <- function(m, name, fit_file = NULL, settings = list()) {
     curves = function(s) compute_curves(m, s),
     heatmaps = function(s) compute_heatmaps(m, s)
   )
+  # A linear model's ISI (compute_isi_curves()). Added on 2026-11-25 without a
+  # version bump: only linear models have it, and the qmd checks for it.
+  if (!is.null(attr(m, "linear"))) components$isi <- function(s) compute_isi_curves(m, s)
+  # And its participants' effects, for 4_reliability.qmd (compute_grouplevel()),
+  # also without a bump
+  if (!is.null(attr(m, "linear"))) components$grouplevel <- function(s) compute_grouplevel(m)
   # The components run in parallel, and the curves and heatmaps then fork
   # again over their parameters: give those half the cores each, which keeps
   # the total near `cores` (the other three components are one process each

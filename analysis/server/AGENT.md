@@ -350,7 +350,7 @@ grouping factor), not `gp()` terms, and only for fits with
 | --- | --- |
 | `2_modelcomparison.qmd` | **no.** It reads prediction files only. All 11 in `analysis/models/predictions/` are format 2 and were made on the cluster with brms 2.21.0 (their `$meta$packages`). The local fallback, `run_predictions()`, refuses a brms other than the fit's. |
 | `combine_model.R` (`loo`) | **no.** It runs on the cluster under 2.21.0. |
-| `4_analysis.qmd` (`3_analysis.qmd` until 2026-11-24) | **yes:** `estimate_relation()` at ~116 (the density plots) and ~307 (the heatmaps), on whatever fit it loads. It currently reads `models/gam_lnr_muller.rds`, which no longer exists, and nothing has been rendered from it, so no wrong output exists yet. Before reviving it, move its predictions into `predictions.R`, or patch the fit right after `readRDS()`. |
+| `4_analysis.qmd` (`3_analysis.qmd` until 2026-11-24; `old.qmd`, untracked, since 2026-11-25, which freed the 4 for `4_reliability.qmd`, 6.18) | **yes:** `estimate_relation()` at ~116 (the density plots) and ~307 (the heatmaps), on whatever fit it loads. It currently reads `models/gam_lnr_muller.rds`, which no longer exists, and nothing has been rendered from it, so no wrong output exists yet. Before reviving it, move its predictions into `predictions.R`, or patch the fit right after `readRDS()`. |
 | `server/lba_modes/` | **no.** Computed by hand from `standata(m)` and validated against `lp__` (`lba_decompose.R`). |
 | `0_preprocessing.qmd` | **no.** Its `estimate_relation()` calls are on `mgcv::bam` models fitted in the same session. |
 | summaries of the draws (`summary()`, `fixef()`, `as_draws_*()`, Rhat, `lp__`) | **no.** No basis is involved. |
@@ -2408,7 +2408,7 @@ Ebbinghaus (11698242) is still a stand-in.
 **The model comparison is closed** (user's decision, 2026-11-24): most models
 are unstable across the three illusions, and DDM-5 has the best overall
 characteristics. It is the model of Study 2 (linear effects of difficulty x
-strength within the linear-approximation region). The write-up is in
+strength within the linear subrange, 6.17). The write-up is in
 `paper/manuscript.qmd` ("Study 1"), with its numbers from the prediction
 files (`models/predictions/`). In brief:
 
@@ -2637,6 +2637,177 @@ the 50-participant test with the new formula, in its own `IGC_MODELS_DIR`
 (e.g. `test_lin_ddm5_20261125_nutpie`), then point `linear_files` in the qmd
 at it.
 
+**Submitted 2026-11-25 ~16:45 as 11841190** (`sussexneuro`, rtx-02, running
+at once). It is 6.14's command with three changes: `IGC_MODELS_DIR` is
+`test_lin_ddm5_20261125_nutpie`, the job asks for `--partition=sussexneuro
+--time=1-00:00:00`, and the stimuli are the linear subrange 0.045–0.45 x ±30
+(6.17), where the old test had 0.05–0.45. The rest is unchanged: same 50
+participants (seed 2026), stanli 0.31.0 with nutpie low-rank, 4 chains of
+1000 + 1000, 4 CPUs, 16G, zen5.
+
+Why `sussexneuro`: `sbatch --test-only` gave a start at once there and on
+`short`, ~10 h away on `general` and ~2 days on `long`. `short`'s 2 h cap is
+too close to the old test's 1h44m. The group pool held 48 of its 256 CPUs
+(`dmm56` 32).
+
+Before submitting, in one SSH connection: `models.R` and `fit_model.R` matched
+the repo after `./hpc push`, `igc_lin` was the no-gap formula, the 0.31.0
+library (with nutpieR) and runtime were in place, and the directory had no
+shard.
+
+**And a 40-participant twin, 11841200** (2026-11-25 ~16:45, the user's
+request, hoping for a faster result): the same command with
+`IGC_NPARTICIPANTS=40`, into `test_lin_ddm5_20261125_nutpie_n40`, on `short`
+with `--time=02:00:00` (its cap), zen5. With seed 2026 its 40 participants are
+the first 40 of the 50: `sample()` without replacement draws in the same order
+whatever the size (no hashing at n ~2,200). The 50-participant test took 1h44m,
+and the save happens only at the end, so a slow chain can make this one time
+out with nothing kept. Its first `squeue` showed it `PENDING`, with the zen5
+nodes reserved for higher-priority partitions. That was transient: it started
+at 16:45 on rtx-02, next to the 50-participant test.
+
+**Results (2026-11-25, both on rtx-02, neither combined yet):**
+
+| job | ppts | rows | wall | treedepth | step | divergent | max Rhat | min neff ratio | params |
+|---|---|---|---|---|---|---|---|---|---|
+| 11841190 (sussexneuro) | 50 | 7,082 | 1h42m (101.8 min) | 6.1 | 0.102 | 19 (0.5%) | 1.030 | 0.043 | 1,751 |
+| 11841200 (short) | 40 | 5,547 | 1h35m (94.2 min) | 6.0 | 0.096 | 41 (1.0%, 39 in chain 4) | 1.022 | 0.038 | 1,441 |
+
+The 40-participant run saved only 7 minutes: about 75 against 63 gradients
+per draw, while the wall stays near 1.5 h. No chain stalled at the start this
+time (6.14's chain 4 did). Against 6.14's gapped test (1h44m, 26 divergences,
+Rhat 1.018, neff 0.071, 2,336 parameters), the no-gap 50 is as fast, with
+fewer parameters and a lower minimum neff ratio. The 50-participant fit is the
+one to use for the figure: the 40 are a subset of it.
+
+**Combined, predicted and drawn (2026-11-25, 50-participant test only, the
+user's choice).** Combine 11841574 (1 min 13 s; loo: 52 of 7,082 Pareto k >
+0.7, 8 of them > 1) and predict 11841575 (1 min 42 s), both on `short` with
+`--mem=24G --time=00:30:00`: `general` would only have started them the next
+morning (`sbatch --test-only`). They were submitted in one SSH connection, the predict job with
+`--dependency=afterok:` on the combine job. The commands were generated offline by a copy of `./hpc`
+whose `remote()` writes to a file. The shard and the prediction file were
+pulled into `analysis/models/test_lin_ddm5_20261125_nutpie/` (one `tar`
+stream, md5 checked), `linear_files` in `3_linearmodels.qmd` points at it,
+and `study2_approximation.png` and the manuscript were re-rendered. The 40-participant
+shard was never combined or pulled, and its directory
+(`test_lin_ddm5_20261125_nutpie_n40/`, 43 MB) was deleted on 2026-11-25 at
+the user's request, since it will not be used. Its logs
+(`fit_lin_ddm5_mullerlyer_stanli_11841200_1.*` in scratch) and the table
+above are what remain.
+
+**What the figure shows.** The two half-lines meet, and the error rate
+follows DDM-5 closely (hardest level, strength 0: .26 vs .23; +10: .83 vs
+.88). The boundary and drift variability do not. At the hardest level they
+form a deep V at zero strength. At 0, boundary 1.46 vs DDM-5's 1.94 and drift
+variability 0.39 vs 1.02. At −10, 1.90 vs 2.27 and 0.79 vs 1.61. So the median
+correct RT there is too short: 0.71 vs 0.86 s. These are the gapped test's
+conflicting-side values at zero: the facilitating side now runs down to them,
+instead of jumping. Both linear tests sit below DDM-5 on the boundary and the
+drift variability at the easiest level, on both sides (no gap: about 2.0 vs
+2.7-2.9 and 1.4-1.7 vs 2.3). That level shift is in the gapped test too, so
+it may be the 50 participants rather than the coding. Compare only the shapes
+with DDM-5's 2,215 until the full fit exists.
+
+**The same with √|strength| (2026-11-25, the user's request), 11842376.** New
+registry entry `lin_ddm5sqrt_mullerlyer`: `lin_ddm5_mullerlyer` with
+`transform_strength = "sqrt"` (the strength coded √|S| / √30, from 0 to 1),
+the same formula and range. On the Study 1 surfaces it recovers what dropping
+the gap cost on Müller-Lyer (worst R² .917 → .935). A concave strength lets
+the parameters change fast at weak strengths, where the untransformed fit drew
+its V. Same command as 11841190 (same 50 participants, seed 2026; stanli
+0.31.0, nutpie low-rank, 4 chains of 1000 + 1000, 4 CPUs, 16G, zen5,
+`sussexneuro`, 1 day) with `IGC_MODELS_DIR=.../test_lin_ddm5sqrt_20261125_nutpie`.
+It was submitted after `./hpc push`, in one SSH connection that first checked
+three things: the cluster's `models.R` had the entry, the directory was empty,
+and the 0.31.0 library and runtime were in place.
+`--test-only` gave a start at once on `sussexneuro` and on `short`. `short`
+was not used because its 2 h cap is too close to the untransformed run's 1h42m. It
+started at 20:10 on rtx-02. When it is done: combine, predict and pull it as
+above (`short`, `--mem=24G --time=00:30:00`), into
+`analysis/models/test_lin_ddm5sqrt_20261125_nutpie/`. **Done 2026-11-25 in
+56 min** (rtx-02, 20:10 to 21:07; not yet combined): treedepth 6.0, step
+0.098, 0.2% divergent, max Rhat 1.019, min neff ratio 0.032, 1,751
+parameters. That is half the untransformed run's wall time (1h42m) on the same
+participants, with fewer divergences. Combined (11842821, 1.6 min; loo 53 of
+7,082 Pareto k > 0.7) and predicted (11842822, 2.6 min, with `isi` and
+`grouplevel`) on `short` the same evening, the user's go-ahead. Pulled into
+`analysis/models/test_lin_ddm5sqrt_20261125_nutpie/` (shard + prediction file,
+md5 checked). **Against the untransformed test** (same 50 participants and
+7,082 rows; compared from the prediction files only):
+- *The V is mostly gone.* At the hardest level and zero strength the drift
+  variability is 1.00 (DDM-5 1.02, untransformed 0.39) and the boundary is
+  1.66 (1.94, 1.46). The median correct RT there is 0.73 s (0.86, 0.71).
+- *But √ has an infinite slope at zero, so it draws a cusp there at every
+  difficulty*, where DDM-5 is smooth. At the easiest level the drift peaks at
+  ~10 at zero (DDM-5 8.7), the drift variability at 2.44 (2.28), and the
+  boundary at 2.35 (2.92, but with a peak the GAM does not have).
+- *Closer to DDM-5 on the parameters.* RMSE over the common grid, link scale,
+  untransformed → √: drift 1.26 → 1.03, drift variability 0.78 → 0.68,
+  boundary 0.55 → 0.49, bias 0.34 → 0.27, NDT 0.056 → 0.058. On the outcomes
+  the two are level: error rate 0.028 / 0.029, median RT 0.050 / 0.064 s.
+- *The data do not prefer it.* elpd_loo 1501.4 vs 1484.8, a difference of
+  −16.6 (SE 14.8) against √, about one SE.
+
+Both share the level shift against DDM-5 at the easiest level (lower boundary
+and drift variability), so that is the 50 participants, not the coding. The
+comparison figure was a scratch file of the session, not saved in the repo.
+**The user's decision (2026-11-25): keep the untransformed model for now**
+(`linear_files` and `best_files` still read it), and test a second illusion
+instead of a third Müller-Lyer variant.
+
+**The second illusion: `lin_ddm5_verticalhorizontal`, 11842905 (2026-11-25
+21:34, `sussexneuro`, rtx-02).** New registry entry, untransformed, over VH's
+linear subrange (= its reliable subrange, 0.03–0.30 x ±45). Same command as
+11841190: 50 participants of VH drawn with seed 2026, stanli 0.31.0, nutpie
+low-rank, 4 chains of 1000 + 1000, 4 CPUs, 16G, zen5, 1 day. It writes into
+the same `test_lin_ddm5_20261125_nutpie/`, where the files carry the model's
+name, so nothing collides. Before submitting, in the same connection: the
+cluster's `models.R` had the entry, and the directory had no VH file.
+`linear_files` (`3_linearmodels.qmd`) and `best_files` (`4_reliability.qmd`)
+already point at its prediction file. Both skip a missing file, so once it is
+combined, predicted and pulled (as for ML: `short`, `--mem=24G
+--time=00:30:00`), re-rendering is all that is left.
+`3_linearmodels.qmd`
+draws one linear model per illusion (`linear_files`), so comparing the two
+fits means either swapping the file or drawing both.
+
+**The ISI in the prediction files (2026-11-25, the user's request).** A linear
+model's prediction file now has an `isi` element, made by
+`compute_isi_curves()` (`predictions.R`). It is added only for models with a
+`linear` entry and has no version bump, since the qmd checks for it. It
+holds `curves` and `coefficients`:
+- `curves`: the five parameters (posterior median and 95% interval) and the
+  error rate, mean and median correct RT (simulated, `curves_iterations` per
+  point). They cover 21 points along the coded ISI (−1 to 1, setting
+  `isi_n`), for every study in the fit and with no illusion, at the
+  hardest, middle and easiest difficulty of the range.
+- `coefficients`: posterior summaries of the `polyISI` terms and the
+  `sd_Study__` SDs.
+
+Each study is predicted with its own intercept and the participant at the
+population level, through brms's `re_formula = ~ (1 | Study)`. brms is
+called directly (`posterior_epred(dpar =)`, and `prepare_predictions()` +
+cogmod's `posterior_predict_<family>()` one grid point at a time), because
+modelbased cannot do it: insight 1.5.4 fails on a formula as
+`include_random` (`is.na()` of a formula in `.get_predicted_args()`: job
+11842688 failed on it). A check stops the job if the study curves come out
+identical, which would mean the intercepts were dropped. The qmd turns the
+coded ISI back into seconds with each study's window centre
+(`isi_windows`, the same min/max midpoint as `fit_model.R`). Its new section,
+"The Effect of the Interval Before the Stimulus", has a figure per illusion:
+rows for the outcomes and parameters, columns for the three stimuli,
+a line per study along its own window, and a separate y-axis in every panel. It
+also has a table of the coefficients. The 50-participant test was re-predicted
+for it (11842723, `short`, 1.6 min), and the file pulled (md5 checked).
+What the test shows: the foreperiod effect on the median RT (about −30 ms
+over the first half of the window) comes through a narrowing boundary, the
+only ISI coefficient whose interval excludes zero (start to end −0.19
+[−0.33, −0.05], softplus scale), and a U-shaped NDT. The drift is flat. The
+error rate at the hardest stimulus rises by a few points. Any later predict
+of a `lin_*` model (the √|strength| test included) gets the `isi` element
+too.
+
 ### 6.16 The reliable predictor space, for every figure and the linear fits (2026-11-25)
 
 **The rule** (the user's: one rule for the three illusions, on a share of
@@ -2677,6 +2848,10 @@ start at 0.05). The GAM fits themselves are unchanged (every trial).
 is now 0.045-0.45 x ±30 (307,686 trials, was 280,745), and the qmd's
 `linear_ranges` is `plot_ranges` for all three. A model fitted on a narrower
 subrange would show in the figure as dashed lines stopping short of the edges.
+*Later the same day (6.17):* the range the linear models fit is the **linear
+subrange**, `igc_linear_ranges` in `models.R`. It is the whole reliable space
+by default, not by decision, and is still to be refined. `linear_ranges` in the
+qmd now reads it.
 The linearity numbers changed with the ranges (worst R² of the coding
 retained: .887 / .893 / .874; best transformations now log1p(d) + √|S| on
 Müller-Lyer, √d on Vertical-Horizontal, √d + √|S| on Ebbinghaus). The
@@ -2689,9 +2864,297 @@ R² drops (.917 without them).
 and its linearity numbers; Ebbinghaus then has 9 difficulty curves again, not
 the 6 that survive cropping), then the other Study 1 models for their
 heatmaps at full resolution and Müller-Lyer's 0.045 row. The linear test is
-re-predicted when it is re-run (6.15). A last-minute `curves_strength` /
+re-predicted when it is re-run (6.15).
+
+**Submitted 2026-11-25** (after `./hpc push`, nothing pending in the queue):
+`./hpc predict gam_ddm5_mullerlyer,gam_ddm5_verticalhorizontal,gam_ddm5_ebbinghaus`
+→ jobs 11840163 (Müller-Lyer), 11840164 (Vertical-Horizontal), 11840165
+(Ebbinghaus), `general`, predict.slurm's defaults. They sat in
+`QOSMaxCpuPerUserLimit` on `general` (the per-user cap, filled by another
+job of the account, `ceeg_pass1`; estimated start the next day), so they
+were moved with `scontrol update JobId=... Partition=sussexneuro`, and given
+`TimeLimit=01:00:00`: sussexneuro's default is 60 days, which kept them
+pending on `Resources` with 490 CPUs idle, and a DDM-5 predict takes 1-6 min
+(sacct of 11716041-11783033). Estimated starts then 13:31-15:31 the same day.
+The user had them cancelled and resubmitted on `short` instead (2 h cap, 550
+CPUs per user, none in use; `sbatch --test-only` gave a start ~1 h away there
+against 2 days on `long`): `./hpc predict gam_ddm5_mullerlyer,gam_ddm5_verticalhorizontal,gam_ddm5_ebbinghaus
+--partition=short --time=01:00:00` → **11840605 (Müller-Lyer), 11840606
+(Vertical-Horizontal), 11840607 (Ebbinghaus)**. **A predict job belongs on
+`short` with `--time=01:00:00`**: it takes minutes, and `general`'s per-user
+cap is shared with the account's other work. **Done** 13:33-13:44, about 2
+min each, pulled and rendered: the three files cover the reliable space with
+9 difficulty levels. The linearity numbers did not move (Müller-Lyer worst
+still .887): the 0.045 level is genuinely the least linear part of its
+surface, not an extrapolation artefact, and the manuscript's numbers stand.
+`plot_approximation()` now colours a curve by its own difference on the GAM's
+scale rather than matching levels, so the old linear test (grid 0.05-0.45)
+still draws next to the new DDM-5 grid (0.045-0.45). In the paper's
+`study1_allmodels.png` (Müller-Lyer) the DDM-5 column now starts at 0.045 and
+the six other models at 0.05, until they are re-predicted too: submitted the
+same day on `short` (`--time=01:00:00`) as 11840847 (`gam_lnr_mullerlyer`),
+11840848 (`gam_lnr6`), 11840849 (`gam_ddm4`), 11840850 (`gam_rdm`), 11840851
+(`gam_rdm5`), 11840852 (`gam_lba`). **Done** 14:11-14:14, 2-3 min each,
+pulled, `2_modelcomparison.qmd` and the manuscript re-rendered: every column
+of `study1_allmodels.png` now covers 0.045-0.45 x ±30. Their stanli twins
+(the sampler comparison only) are left at 0.05, and `load_predictions()` says
+so for `gam_lnr`, `gam_ddm4`, `gam_rdm` and `gam_rdm5` (stanli) at every
+render. **That breaks the appendix's curve comparison** (`plot_sampler_curves()`):
+it pairs the two samplers by difficulty level, and the cmdstanr grid
+(0.045-0.45, 9 levels, step 0.0506) now shares only 0.45 with the stanli one
+(0.05-0.45, 5 levels), so each panel's "gap" is measured on that one level and
+the stanli curves draw at 0.45 only. The sampler agreement table (ELPD, from
+loo) and the paper (which cites only that) are unaffected. Fixed the same
+day by re-predicting the four stanli twins the same way (`IGC_BACKEND=stanli
+./hpc predict ... --partition=short --time=01:00:00`): 11841036 (`gam_lnr`),
+11841037 (`gam_ddm4`), 11841038 (`gam_rdm`), 11841039 (`gam_rdm5`), done
+15:45-15:48, pulled (`IGC_BACKEND=stanli ./hpc pull predictions`) and
+re-rendered. Both samplers now share the 9-level grid, no file warns of
+coverage, and the curves pair at all five levels again (LNR gaps 0.00-0.11 SD).
+**Re-predicting a model means re-predicting its stanli twin too.** The steps that
+followed were: `./hpc pull
+predictions`, re-render `3_linearmodels.qmd` (the Müller-Lyer linearity
+numbers, then the manuscript's two Study 2 paragraphs and its TODOs) and
+`2_modelcomparison.qmd`, then the manuscript. A last-minute `curves_strength` /
 ±49 setting for the Müller-Lyer curves was written and removed the same day:
 the figure's axis is this space, not the whole range.
+
+### 6.17 The three ranges of the predictors: full, reliable, linear (2026-11-25)
+
+**The concepts** (the user's framing). Task difficulty and illusion strength
+are used over three nested ranges, one per purpose. Keep them apart.
+
+| Range | What it is | Where it lives | Used for |
+|---|---|---|---|
+| **Full range** | every value shown in any study | the bounds of `restore_units()` / `normalize_units()` in `predictions.R`, and `fit_model.R`'s min/max normalisation | the Study 1 GAMs, fitted to every trial |
+| **Reliable subrange** | the full range less the extremes holding < 5% of an illusion's trials: exactly what only Validation showed (6.16) | `plot_ranges` in `predictions.R`; "the reliable predictor space" in the paper, the qmds and 6.16 | every prediction grid, curve, heatmap and figure of both studies; the outer limit of any linear fit |
+| **Linear subrange** | the part of the reliable subrange where the effects of the two predictors are taken to be close enough to linear for a linear model to stand in for DDM-5's surfaces | `igc_linear_ranges` in `models.R`, from which the `lin_*` entries take their `linear` range | the fits of Study 2 |
+
+**The full range, study by study** (`3_linearmodels.qmd`, "The Full Range,
+Study by Study"; all trials after exclusions). Three designs, 8 levels of
+difference and 8 or 10 of strength in each:
+
+| Illusion | Validation (255 ppts) | EEG + Reliability (~600) | Main: International, Suggestibility, PCS, Self-Association (~1,360) | Full range | Reliable subrange | Validation trials outside it |
+|---|---|---|---|---|---|---|
+| Müller-Lyer | 0.04–0.46 x ±49 | 0.05–0.35 x ±23 | 0.045–0.45 x ±30 | 0.04–0.46 x ±49 | 0.045–0.45 x ±30 | 53% |
+| Vertical-Horizontal | 0.03–0.24 x ±66.5 | 0.05–0.225 x ±33 | 0.03–0.30 x ±45 | 0.03–0.30 x ±66.5 | 0.03–0.30 x ±45 | 38% |
+| Ebbinghaus | 0.07–0.70 x ±2.03 | 0.09–0.28 x ±1.0 | 0.05–0.50 x ±1.5 | 0.05–0.70 x ±2.03 | 0.05–0.50 x ±1.5 | 44% |
+
+So the reliable subrange is exactly the main design's range on all three
+illusions, contains the EEG + Reliability grid, and leaves out only levels of
+Validation. Validation is not the widest design in every way: its
+Vertical-Horizontal differences stop at 0.24, and its Ebbinghaus ones start
+at 0.07. What it alone has is the strongest illusions on all three, and the
+largest differences on Müller-Lyer and Ebbinghaus. Only Validation showed no
+illusion (strength 0, ~1% of the trials); the other designs' weakest strength
+is 2.3-3 on Müller-Lyer.
+
+**The linear subrange is still to be refined.** For now it is the whole
+reliable subrange on all three illusions. That is a default, not a decision.
+Under the coding of 6.15 the least linear DDM-5 parameter keeps R² .887 / .893
+/ .874 over it (ML / VH / Ebb, at the stimuli, trial-weighted, 6.16). A
+narrower subrange trades trials for linearity, and no criterion is chosen yet.
+Candidates on record:
+- the boxes of Study 1, drawn for the *signed* strength coding (D x S),
+  formerly `linear_regions` in `2_modelcomparison.qmd`. Müller-Lyer 0.1–0.4 x
+  ±30 was drawn by eye and kept by the user on 2026-11-16: worst R² 0.854
+  under D x S, 63% of its trials. Vertical-Horizontal 0.03–0.30 x ±45 (96%,
+  0.87) and Ebbinghaus 0.08–0.70 x ±1.5 (88%, 0.86) were proposed the same day
+  as the largest boxes as bilinear as Müller-Lyer's, never confirmed. The
+  Ebbinghaus box reaches past the reliable subrange (0.50).
+- leaving out Müller-Lyer's 0.045 level, the least linear part of its surface:
+  worst R² .917 rather than .887 (6.16).
+
+**Changing it.** Edit `igc_linear_ranges` in `models.R`; the `lin_*` entries
+follow. A variant may instead write its own range into its entry. Then:
+- `3_linearmodels.qmd` stops if either range is not within `plot_ranges`.
+- Its "how linear" R² use the new range (`linear_ranges` there is
+  `igc_linear_ranges`).
+- Its approximation figure draws the linear model's dashed lines only over
+  the range fitted.
+- `2_modelcomparison.qmd` outlines the subrange on every heatmap, and starts
+  the Best Model colour gradient at its difficulty bounds. Both happen only
+  where it is narrower than the reliable subrange (`linear_subrange()`): with
+  the two equal, as now, there is no outline.
+
+Like any change to `models.R`, `./hpc push` it before a fit. It changes the
+data of the `lin_*` models, so a shard fitted on the old range must not be
+adopted: use a fresh `IGC_MODELS_DIR` or `./hpc archive`.
+
+**Names.** "Reliable predictor space" (the paper, the qmds, 6.16) = the reliable
+subrange. Three older names meant the Study 1 boxes above, never the linear
+subrange as defined here: "linear-approximation region", `linear_regions`
+(retired from `2_modelcomparison.qmd` on 2026-11-25) and "optimal zone"
+(2026-11-16). In 6.14 and 6.16, "the range of stimuli" of a linear model is
+its linear subrange.
+
+**Still open in the paper.** Study 1's Results and Discussion say the effects
+are close to linear "over a central range of stimuli" and that Study 2 tests
+linear effects "within that range". Study 2's Methods say the models are fitted
+over the reliable predictor space. Both are true for now, but they have to be
+brought together once the linear subrange is settled (TODO in
+`paper/manuscript.qmd`).
+
+### 6.18 The reliability of the participants' effects: `4_reliability.qmd` (2026-11-25)
+
+The user's request: a new script that reads the best linear model of each
+illusion and ranks, by their reliability (D-vour,
+`performance::performance_dvour()`), the most interpretable participant-level
+effects of each parameter. These are difficulty, strength (incongruent in
+particular) and their interaction. It is a pipeline for now: it runs on the
+50-participant test (6.15), whose numbers mean nothing.
+
+**Where it is computed.** Like the other scripts, the qmd does not load a fit.
+`compute_grouplevel()` (`predictions.R`) adds a `grouplevel` element to every
+linear model's prediction file (no version bump, the qmd checks for it). It
+holds two tables in the format of `modelbased::estimate_grouplevel()`
+(Component, Group, Level, Parameter, Median, MAD, CI, CI_low, CI_high), with
+class `estimate_grouplevel` and `coef_name = "Median"`, which is all that
+`performance_dvour()` reads:
+- `terms`: every participant random effect as fitted;
+- `effects`: the interpretable combinations, made draw by draw
+  (`igc_grouplevel_effects`):
+  - Difficulty = `Difference`;
+  - Strength (incongruent / congruent) = `Strength ± 0.5 Strength:Effect`;
+  - Difficulty x Strength (incongruent / congruent) =
+    `Difference:Strength ± 0.5 Difference:Strength:Effect`.
+
+`estimate_grouplevel()` itself is not used, for two reasons. Its result
+carries the whole model in its attributes (55 MB on the test). And it
+summarises every random effect at once: a full fit has ~2,200 participants x
+31 terms, about 70,000 of them, i.e. GBs of draws. `compute_grouplevel()`
+goes one model parameter at a time instead. On the test it reproduced
+`estimate_grouplevel(m, dispersion = TRUE)` exactly (Median, MAD and CI of
+all 1,550 participant effects), and `performance_dvour()` gave identical
+results on the two (checked 2026-11-25 on the pulled shard: draws only, no
+brms predictions). The `effects` file is 0.6 MB on the test.
+
+D-vour = SD² of the participants' medians / (that + the mean MAD²).
+The `performance` documentation reads it as: above 0.75 strong, around 0.5
+use with caution, below 0.5 dominated by uncertainty. It is computed in the
+qmd, which also shows its two parts (the SD between participants and the mean
+MAD) and ranks the effects. Which model is "best" per illusion is
+`best_files` at the top of the qmd. For now that is the untransformed
+Müller-Lyer test, until the variants are compared on the full fits.
+
+On the test (50 participants, no meaning, for the record): the drift's
+incongruent strength slope was the most reliable effect (0.79), then the
+drift's difficulty (0.67), and every effect of the boundary was below 0.15.
+
+**Baselines added (2026-11-25, the user's request).** `igc_grouplevel_effects`
+starts with "Baseline" = `Intercept`: each parameter with no illusion, at
+the middle difficulty of the range and the centre of the ISI window, relative
+to the participant's study. It is the only effect the outlier proportion has.
+The test was re-predicted (11842973) and pulled. As the user expected, the
+baselines rank high: boundary 0.84, NDT 0.83 and drift 0.71 are three of the
+top four, with the drift's incongruent slope (0.79). The outlier proportion
+scores 0.36, the drift variability 0.24 and the starting point 0.12.
+
+**Empirical indices (2026-11-25, the user's request).** A section of
+`4_reliability.qmd` computes, for every participant and illusion, indices from
+the raw trials (`data/illusion_part*.csv`). It uses the trials of the linear
+subrange (`igc_linear_ranges`, the rule of `igc_linear_data()`), so the same
+trials lie behind the indices and the model. The indices are:
+- error rate; median correct RT; IES (mean correct RT / proportion correct);
+- the same three on incongruent trials;
+- the illusion effect on errors and on median RT (incongruent − congruent);
+- PSE and JND, from a per-participant logistic regression of the errors on
+  the difference and the signed strength:
+  - the PSE is the difference an incongruent illusion of *half* the strongest
+    strength of the range cancels (50% errors);
+  - the JND is log(3) / −slope of the difference, i.e. 50% to 75% correct with
+    no illusion.
+
+The PSE is taken at half the strongest strength because, at the strongest, it
+lies beyond the largest difference shown for ~17% of participants on ML and
+VH (8% on Ebb). Censoring those would drop the most susceptible.
+
+The PSE and JND are left missing:
+- with fewer than 5 errors;
+- when the fit fails;
+- when the slope of the difference is not negative;
+- when the JND lies beyond the largest difference shown (a flat function);
+- when the JND is below a tenth of the smallest difference (separation).
+
+Without that rule, a few fits gave PSEs of ±3e14. With it, 36 participants
+lose them on ML (1.6%), 45 on VH and 77 on Ebb (3.5%). The section takes about
+30 s for ~6,600 participant x illusion pairs. Medians across participants
+(ML / VH / Ebb): error rate .23 / .19 / .17; illusion effect on errors .45 /
+.31 / .25; PSE 0.18 / 0.085 / 0.12; JND 0.059 / 0.059 / 0.083.
+
+**Structure Analysis (2026-11-25, the user's request).** The last section of
+`4_reliability.qmd` builds one correlation matrix, sorted by hierarchical
+clustering of the *absolute* correlations: `correlation::cor_sort(1 - abs(r),
+distance = "raw")` gives the order, and the signed matrix is shown in it.
+That was the user's request, the same day: the default distance, (1 − r) / 2,
+put strongly but negatively related variables far apart. It holds every model effect with a
+D-vour above `reliable_threshold` (0.5) and every empirical index, over the
+participants who have both (Participant joined to the `grouplevel` Level).
+Its choices:
+- the correlations are Spearman's, since the RTs, IES, PSE and JND are
+  skewed;
+- every variable is centred within the participant's study first
+  (`center_within_study`). The model's baselines are deviations from the
+  study's intercept, while the empirical indices carry the differences
+  between studies too.
+- Once several illusions have a model, their variables enter the same
+  matrix, prefixed ML / VH / Ebb and joined by participant, which gives the
+  correlations across illusions.
+
+On the test (50 participants, ML only: 7 reliable effects + 10 indices; no
+meaning, for the record), the matrix splits into three clusters:
+- the drift's strength effects, with the illusion effect on errors, the
+  incongruent error rate and the PSE (drift strength (incongruent) with the
+  illusion effect on errors .78, with the PSE .71);
+- the boundary baseline, with the RTs and IES (.83 to .90);
+- the drift's baseline and difficulty.
+
+The drift's own effects are nearly collinear across participants: baseline
+with difficulty .98, and strength (incongruent) with Difficulty x Strength
+(incongruent) −.93. Check this on the full fits before reading the drift's
+effects as separate traits.
+
+**The user's position on correlations (2026-11-25).** Explore the *derived
+individual scores* (the posterior medians), not the model's latent
+random-effect correlations (`cor_Participant__…`). Those are more accurate,
+but people will use the models to derive individual scores and use those, so
+the scores' properties are what matters. Do not propose the latent
+correlations instead.
+
+**The model-based PSE (2026-11-25, the user's request).** Why it was added:
+the raw incongruent strength slope of the drift correlated −.71 to −.93 with
+the drift's baseline and difficulty on the test. That could be a shared gain
+(a precise observer has steeper slopes for real and illusory differences
+alike) rather than a lack of a separate susceptibility dimension. The
+behavioural PSE, which divides by the slope of the difference, was nearly
+independent of the JND (.17) and of the drift's baseline (−.10).
+
+How it is computed: `compute_grouplevel()` adds a "PSE" effect to the drift
+(`drift_pse()`, `igc_pse_strength = 0.5`, `igc_grouplevel_effect_names`).
+Draw by draw, from each participant's total drift coefficients (population +
+study intercept + participant, ISI at the window centre), it takes the
+physical difference at which the drift is zero under an incongruent illusion
+of half the strongest strength: −a / g on the coded scale, back to raw units
+through the inverse transformation. A gain common to the drift's coefficients
+cancels out of it. The empirical PSE of the qmd now reads the same
+`igc_pse_strength`. Checked on the pulled shard: a hand computation for one
+participant matches.
+
+On the test (re-predicted 11843176, pulled):
+- median 0.176, against 0.183 for the behavioural PSE of the same 50
+  participants; Spearman .94 with it (uncentred);
+- D-vour 0.82, third of all effects, after the boundary and NDT baselines and
+  above the raw strength slope (0.79);
+- in the structure matrix (centred within study): .96 with the behavioural
+  PSE, .91 with the illusion effect on errors, .78 with the raw strength
+  slope, but only −.18 with the drift's baseline, −.23 with its difficulty
+  and .14 with the JND.
+
+So a susceptibility measured relative to discrimination comes out largely
+separate from it. It still correlates −.50 with the boundary baseline (the
+behavioural PSE −.55), which a drift-only quantity need not. That could be
+a real relation or a trade-off between the drift and the boundary in the
+estimation. Look at it on the full fits.
 
 ---
 
@@ -2745,7 +3208,7 @@ machinery removed (2026-09-18); `verylong` — not worth it.
 | `refit_colleagues.md` | step-by-step for a colleague's account in the 2026-10-13 refit (6.5) |
 | `install_pkgs.R` | builds the project R library (`./hpc install`); enforces cogmod >= 0.3.5 (`IGC_COGMOD_MIN`) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
-| `models.R` | **the model registry** — one entry per model, read by everything else |
+| `models.R` | **the model registry** — one entry per model, read by everything else; also Study 2's linear subrange (`igc_linear_ranges`, 6.17) |
 | `fit_model.R` | fits the model named by `IGC_MODEL`, one shard per array task |
 | `fit.slurm` | array job for the above; its `#SBATCH` defaults are the production config |
 | `combine_model.R` | merges one model's shards, adds `loo`, keeps them |

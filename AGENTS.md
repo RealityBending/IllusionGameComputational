@@ -55,8 +55,8 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   (`gam_lnr_mullerlyer`, since 2026-10-13). Notes, logs and archived fits from
   before then call the MullerLyer models by the bare family name (`gam_lnr`).
 - **Study 1 (the model comparison) is closed** (2026-11-24): DDM-5 is
-  retained, and Study 2 fits it with linear effects within the
-  linear-approximation region. Do not propose further Study 1 variants
+  retained, and Study 2 fits it with linear effects within the linear
+  subrange (see the three ranges below). Do not propose further Study 1 variants
   (`analysis/server/AGENT.md` §6.12). The write-up is in
   `paper/manuscript.qmd`.
 - **Not every model in the registry should be submitted.**
@@ -97,12 +97,24 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   in `3_linearmodels.qmd`, which draws the paper's DDM-5 figure with the
   linear models of Study 2 over it since 2026-11-25), and
   the text follows the figures.
-- **Every figure is drawn over the reliable predictor space**, the same for
-  Study 1 and Study 2: `plot_ranges` in `analysis/server/predictions.R`, the
-  values holding less than 5% of an illusion's trials left out at each end of
-  each predictor (they all come from the Validation study alone). The fits of
-  Study 1 use every trial; those of Study 2 are fitted over that space or a
-  subrange of it. `analysis/server/AGENT.md` §6.16.
+- **The predictors have three ranges; keep them apart**
+  (`analysis/server/AGENT.md` §6.17):
+  - **The full range**: every value any study showed. The studies used three
+    stimulus designs, and Validation alone showed the extremes. The Study 1
+    fits use every trial, over this range.
+  - **The reliable subrange** (the paper's "reliable predictor space"): the
+    full range less the values holding less than 5% of an illusion's trials
+    at each end of each predictor, i.e. what only Validation showed. **Every
+    prediction and figure, of both studies, is drawn over it**: `plot_ranges`
+    in `analysis/server/predictions.R` (§6.16).
+  - **The linear subrange**: the part of the reliable subrange that the
+    linear models of Study 2 are fitted on, where the effects are taken to
+    be close enough to linear. It is `igc_linear_ranges` in
+    `analysis/server/models.R`, and the `lin_*` entries take their range from
+    it. **Still to be refined**: for now it is the whole reliable subrange,
+    as a default, not a decision. The old Study 1 boxes
+    (`linear_regions`, "linear-approximation region", "optimal zone") are
+    candidates, not it.
 - **`1_models.qmd` does not load fits either.** It reads the files that
   `./hpc priors` writes to `models/priors/` (fetched with
   `./hpc pull priors`): for every combined fit, its priors as brms resolved
@@ -113,8 +125,21 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   specification reads the DDM-5 prediction files of Study 1, and is where
   the coding of the linear models' predictors (|strength| x its direction,
   the range of stimuli, the per-illusion transformations) is decided and
-  drawn for the paper. The old `3_analysis.qmd` is `4_analysis.qmd` since
-  2026-11-24.
+  drawn for the paper. The old `3_analysis.qmd` (`4_analysis.qmd` from
+  2026-11-24) is `old.qmd` in the working tree since 2026-11-25.
+- **`4_reliability.qmd` does not load fits either.** It reads, from the
+  prediction file of the best linear model of each illusion, the
+  participants' effects that `compute_grouplevel()` (`analysis/server/predictions.R`)
+  summarises on the cluster from the draws. Those are the raw random effects,
+  and interpretable combinations of them: each parameter's baseline,
+  difficulty, strength when incongruent or congruent, and their interactions
+  with difficulty. `performance::performance_dvour()` ranks them by
+  reliability. Its "Empirical Indices" section computes behavioural indices
+  per participant from the raw trials of the linear subrange (error rates,
+  median RTs, IES, illusion effects, PSE, JND). Its "Structure Analysis" puts
+  the reliable model effects (D-vour > 0.5) and the indices in one sorted
+  Spearman correlation matrix, centred within study (`analysis/server/AGENT.md`
+  §6.18).
 - **Never run brms post-processing on a cluster fit with the laptop's brms.**
   The fits are brms 2.21.0, and the laptop's 2.23.1 rebuilds their smooth
   bases with the wrong signs. `log_lik()`, `loo()`, `posterior_*()`,

@@ -1,0 +1,588 @@
+---
+title: "IllusionComputationalModel - Reliability"
+editor: source
+editor_options:
+  chunk_output_type: console
+format:
+  html:
+    code-fold: true
+    self-contained: false
+    toc: true
+execute:
+  cache: false
+---
+
+The linear models of Study 2 (`3_linearmodels.qmd`) give every participant
+their own effects of task difficulty and of illusion strength, and of the two
+together, on each parameter of the DDM. This script asks how reliable these
+participant-level effects are: how well they tell the participants apart,
+given how uncertain each participant's estimate is. Those that do are the
+candidates for measuring individual differences in sensitivity to illusions.
+
+Like the other scripts, it never loads a fit. The participants' effects are
+summarised on the cluster, from the draws of the best linear model of each
+illusion (`compute_grouplevel()` in `server/predictions.R`, run by
+`./hpc predict`), and stored in the model's prediction file, which is pulled
+with `./hpc pull predictions`. The full fits hold some 70,000 participant-level
+parameters each, and were made with brms 2.21.0 (`server/AGENT.md` §3.9).
+
+::: {.callout-warning}
+**For now this runs on the 50-participant test of the Müller-Lyer model**
+(untransformed, `server/AGENT.md` §6.15): the pipeline, not the results. Fifty
+participants estimate neither the variability between participants nor the
+reliability well, and the Vertical-Horizontal and Ebbinghaus models are not
+fitted yet.
+:::
+
+## Loading
+
+```{r}
+#| warning: false
+#| error: false
+
+library(tidyverse)
+library(gt)
+
+# igc_grouplevel_effects: the definitions of the participants' effects
+source(if (dir.exists("server")) "server/predictions.R" else "analysis/server/predictions.R")
+# igc_linear_ranges: the linear subrange, which the empirical indices are
+# computed over, as the models are fitted over it
+source(if (dir.exists("server")) "server/models.R" else "analysis/server/models.R")
+
+path <- if (dir.exists("models")) "models/" else "analysis/models/"
+data_path <- if (dir.exists("../data")) "../data/" else "data/"
+
+# The prediction file of the best linear model of each illusion: the variant
+# (untransformed or transformed, 3_linearmodels.qmd) that the comparison of
+# the fits retains. Until the full fits exist, the Müller-Lyer one is the
+# 50-participant test of 2026-11-25 (job 11841190, server/AGENT.md 6.15), in a
+# directory of its own (pulled with IGC_LOCAL_MODELS, server/hpc), untransformed
+# (the user's choice over the √|strength| test, 2026-11-25), and the
+# Vertical-Horizontal one the same test of that illusion. An illusion with no
+# file yet is left out.
+best_files <- c(
+  MullerLyer = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/lin_ddm5_mullerlyer_MullerLyer.rds"),
+  VerticalHorizontal = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/",
+                              "lin_ddm5_verticalhorizontal_VerticalHorizontal.rds")
+)
+
+illusions <- c(MullerLyer = "Müller-Lyer", VerticalHorizontal = "Vertical-Horizontal",
+               Ebbinghaus = "Ebbinghaus")
+# The model's parameters, as estimate_grouplevel() names them ("conditional"
+# is the drift)
+parameter_labels <- c(conditional = "Drift", sigmadrift = "Drift Variability", boundary = "Boundary",
+                      bias = "Starting Point", ndt = "Non-Decision Time", poutlier = "Outlier Proportion")
+
+best_files <- best_files[file.exists(best_files)]
+if (length(best_files) < length(illusions)) {
+  message("No linear model yet for: ", paste(setdiff(names(illusions), names(best_files)), collapse = ", "))
+}
+grouplevel <- imap(best_files, \(file, ill) {
+  p <- readRDS(file)
+  if (is.null(p$grouplevel)) {
+    message(file, " has no participants' effects: re-run `./hpc predict` (predictions.R since 2026-11-25).")
+  }
+  p$grouplevel
+})
+grouplevel <- grouplevel[!vapply(grouplevel, is.null, logical(1))]
+
+# The tables, in one style, with the numbers centred in their cells
+gt_style <- function(tab) {
+  tab |>
+    cols_align("center", columns = where(is.numeric)) |>
+    tab_options(table.font.size = px(13), heading.title.font.size = px(16),
+                heading.subtitle.font.size = px(13), data_row.padding = px(3),
+                row_group.font.weight = "bold", row_group.background.color = "#F5F5F5")
+}
+```
+
+## The Participants' Effects
+
+Each parameter of the linear models has, per participant, a deviation from the
+population for each of its terms (the random effects): an intercept, the
+difference, the absolute strength, the absolute strength by its direction
+(Effect, +0.5 when the illusion is incongruent, −0.5 when it is congruent),
+and the interactions of the difference with the last two. The raw terms are
+not the most interpretable, since the effect of the strength is split between
+`Strength` and `Strength:Effect`. The effects studied here are the baseline of
+each parameter (its intercept) and combinations of the other terms, made draw
+by draw on the cluster:
+
+```{r}
+effect_meanings <- c(
+  "Baseline" = "The parameter with no illusion, at the middle difficulty and the centre of the ISI window",
+  "Difficulty" = "The effect of the difference between the targets, with no illusion",
+  "Strength (incongruent)" = "The slope of the illusion's strength when it is incongruent",
+  "Strength (congruent)" = "The slope of the illusion's strength when it is congruent",
+  "Difficulty x Strength (incongruent)" = "How the difference changes the slope of an incongruent illusion",
+  "Difficulty x Strength (congruent)" = "How the difference changes the slope of a congruent illusion",
+  "PSE" = paste0("The difference between the targets at which the drift is zero under an incongruent illusion ",
+                 "of medium strength: the difference the illusion cancels (drift only, raw units)")
+)
+tibble(Effect = names(igc_grouplevel_effects),
+       Terms = map_chr(igc_grouplevel_effects, \(w) {
+         paste(sprintf("%s%s%s", ifelse(seq_along(w) == 1, "", ifelse(w < 0, " − ", " + ")),
+                       ifelse(abs(w) == 1, "", paste0(abs(w), " × ")), names(w)), collapse = "")
+       })) |>
+  add_row(Effect = "PSE",
+          Terms = "−a / g in raw units: a, g the total drift at D = 0 and its slope of D, at half the strongest strength") |>
+  mutate(Meaning = effect_meanings[Effect]) |>
+  gt() |>
+  tab_header(title = "The participants' effects", subtitle = "Per parameter of the model") |>
+  gt_style() |>
+  cols_align("left")
+```
+
+The predictors are coded as in the fits: the difference from −1 to 1 and the
+absolute strength from 0 to 1 over the range fitted, so the slope of the
+strength is the change from no illusion to the strongest illusion of the range.
+Each effect is a deviation of the participant from the population, on the
+link scale of its parameter, and the baseline a deviation from the
+participant's study, which has an intercept of its own. The outlier proportion
+has a baseline only. Baselines can be expected to be the most reliable: every
+trial informs them, where a slope rests on the contrast between trials.
+
+The model-based PSE is the one effect that is not a deviation. It is computed
+draw by draw from the participant's total coefficients on the drift
+(population + study + participant), in the raw units of the difference, at
+the same strength as the empirical PSE below (`igc_pse_strength`, half the
+strongest of the range). It is the illusion's strength expressed as the
+physical difference it cancels. A precision common to all of a participant's
+drift coefficients cancels out of it. The raw strength slope keeps that
+precision: participants who see differences more sharply have steeper slopes
+for real and illusory differences alike. The PSE thus measures susceptibility
+relative to the participant's own discrimination.
+
+```{r}
+imap_dfr(grouplevel, \(g, ill) {
+  g$effects |>
+    as.data.frame() |>
+    summarise(Participants = n_distinct(Level), .by = Component) |>
+    mutate(Illusion = illusions[ill])
+}) |>
+  summarise(Participants = first(Participants), .by = Illusion) |>
+  gt() |>
+  tab_header(title = "Participants per model") |>
+  gt_style()
+```
+
+## Reliability: D-vour
+
+D-vour, the variability-over-uncertainty ratio (`performance::performance_dvour()`),
+compares how much the participants' estimates differ from one another with
+how uncertain each of them is:
+
+$$
+\text{D-vour} = \frac{\sigma_B^2}{\sigma_B^2 + \mu_{\text{SE}}^2}
+$$
+
+where $\sigma_B$ is the standard deviation, across participants, of their
+point estimates (posterior medians), and $\mu_{\text{SE}}$ the mean of their
+posterior dispersions (MADs). It is 0 when the differences between
+participants are no larger than the uncertainty of each, and tends to 1 when
+the uncertainty is negligible next to them. Above 0.75 the differences
+between participants are at least three times the uncertainty; around 0.5
+the two are similar, and the estimates should be used with caution; below
+0.5 the uncertainty dominates (the `performance` documentation). It rests on
+the estimates alone, so it is itself more reliable with more participants.
+
+```{r}
+# D-vour of every effect of every parameter, with the two quantities it is
+# made of
+dvour_of <- function(tables) {
+  imap_dfr(tables, \(g, ill) {
+    spread <- as.data.frame(g) |>
+      summarise(SD_between = sd(Median), Uncertainty = mean(MAD), .by = c(Component, Parameter))
+    performance::performance_dvour(g) |>
+      left_join(spread, by = c("Component", "Parameter")) |>
+      mutate(Illusion_Type = ill)
+  }) |>
+    mutate(Illusion = factor(illusions[Illusion_Type], levels = illusions),
+           Model_Parameter = factor(parameter_labels[Component], levels = parameter_labels),
+           Effect = Parameter)
+}
+dvour <- dvour_of(map(grouplevel, "effects")) |>
+  mutate(Effect = factor(Effect, levels = igc_grouplevel_effect_names))
+```
+
+### From the Most to the Least Reliable
+
+```{r}
+dvour_colour <- \(x) scales::col_numeric(c("#FFEBEE", "#FFF8E1", "#C8E6C9", "#2E7D32"),
+                                        domain = c(0, 1))(pmin(pmax(x, 0), 1))
+
+dvour |>
+  arrange(desc(D_vour)) |>
+  mutate(Rank = row_number(), .by = Illusion) |>
+  select(Illusion, Rank, Model_Parameter, Effect, D_vour, SD_between, Uncertainty) |>
+  gt(groupname_col = "Illusion") |>
+  tab_header(title = "Reliability of the participants' effects",
+             subtitle = "D-vour, from the most to the least reliable") |>
+  cols_label(Model_Parameter = "Parameter", D_vour = "D-vour",
+             SD_between = "SD between participants", Uncertainty = "Mean uncertainty (MAD)") |>
+  fmt_number(D_vour, decimals = 2) |>
+  fmt_number(c(SD_between, Uncertainty), decimals = 3) |>
+  data_color(D_vour, fn = dvour_colour) |>
+  tab_source_note("SD between participants and mean uncertainty on the link scale of each parameter.") |>
+  gt_style()
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 7
+
+dvour |>
+  mutate(Label = paste0(Model_Parameter, ": ", Effect)) |>
+  ggplot(aes(D_vour, reorder(Label, D_vour), colour = Model_Parameter)) +
+  annotate("rect", xmin = 0.75, xmax = 1, ymin = -Inf, ymax = Inf, fill = "#E8F5E9") +
+  annotate("rect", xmin = 0, xmax = 0.5, ymin = -Inf, ymax = Inf, fill = "#FFEBEE") +
+  geom_segment(aes(x = 0, xend = D_vour, yend = reorder(Label, D_vour)), linewidth = 0.4) +
+  geom_point(aes(shape = Effect), size = 2.5) +
+  facet_wrap(~ Illusion, scales = "free_y") +
+  scale_x_continuous(limits = c(0, 1), expand = c(0, 0)) +
+  scale_colour_manual(values = c(Drift = "#2196F3", "Drift Variability" = "#00BCD4", Boundary = "#4CAF50",
+                                 "Starting Point" = "#FF9800", "Non-Decision Time" = "#9C27B0",
+                                 "Outlier Proportion" = "#9E9E9E")) +
+  scale_shape_manual(values = c(18, 16, 17, 2, 15, 0, 8)) +
+  labs(x = "D-vour", y = NULL, colour = "Parameter", shape = "Effect") +
+  theme_minimal() +
+  theme(panel.grid.major.y = element_blank(), strip.text = element_text(face = "bold"))
+```
+
+### By Parameter and Effect
+
+The same, laid out as a grid, which makes it easier to see whether a
+parameter or an effect is reliable as a whole.
+
+```{r}
+#| fig-width: 9
+#| fig-height: 4
+
+dvour |>
+  ggplot(aes(Effect, Model_Parameter, fill = D_vour)) +
+  geom_tile(colour = "white", linewidth = 1) +
+  geom_text(aes(label = sprintf("%.2f", D_vour)), size = 3.2) +
+  facet_wrap(~ Illusion) +
+  scale_fill_gradientn(colours = c("#FFEBEE", "#FFF8E1", "#C8E6C9", "#2E7D32"), limits = c(0, 1),
+                       name = "D-vour") +
+  scale_x_discrete(labels = \(x) str_wrap(x, 14)) +
+  scale_y_discrete(limits = rev) +
+  labs(x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(panel.grid = element_blank(), strip.text = element_text(face = "bold"))
+```
+
+## Every Term as Fitted
+
+For reference, the D-vour of the raw random effects, every term of every
+parameter, the intercepts (and the outlier proportion's) included.
+
+```{r}
+dvour_of(map(grouplevel, "terms")) |>
+  arrange(desc(D_vour)) |>
+  mutate(Rank = row_number(), .by = Illusion) |>
+  select(Illusion, Rank, Model_Parameter, Term = Effect, D_vour, SD_between, Uncertainty) |>
+  gt(groupname_col = "Illusion") |>
+  tab_header(title = "Reliability of the random effects as fitted", subtitle = "D-vour") |>
+  cols_label(Model_Parameter = "Parameter", D_vour = "D-vour",
+             SD_between = "SD between participants", Uncertainty = "Mean uncertainty (MAD)") |>
+  fmt_number(D_vour, decimals = 2) |>
+  fmt_number(c(SD_between, Uncertainty), decimals = 3) |>
+  data_color(D_vour, fn = dvour_colour) |>
+  gt_style()
+```
+
+## Empirical Indices
+
+The usual way to measure individual differences in this task is from the
+behaviour directly: how often and how fast a participant responds, overall and
+when the illusion works against them, and where their psychometric function
+lies. These indices are computed here for every participant, on each illusion,
+from the trials the linear models are fitted on (the linear subrange,
+`igc_linear_ranges`), so that the next section can relate them to the
+participants' model parameters, with the same trials behind both.
+
+```{r}
+# The indices, in the order of the tables and plots, with what they are
+index_definitions <- tribble(
+  ~Index, ~Label, ~Definition,
+  "Error_Rate", "Error rate", "Proportion of errors, all trials",
+  "RT_Median", "Median RT (s)", "Median RT of the correct responses, all trials",
+  "IES", "IES (s)", "Inverse efficiency score: mean RT of the correct responses / proportion correct, all trials",
+  "Error_Rate_Incongruent", "Error rate, incongruent", "Proportion of errors when the illusion is incongruent",
+  "RT_Median_Incongruent", "Median RT, incongruent (s)", "Median RT of the correct responses when the illusion is incongruent",
+  "IES_Incongruent", "IES, incongruent (s)", "Inverse efficiency score when the illusion is incongruent",
+  "Illusion_Effect_Errors", "Illusion effect on errors", "Error rate, incongruent − congruent",
+  "Illusion_Effect_RT", "Illusion effect on RT (s)", "Median correct RT, incongruent − congruent",
+  "PSE", "PSE (difference)", "Point of subjective equality of an incongruent illusion of medium strength (half the strongest of the range): the difference between the targets it cancels (50% errors), from the psychometric function",
+  "JND", "JND (difference)", "Just-noticeable difference with no illusion: the difference from 50% to 75% correct, from the psychometric function"
+)
+
+index_definitions |>
+  select(Index = Label, Definition) |>
+  gt() |>
+  tab_header(title = "Empirical indices", subtitle = "Per participant and illusion, on the trials of the linear subrange") |>
+  gt_style() |>
+  cols_align("left")
+```
+
+The psychometric function is a logistic regression of each participant's
+errors on the difference between the targets and the signed strength of the
+illusion (positive when incongruent), on one illusion. Where the error rate is
+50%, the participant cannot tell the targets apart. With no illusion, the
+slope of the difference gives the JND. Under an incongruent illusion, the
+difference at which the errors reach 50% is the point of subjective equality:
+the physical difference the illusion cancels, in the units of the difference.
+It is taken at half the strongest incongruent strength of the range: at the
+strongest, it lies beyond the largest difference shown for about one
+participant in six on the Müller-Lyer and Vertical-Horizontal illusions, where
+it is extrapolated. The function is linear in both predictors, as a first
+approximation. It is left missing when the participant made fewer than five
+errors or the fit fails, and when it is degenerate. That covers errors that
+do not decrease as the difference grows, and a JND beyond the largest
+difference shown (the errors barely depend on the difference). It also covers
+a JND below a tenth of the smallest (the errors switch from all to none
+between two levels, so the slope is not estimable).
+
+```{r}
+# Every participant's trials on each illusion, within its linear subrange
+# (the rule of igc_linear_data(), which fit_model.R applies)
+ranges <- imap_dfr(igc_linear_ranges, \(r, ill) {
+  tibble(Illusion_Type = ill, D_lo = r$difference[1], D_hi = r$difference[2], S_max = r$strength)
+})
+trials <- map_dfr(1:3, \(i) read.csv(paste0(data_path, "illusion_part", i, ".csv"))) |>
+  mutate(Illusion_Difference = abs(Illusion_Difference)) |>
+  inner_join(ranges, by = "Illusion_Type") |>
+  filter(Illusion_Difference >= D_lo - 1e-9, Illusion_Difference <= D_hi + 1e-9,
+         abs(Illusion_Strength) <= S_max + 1e-9)
+
+# A participant's psychometric function on one illusion (see above): the PSE
+# of an incongruent illusion of half the strongest strength of the range, and
+# the JND, or NA when the function is degenerate
+psychometric <- function(d, s_max, d_lo, d_hi) {
+  na <- c(PSE = NA_real_, JND = NA_real_)
+  if (sum(d$Error) < 5) return(na)
+  fit <- tryCatch(suppressWarnings(glm(Error ~ Illusion_Difference + Illusion_Strength,
+                                       family = binomial, data = d)),
+                  error = \(e) NULL)
+  if (is.null(fit) || !fit$converged) return(na)
+  b <- coef(fit)
+  if (anyNA(b) || b[["Illusion_Difference"]] >= 0) return(na)
+  jnd <- log(3) / -b[["Illusion_Difference"]]
+  if (jnd > d_hi || jnd < d_lo / 10) return(na)
+  # At the strength of the model-based PSE (igc_pse_strength, server/predictions.R)
+  c(PSE = -(b[["(Intercept)"]] + b[["Illusion_Strength"]] * s_max * igc_pse_strength) /
+      b[["Illusion_Difference"]],
+    JND = jnd)
+}
+
+# The inverse efficiency score of some trials (missing if all are errors)
+ies <- \(rt, error) if (mean(error) >= 1) NA_real_ else mean(rt[error == 0]) / (1 - mean(error))
+
+empirical <- trials |>
+  group_by(Illusion_Type, Participant) |>
+  group_modify(\(d, key) {
+    inc <- d$Illusion_Strength > 0
+    con <- d$Illusion_Strength < 0
+    correct <- d$Error == 0
+    pf <- psychometric(d, d$S_max[1], d$D_lo[1], d$D_hi[1])
+    tibble(Study = sub("^IllusionGame", "", d$Dataset[1]),
+           Trials = nrow(d),
+           Error_Rate = mean(d$Error),
+           RT_Median = median(d$RT[correct]),
+           IES = ies(d$RT, d$Error),
+           Error_Rate_Incongruent = mean(d$Error[inc]),
+           RT_Median_Incongruent = median(d$RT[inc & correct]),
+           IES_Incongruent = ies(d$RT[inc], d$Error[inc]),
+           Illusion_Effect_Errors = mean(d$Error[inc]) - mean(d$Error[con]),
+           Illusion_Effect_RT = median(d$RT[inc & correct]) - median(d$RT[con & correct]),
+           PSE = pf[["PSE"]],
+           JND = pf[["JND"]])
+  }) |>
+  ungroup() |>
+  mutate(Illusion = factor(illusions[Illusion_Type], levels = illusions))
+```
+
+```{r}
+# Per illusion: each index's median and interquartile range across
+# participants, and the number of participants it could be computed for
+empirical |>
+  pivot_longer(all_of(index_definitions$Index), names_to = "Index", values_to = "Value") |>
+  summarise(Median = median(Value, na.rm = TRUE),
+            Q1 = quantile(Value, 0.25, na.rm = TRUE),
+            Q3 = quantile(Value, 0.75, na.rm = TRUE),
+            N = sum(!is.na(Value)),
+            .by = c(Illusion, Index)) |>
+  mutate(Index = factor(index_definitions$Label[match(Index, index_definitions$Index)],
+                        levels = index_definitions$Label),
+         Summary = sprintf("%.3g [%.3g, %.3g]", Median, Q1, Q3)) |>
+  select(Illusion, Index, Summary, N) |>
+  arrange(Illusion, Index) |>
+  pivot_wider(names_from = Illusion, values_from = c(Summary, N), names_glue = "{Illusion}__{.value}",
+              names_vary = "slowest") |>
+  arrange(Index) |>
+  gt() |>
+  tab_header(title = "Empirical indices", subtitle = "Median [interquartile range] across participants, and N") |>
+  tab_spanner_delim("__") |>
+  fmt_integer(ends_with("__N")) |>
+  gt_style()
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 10
+
+# Their distributions across participants. The axes stop at the 1st and 99th
+# percentiles of each index, which the PSE and the JND can exceed by far when a
+# psychometric function is nearly flat.
+illusion_colours <- c("Müller-Lyer" = "#E91E63", "Vertical-Horizontal" = "#3F51B5", "Ebbinghaus" = "#009688")
+empirical |>
+  pivot_longer(all_of(index_definitions$Index), names_to = "Index", values_to = "Value") |>
+  filter(!is.na(Value)) |>
+  mutate(Index = factor(index_definitions$Label[match(Index, index_definitions$Index)],
+                        levels = index_definitions$Label)) |>
+  filter(between(Value, quantile(Value, 0.01), quantile(Value, 0.99)), .by = Index) |>
+  ggplot(aes(Value, fill = Illusion, colour = Illusion)) +
+  geom_density(alpha = 0.25, linewidth = 0.4) +
+  facet_wrap(~ Index, scales = "free", ncol = 2) +
+  scale_fill_manual(values = illusion_colours) +
+  scale_colour_manual(values = illusion_colours) +
+  labs(x = NULL, y = NULL, fill = NULL, colour = NULL) +
+  theme_minimal() +
+  theme(axis.text.y = element_blank(), panel.grid.minor = element_blank(),
+        strip.text = element_text(face = "bold"), legend.position = "top")
+```
+
+The indices are computed for every participant, but only those in a model
+(`grouplevel`, above) have parameters to compare them with: for now, the 50
+participants of the Müller-Lyer test.
+
+```{r}
+imap_dfr(grouplevel, \(g, ill) {
+  ids <- unique(as.data.frame(g$effects)$Level)
+  tibble(Illusion = illusions[[ill]],
+         `In the model` = length(ids),
+         `With empirical indices` = sum(ids %in% empirical$Participant[empirical$Illusion_Type == ill]))
+}) |>
+  gt() |>
+  tab_header(title = "Participants in both") |>
+  gt_style()
+```
+
+## Structure Analysis
+
+How the model's participant-level effects relate to one another and to the
+empirical indices: one correlation matrix of every reliable model effect (a
+D-vour above `reliable_threshold`) and every empirical index, over the
+participants who have both, sorted by hierarchical clustering of the absolute
+correlations (`correlation::cor_sort()` on 1 − |r|), so that variables that go
+together sit together, whether they rise or fall together.
+Once several illusions have a model, their variables enter the same matrix,
+joined by participant, which also gives their correlations across illusions.
+
+Two choices:
+- The correlations are Spearman's, since several indices are skewed (RTs,
+  IES, the PSE and JND).
+- Every variable is centred within the participant's study first. The model's
+  baselines are deviations from the study's intercept, while the empirical
+  indices also carry the differences between studies. Centring both leaves
+  the differences between participants of the same study only, on both sides.
+
+The empirical indices have no reliability of their own here, so a weak
+correlation with one of them may only mean that it is noisy.
+
+```{r}
+# The threshold of D-vour above which a model effect enters the matrix
+reliable_threshold <- 0.5
+center_within_study <- TRUE
+
+illusion_codes <- c(MullerLyer = "ML", VerticalHorizontal = "VH", Ebbinghaus = "Ebb")
+several <- length(grouplevel) > 1
+
+# The reliable model effects, per illusion
+reliable_effects <- dvour |>
+  filter(D_vour > reliable_threshold) |>
+  select(Illusion_Type, Component, Parameter, D_vour)
+
+# Each participant's model effects (posterior medians), long, for the reliable
+# ones
+model_scores <- imap_dfr(grouplevel, \(g, ill) mutate(as.data.frame(g$effects), Illusion_Type = ill)) |>
+  semi_join(reliable_effects, by = c("Illusion_Type", "Component", "Parameter")) |>
+  transmute(Participant = Level, Illusion_Type, Source = "Model",
+            Variable = paste0(parameter_labels[Component], ": ", Parameter), Value = Median)
+
+# Their empirical indices, on the illusions that have a model, for the
+# participants in it
+empirical_scores <- empirical |>
+  filter(Illusion_Type %in% names(grouplevel)) |>
+  semi_join(distinct(model_scores, Participant, Illusion_Type), by = c("Participant", "Illusion_Type")) |>
+  pivot_longer(all_of(index_definitions$Index), names_to = "Index", values_to = "Value") |>
+  transmute(Participant, Illusion_Type, Source = "Empirical",
+            Variable = index_definitions$Label[match(Index, index_definitions$Index)], Value)
+
+# Every participant's study, from the empirical indices (every participant
+# has them)
+studies_of <- distinct(empirical, Participant, Study)
+
+structure_long <- bind_rows(model_scores, empirical_scores) |>
+  mutate(Variable = if (several) paste0(illusion_codes[Illusion_Type], " ", Variable) else Variable) |>
+  left_join(studies_of, by = "Participant") |>
+  mutate(Value = if (center_within_study) Value - mean(Value, na.rm = TRUE) else Value,
+         .by = c(Variable, Study))
+
+structure_wide <- structure_long |>
+  select(Participant, Variable, Value) |>
+  pivot_wider(names_from = Variable, values_from = Value)
+```
+
+```{r}
+reliable_effects |>
+  mutate(Illusion = illusions[Illusion_Type], Parameter_label = parameter_labels[Component]) |>
+  arrange(Illusion, desc(D_vour)) |>
+  select(Illusion, Parameter = Parameter_label, Effect = Parameter, D_vour) |>
+  gt(groupname_col = "Illusion") |>
+  tab_header(title = "The model effects in the matrix",
+             subtitle = paste0("D-vour above ", reliable_threshold, ", with the ",
+                               nrow(index_definitions), " empirical indices")) |>
+  cols_label(D_vour = "D-vour") |>
+  fmt_number(D_vour, decimals = 2) |>
+  data_color(D_vour, fn = dvour_colour) |>
+  gt_style()
+```
+
+```{r}
+#| fig-width: 9
+#| fig-height: 8.5
+
+# Spearman correlations, pairwise, sorted by hierarchical clustering of their
+# absolute values: the distance between two variables is 1 - |r|, so that
+# strongly related ones sit together whatever the sign of the relation
+# (cor_sort()'s default, (1 - r) / 2, would put r = -.9 as far apart as
+# possible). The signed matrix is then shown in that order.
+r <- cor(select(structure_wide, -Participant), method = "spearman", use = "pairwise.complete.obs")
+order_vars <- rownames(correlation::cor_sort(1 - abs(r), distance = "raw"))
+r <- r[order_vars, order_vars]
+sources <- distinct(structure_long, Variable, Source)
+
+as.data.frame(r) |>
+  rownames_to_column("Variable1") |>
+  pivot_longer(-Variable1, names_to = "Variable2", values_to = "r") |>
+  mutate(Label = if_else(Variable1 == Variable2, "", sub("^(-?)0\\.", "\\1.", sprintf("%.2f", r))),
+         Variable1 = factor(Variable1, levels = rev(order_vars)),
+         Variable2 = factor(Variable2, levels = order_vars)) |>
+  ggplot(aes(Variable2, Variable1, fill = r)) +
+  geom_tile(colour = "white", linewidth = 0.4) +
+  geom_text(aes(label = Label, colour = abs(r) > 0.6), size = 2.4, show.legend = FALSE) +
+  scale_fill_gradient2(low = "#1565C0", mid = "white", high = "#C62828", limits = c(-1, 1), name = "rho") +
+  scale_colour_manual(values = c("FALSE" = "grey20", "TRUE" = "white")) +
+  labs(x = NULL, y = NULL,
+       title = "Structure of the model effects and the empirical indices",
+       subtitle = paste0("Spearman correlations, ", nrow(structure_wide), " participants",
+                         if (center_within_study) ", centred within study" else "",
+                         "; ", sum(sources$Source == "Model"), " reliable model effects (D-vour > ",
+                         reliable_threshold, ") and ", sum(sources$Source == "Empirical"),
+                         " empirical indices")) +
+  coord_equal() +
+  theme_minimal(base_size = 9) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid = element_blank())
+```

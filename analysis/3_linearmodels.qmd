@@ -34,6 +34,9 @@ library(gt)
 
 # restore_units(): the Z-scored predictors of the Study 1 fits back in raw units
 source(if (dir.exists("server")) "server/predictions.R" else "analysis/server/predictions.R")
+# The model registry: Study 2's linear subrange (igc_linear_ranges) and the
+# linear models' entries
+source(if (dir.exists("server")) "server/models.R" else "analysis/server/models.R")
 
 path <- if (dir.exists("models")) "models/" else "analysis/models/"
 pred_path <- paste0(path, "predictions/")
@@ -42,11 +45,16 @@ data_path <- if (dir.exists("../data")) "../data/" else "data/"
 # The prediction files of Study 2's linear models, per illusion. They are made
 # on the cluster from the combined fits (`./hpc combine`, `./hpc predict`, then
 # `./hpc pull predictions`), like Study 1's, and never computed here. Until the
-# full fits exist, the Müller-Lyer one is the 50-participant test of 2026-11-24
-# (job 11837255, server/AGENT.md 6.14), in a directory of its own (pulled with
-# IGC_LOCAL_MODELS, server/hpc). An illusion with no file yet is left out.
+# full fits exist, the Müller-Lyer one is the 50-participant test of 2026-11-25
+# (job 11841190, the coding without a gap, server/AGENT.md 6.15), in a
+# directory of its own (pulled with IGC_LOCAL_MODELS, server/hpc). The test of
+# 2026-11-24, with the gap, is in test_lin_ddm5_20261124_nutpie/ (6.14). The
+# Vertical-Horizontal one is the same test (submitted 2026-11-25), in the same
+# directory. An illusion with no file yet is left out.
 linear_files <- c(
-  MullerLyer = paste0(path, "test_lin_ddm5_20261124_nutpie/predictions/lin_ddm5_mullerlyer_MullerLyer.rds")
+  MullerLyer = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/lin_ddm5_mullerlyer_MullerLyer.rds"),
+  VerticalHorizontal = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/",
+                              "lin_ddm5_verticalhorizontal_VerticalHorizontal.rds")
 )
 
 illusions <- c(MullerLyer = "Müller-Lyer", VerticalHorizontal = "Vertical-Horizontal",
@@ -60,8 +68,9 @@ df <- map_dfr(1:3, \(i) read.csv(paste0(data_path, "illusion_part", i, ".csv")))
 # The tables, in one style, with the numbers centred in their cells (side by
 # side, right-aligned numbers in cells of a similar colour read as one cell).
 # R² cells are coloured on one scale throughout, from pale orange (0.7 and
-# below) to green (1), as in the paper's figure, and changes in R² from red
-# (worse) to green (better); values beyond a scale take the colour of its end.
+# below) to green (1), as in the figure of the transformations, and changes in
+# R² from red (worse) to green (better); values beyond a scale take the colour
+# of its end.
 gt_style <- function(tab) {
   tab |>
     cols_align("center", columns = where(is.numeric)) |>
@@ -128,22 +137,85 @@ surfaces |>
   gt_style()
 ```
 
+### The Three Ranges of the Predictors
+
+Task difficulty and illusion strength are used over three nested ranges
+(`server/AGENT.md` §6.17):
+
+- **The full range**: every value shown in any study. The Study 1 models are
+  fitted to every trial, over this range.
+- **The reliable predictor space** (the reliable subrange): the full range
+  less the values that only one study showed. Every prediction and figure, of
+  Study 1 and Study 2, is made over it (`plot_ranges` in
+  `server/predictions.R`).
+- **The linear subrange**: the part of the reliable predictor space that the
+  linear models of Study 2 are fitted on, where the effects of the two
+  predictors are taken to be close enough to linear (`igc_linear_ranges` in
+  `server/models.R`). It is still to be refined, and for now it is the whole
+  reliable predictor space.
+
+### The Full Range, Study by Study
+
+The studies did not all show the same stimuli. They used three designs (table
+below). Validation, the first, showed the strongest illusions, and on
+Müller-Lyer and Ebbinghaus also the largest differences. EEG and Reliability
+used a narrower grid. The four later studies (International, Suggestibility,
+Phenomenological Control and Self-Association) used the main one, which
+contains the EEG and Reliability grid. Every study showed 8 levels of difference
+and 8 or 10 of strength. The levels that only Validation showed were seen by
+about 250 participants, in about 4,000 trials per level, against 10,000 to
+27,000 trials per level elsewhere. What is estimated there rests on one study,
+which the GAMs of Study 1, with no effect of study, cannot tell apart from what
+is particular to it.
+
+```{r}
+# The stimuli of each study, per illusion: the range of the difference and of
+# the absolute strength, their numbers of levels, and the share of the trials
+# outside the reliable predictor space (plot_ranges, checked against the data
+# in the next chunk)
+study_order <- c("Validation", "EEG", "Reliability", "International", "Suggestibility", "PCS",
+                 "SelfAssociation")
+df |>
+  mutate(Study = factor(sub("^IllusionGame", "", Dataset), levels = study_order),
+         Reliable = in_plot_range(first(Illusion_Type), Illusion_Difference, Illusion_Strength),
+         .by = Illusion_Type) |>
+  summarise(Participants = n_distinct(Participant), Trials = n(),
+            Difference_from = min(Illusion_Difference), Difference_to = max(Illusion_Difference),
+            Difference_levels = n_distinct(Illusion_Difference),
+            Strength_max = max(abs(Illusion_Strength)), Strength_levels = n_distinct(abs(Illusion_Strength)),
+            Outside = mean(!Reliable), .by = c(Illusion_Type, Study)) |>
+  mutate(Illusion = factor(illusions[Illusion_Type], levels = illusions)) |>
+  arrange(Illusion, Study) |>
+  select(Illusion, Study, Participants, Trials, Difference_from, Difference_to, Difference_levels,
+         Strength_max, Strength_levels, Outside) |>
+  gt(groupname_col = "Illusion") |>
+  tab_header(title = "The full range, study by study",
+             subtitle = "The stimuli each study showed, and the share of its trials outside the reliable predictor space") |>
+  tab_spanner("Difference", starts_with("Difference")) |>
+  tab_spanner("Strength", starts_with("Strength")) |>
+  cols_label(Difference_from = "from", Difference_to = "to", Difference_levels = "levels",
+             Strength_max = "±", Strength_levels = "levels", Outside = "Trials outside") |>
+  fmt_integer(c(Participants, Trials)) |>
+  fmt_number(starts_with("Difference_"), decimals = 3, drop_trailing_zeros = TRUE) |>
+  fmt_integer(ends_with("_levels")) |>
+  fmt_number(Strength_max, decimals = 2, drop_trailing_zeros = TRUE) |>
+  fmt_percent(Outside, decimals = 0) |>
+  tab_source_note("Strength levels count a strength and its opposite as one; PCS is Phenomenological Control.") |>
+  gt_style()
+```
+
 ### The Reliable Predictor Space
 
-The studies did not all show the same stimuli. Validation, the first, used the
-widest grid of difficulty and strength, and the six others narrower ones, so
-the edges of every illusion's space were seen by about 250 participants, in
-about 4,000 trials per level, against 10,000 to 27,000 trials per level
-elsewhere. What is estimated there rests on one study, which the GAMs of Study
-1, with no effect of study, cannot tell apart from what is particular to it.
-
-The analyses are therefore limited to a reliable predictor space, by one rule
-for the three illusions: at each end of each predictor, the most extreme
-values that together hold less than 5% of the illusion's trials are left out.
-The difference is kept from its 5th to its 95th percentile, and the absolute
-strength up to its 95th percentile. Every curve and heatmap of Study 1 and
-Study 2 is drawn over this space (`plot_ranges` in `server/predictions.R`,
-which the code below checks against the data).
+The figures and the linear fits are therefore limited to a reliable predictor
+space, by one rule for the three illusions: at each end of each predictor, the
+most extreme values that together hold less than 5% of the illusion's trials
+are left out. The difference is kept from its 5th to its 95th percentile, and
+the absolute strength up to its 95th percentile. On all three illusions this is
+exactly the range of the main design. What it leaves out is the levels that
+only Validation showed, 38% to 53% of that study's trials, and none of the
+other studies' trials. Every curve and heatmap of Study 1 and Study 2 is drawn
+over this space (`plot_ranges` in `server/predictions.R`, which the code below
+checks against the data).
 
 ```{r}
 # The reliable predictor space at threshold p: the difference from its p-th to
@@ -199,25 +271,82 @@ df |>
   gt_style()
 ```
 
-The linear models are fitted over the whole reliable space (`linear` in the
-registry of `server/models.R`, which repeats it). One fitted over a narrower
-subrange would show it in the figures, as lines that stop short of the edges
-of the space. The Study 1 boxes (Müller-Lyer 0.1–0.4 x ±30, `linear_regions`
-in `2_modelcomparison.qmd`) were drawn for the coding of strength used there,
-and are not needed with the one chosen below.
+### The Linear Subrange
 
-The Müller-Lyer surfaces of Study 1 were predicted before 2026-11-25, and
-start at a difference of 0.05, not 0.045: its stimuli at 0.045 (8% of its
-trials) take the surface extended linearly by half a grid step. They are where
-its R² drops: without them, the worst parameter of the coding retained below
-is at .917 rather than .887 (the non-decision time). Its numbers are therefore
-provisional until DDM-5 is predicted over the new space (`./hpc predict
-gam_ddm5_mullerlyer`).
+The linear models are fitted over a linear subrange of each illusion, within
+the reliable predictor space. This is the set of stimuli over which the effects
+of the two predictors are taken to be close enough to linear for a linear model
+to stand in for DDM-5's surfaces. It is set in `igc_linear_ranges` in
+`server/models.R`, and the registry's linear models take their range from it.
+
+**The linear subrange is still to be refined.** For now it is the whole
+reliable predictor space, on all three illusions. With the coding chosen below,
+the least linear parameter keeps an R² of .87 to .89 over it. A narrower
+subrange would trade trials for linearity, and the criterion for that is not
+decided. The boxes drawn in Study 1 for the signed coding of strength (Müller-Lyer
+0.1–0.4 x ±30, drawn by eye) are candidates (`server/AGENT.md` §6.17). A
+narrower subrange shows in the figures: the linear model's lines stop short of
+the edges of the reliable predictor space, and `2_modelcomparison.qmd`
+outlines the subrange on its heatmaps.
+
+For Müller-Lyer, the reliable predictor space starts at a difference of 0.045,
+the hardest level of the main design (8% of its trials), where the range of
+Study 1 started at 0.05. That level is the least linear part of its surfaces:
+without it, the worst parameter of the coding retained below is at .917 rather
+than .887 (the non-decision time), as the surfaces bend most at the hardest
+discriminations. It is one candidate for a narrower linear subrange.
 
 ```{r}
-# The range the linear models are fitted on, in raw units: difference from-to,
-# and the largest absolute strength. The reliable predictor space for all three.
-linear_ranges <- map(plot_ranges, \(r) list(difference = r$difference, strength = max(r$strength)))
+# The linear subrange, in raw units: difference from-to, and the largest
+# absolute strength (igc_linear_ranges in server/models.R). For now the
+# reliable predictor space on all three illusions. It must lie within the
+# reliable predictor space, as must the range of every linear model in the
+# registry (a variant may set its own).
+linear_ranges <- igc_linear_ranges
+within_reliable <- function(r, illusion) {
+  p <- plot_ranges[[illusion]]
+  !is.null(p) && r$difference[1] >= p$difference[1] - 1e-9 && r$difference[2] <= p$difference[2] + 1e-9 &&
+    r$strength <= max(p$strength) + 1e-9
+}
+for (ill in names(linear_ranges)) {
+  if (!within_reliable(linear_ranges[[ill]], ill)) {
+    stop("igc_linear_ranges in server/models.R is not within the reliable predictor space of ", ill, ".")
+  }
+}
+for (m in names(igc_models)) {
+  l <- igc_models[[m]]$linear
+  if (!is.null(l) && !within_reliable(l, igc_models[[m]]$illusion)) {
+    stop(m, ": its range in server/models.R is not within the reliable predictor space.")
+  }
+}
+
+# The three ranges side by side, with the trials in each
+range_row <- function(ill, d, s) {
+  inside <- df$Illusion_Type == ill & df$Illusion_Difference >= d[1] - 1e-9 &
+    df$Illusion_Difference <= d[2] + 1e-9 & abs(df$Illusion_Strength) <= s + 1e-9
+  tibble(Difference = paste0(signif(d[1], 3), "–", signif(d[2], 3)), Strength = paste0("±", signif(s, 3)),
+         Trials = sum(inside) / sum(df$Illusion_Type == ill))
+}
+imap_dfr(illusions, \(label, ill) {
+  x <- df[df$Illusion_Type == ill, ]
+  bind_rows(
+    range_row(ill, range(x$Illusion_Difference), max(abs(x$Illusion_Strength))) |> mutate(Range = "Full"),
+    range_row(ill, plot_ranges[[ill]]$difference, max(plot_ranges[[ill]]$strength)) |>
+      mutate(Range = "Reliable predictor space"),
+    range_row(ill, linear_ranges[[ill]]$difference, linear_ranges[[ill]]$strength) |>
+      mutate(Range = "Linear subrange (to be refined)")
+  ) |>
+    mutate(Illusion = label)
+}) |>
+  mutate(Illusion = factor(Illusion, levels = illusions)) |>
+  select(Illusion, Range, Difference, Strength, Trials) |>
+  gt(groupname_col = "Illusion") |>
+  tab_header(title = "The three ranges of the predictors",
+             subtitle = "Full: what the Study 1 models are fitted on. Reliable: what every figure shows. Linear: what Study 2 fits") |>
+  cols_label(Range = "", Trials = "Trials") |>
+  fmt_percent(Trials, decimals = 1) |>
+  gt_style()
+
 in_range <- function(illusion, D, S) {
   r <- linear_ranges[[illusion]]
   if (is.null(r)) return(rep(TRUE, length(D)))
@@ -779,9 +908,8 @@ are population-level predictions at the same points (`compute_curves()` in
 `server/predictions.R`), the linear model's at the centre of each study's ISI
 window. With strength coded as its absolute value and its side, the linear
 model's curves are two half-lines, one per side, which meet at zero strength.
-The 50-participant test drawn for now (Müller-Lyer) was fitted with the
-earlier coding, with a gap at zero strength (`server/AGENT.md` §6.14), so its
-half-lines do not meet.
+For now only the Müller-Lyer illusion has one, a test on 50 participants
+(`server/AGENT.md` §6.15).
 
 Each illusion is drawn over its reliable predictor space: DDM-5 over all of
 it, and a linear model over the range it was fitted on, so that a model fitted
@@ -844,16 +972,17 @@ plot_approximation <- function(curves) {
   )
   panels <- unlist(unname(groups))
 
-  # The difficulty levels differ between illusions: their rank among the GAM's
-  # levels is what is coloured, from the hardest to the easiest, and a linear
-  # curve takes the colour of the GAM curve at the same difficulty. The
-  # difference is rounded, as levels from two grids differ in the last digits.
-  levels_of <- curves |>
+  # The difficulty levels differ between illusions: each curve is coloured by
+  # its difference, on a scale from the hardest of the GAM's levels (0) to the
+  # easiest (1), which are evenly spaced. A linear curve at the same level as a
+  # GAM curve takes its colour, and one predicted on another grid (made before
+  # plot_ranges last changed) the colour of its own difficulty.
+  range_of <- curves |>
     filter(Type == "GAM") |>
-    summarise(Levels = list(sort(unique(round(Illusion_Difference, 5)))), .by = Illusion_Type)
+    summarise(Lo = min(Illusion_Difference), Hi = max(Illusion_Difference), .by = Illusion_Type)
   d <- curves |>
-    left_join(levels_of, by = "Illusion_Type") |>
-    mutate(Difficulty = map2_dbl(Illusion_Difference, Levels, \(x, lv) (match(round(x, 5), lv) - 1) / (length(lv) - 1)),
+    left_join(range_of, by = "Illusion_Type") |>
+    mutate(Difficulty = pmin(pmax((Illusion_Difference - Lo) / (Hi - Lo), 0), 1),
            Predicted = case_when(Parameter == "mu" ~ -Predicted,
                                  Parameter == "bias" ~ 1 - Predicted,
                                  .default = Predicted),
@@ -862,17 +991,7 @@ plot_approximation <- function(curves) {
            Type = factor(Type, levels = c("GAM", "Linear")),
            # One line per level for the GAM, per level and side for the
            # linear model
-           Line = paste(Type, Difficulty, sign(coalesce(Effect, 0))))
-  # A linear model predicted on another grid than the GAM's (one of them made
-  # before plot_ranges last changed) has no colour: left out, with a warning,
-  # rather than stopping the render of the paper's figure
-  unmatched <- is.na(d$Difficulty)
-  if (any(unmatched)) {
-    warning("Linear curves at difficulties the GAM was not predicted at, left out (",
-            paste(unique(d$Illusion_Type[unmatched]), collapse = ", "),
-            "): re-run `./hpc predict` for both on the current plot_ranges.")
-    d <- d[!unmatched, ]
-  }
+           Line = paste(Type, round(Illusion_Difference, 5), sign(coalesce(Effect, 0))))
 
   # Reference lines: no drift, and a starting point half-way. Dotted, where
   # plot_retained() has them dashed, which here are the linear models.
@@ -956,11 +1075,161 @@ plot_approximation <- function(curves) {
 plot_approximation(approx_curves)
 ```
 
+## The Effect of the Interval Before the Stimulus
+
+What the linear models make of the ISI (see "The Interval Before the
+Stimulus" above). Each parameter has the same quadratic in the position of
+the ISI within its study's window, plus a random intercept per study. The
+curves below are each study's, with its own intercept and the participant at
+the population level, along its own window in seconds: the window's centre
+plus 0.25 s times the coded ISI, as `fit_model.R` codes it. They are drawn
+at three stimuli: no illusion, at the hardest, the middle and the easiest
+difficulty of the range fitted. On the link scale the ISI moves every
+parameter by the same amount at every stimulus, so a parameter's curves
+differ between the three columns only in their level; the error rate and the
+median RT depend on the stimulus too. As in the figure of the linear
+approximation, the drift is positive towards the correct response and the
+starting point runs from 0 at the error boundary to 1 at the correct one.
+
+The predictions are made on the cluster (`compute_isi_curves()` in
+`server/predictions.R`) and stored in the linear models' prediction files,
+since 2026-11-25. For now only the 50-participant test of the Müller-Lyer
+model has them (`server/AGENT.md` §6.15), whose studies are those its 50
+participants come from: the study intercepts of the studies with few of them
+rest on little.
+
+```{r}
+# The ISI predictions of the linear models that have them, with the ISI in
+# seconds: the centre of its study's window (isi_windows, computed as
+# fit_model.R does) + 0.25 x the coded ISI
+isi <- imap(linear_files, \(file, ill) readRDS(file)$isi)
+if (any(vapply(isi, is.null, logical(1)))) {
+  message("No ISI predictions (re-run `./hpc predict`) for: ",
+          paste(names(isi)[vapply(isi, is.null, logical(1))], collapse = ", "))
+}
+isi <- isi[!vapply(isi, is.null, logical(1))]
+
+isi_curves <- imap_dfr(isi, \(x, ill) mutate(x$curves, Illusion_Type = ill)) |>
+  left_join(select(isi_windows, Study = Dataset, ISI_centre), by = "Study") |>
+  mutate(ISI_seconds = ISI_centre + 0.25 * ISI,
+         Study = factor(sub("^IllusionGame", "", Study), levels = study_order))
+stopifnot(!anyNA(isi_curves$ISI_seconds))
+
+study_colours <- c(Validation = "#E91E63", EEG = "#9C27B0", Reliability = "#3F51B5",
+                   International = "#03A9F4", Suggestibility = "#009688", PCS = "#8BC34A",
+                   SelfAssociation = "#FF9800")
+
+# One illusion: a row per outcome and parameter, a column per stimulus, a line
+# per study along its own window
+plot_isi <- function(curves, illusion) {
+  rows <- c("Error Rate" = "Error rate", "Median RT" = "Median RT\n(correct, s)",
+            "Drift" = "Drift rate\n(+ towards correct)", "Drift Variability" = "Drift rate\nvariability",
+            "Boundary" = "Boundary\nseparation", "Bias" = "Starting point\n(0 error, 1 correct)",
+            "NDT" = "Non-decision\ntime (s)")
+  d <- curves |>
+    filter(Illusion_Type == illusion, Parameter %in% names(approx_labels)) |>
+    mutate(Predicted = case_when(Parameter == "mu" ~ -Predicted,
+                                 Parameter == "bias" ~ 1 - Predicted,
+                                 .default = Predicted),
+           Row = factor(rows[approx_labels[as.character(Parameter)]], levels = rows))
+  levels_d <- sort(unique(d$Illusion_Difference))
+  d$Column <- factor(paste0(c("Hardest", "Middle", "Easiest")[match(d$Illusion_Difference, levels_d)],
+                            " (difference ", signif(d$Illusion_Difference, 3), ")"))
+  d$Column <- factor(d$Column, levels = unique(d$Column[order(d$Illusion_Difference)]))
+  ggplot(d, aes(ISI_seconds, Predicted, colour = Study)) +
+    geom_line(linewidth = 0.7, na.rm = TRUE) +
+    # Each panel its own y-axis: a parameter's level differs between the
+    # stimuli far more than the ISI moves it
+    ggh4x::facet_grid2(Row ~ Column, scales = "free_y", independent = "y", switch = "y") +
+    scale_colour_manual(values = study_colours, drop = TRUE) +
+    labs(x = "ISI (s)", y = NULL, colour = "Study",
+         title = paste0(illusions[[illusion]], ": the effect of the ISI, with no illusion")) +
+    theme_minimal(base_size = 10) +
+    theme(strip.placement = "outside", strip.text.y.left = element_text(angle = 0, hjust = 1),
+          panel.spacing.y = unit(0.8, "lines"), legend.position = "bottom",
+          plot.title = element_text(face = "bold"))
+}
+```
+
+```{r}
+#| fig-width: 8
+#| fig-height: 10
+
+for (ill in names(isi)) print(plot_isi(isi_curves, ill))
+```
+
+In the 50-participant test (Müller-Lyer, 2026-11-25), the model reproduces
+the foreperiod effect of the data. The median RT of correct responses falls by
+about 30 ms over the first half of the window and then levels off, as in the
+table above. It does so mostly through the boundary separation, the one
+coefficient whose interval excludes zero (narrower at the end of the window
+than at its start), and the non-decision time, which is shortest about three
+quarters of the way through the window. The drift barely moves. With the
+narrower boundary, the error rate at the hardest stimulus rises by a few
+points, which the data do not show at the level of the whole study. The
+error-rate panels at the middle and easiest stimuli are simulation noise
+around rates of 1% and 0.2%. All of this rests on 50 participants, and the
+study intercepts on fewer still.
+
+The coefficients themselves, on each parameter's link scale, per unit of the
+coded ISI (0.25 s, half the window): the linear and the quadratic
+term, and the change from the start of the window to its end (twice the
+linear term; the quadratic term is the same at both ends), with the standard
+deviation of the study intercepts for comparison. Medians and 95% intervals
+of the posterior. The drift's and the starting point's are turned around as
+in the figure: positive towards the correct response.
+
+```{r}
+# The ISI coefficients (b_<dpar>_polyISI2rawEQTRUE1 and 2) and the SDs of the
+# study intercepts (sd_Study__<dpar>_Intercept), per parameter
+isi_coefficients <- imap_dfr(isi, \(x, ill) mutate(x$coefficients, Illusion_Type = ill)) |>
+  rename(Low = `2.5%`, High = `97.5%`) |>
+  mutate(
+    Dpar = case_when(
+      startsWith(variable, "sd_Study__") ~ sub("_?Intercept$", "", sub("^sd_Study__", "", variable)),
+      .default = sub("_?polyISI.*$", "", sub("^b_", "", variable))),
+    Dpar = if_else(Dpar == "", "mu", Dpar),
+    Term = case_when(startsWith(variable, "sd_Study__") ~ "SD_Study",
+                     endsWith(variable, "1") ~ "ISI",
+                     .default = "ISI2"),
+    # Turned around, for the drift and the starting point (the bias's logit
+    # changes sign with 1 - bias), as in the figure; not their SDs
+    Flip = Dpar %in% c("mu", "bias") & Term != "SD_Study",
+    across(c(median, Low, High), \(x) if_else(Flip, -x, x)),
+    Low2 = if_else(Flip, High, Low), High = if_else(Flip, Low, High), Low = Low2)
+
+fmt_ci <- \(m, lo, hi) sprintf("%.3f [%.3f, %.3f]", m, lo, hi)
+isi_coefficients |>
+  mutate(Cell = fmt_ci(median, Low, High)) |>
+  select(Illusion_Type, Dpar, Term, Cell) |>
+  pivot_wider(names_from = Term, values_from = Cell) |>
+  left_join(isi_coefficients |>
+              filter(Term == "ISI") |>
+              transmute(Illusion_Type, Dpar, Change = fmt_ci(2 * median, 2 * Low, 2 * High)),
+            by = c("Illusion_Type", "Dpar")) |>
+  mutate(Illusion = illusions[Illusion_Type],
+         Parameter = c(ddm_labels, poutlier = "Outlier proportion")[Dpar],
+         Parameter = factor(Parameter, levels = c("Drift", "Drift Variability", "Boundary", "Bias", "NDT",
+                                                  "Outlier proportion"))) |>
+  arrange(Illusion, Parameter) |>
+  select(Illusion, Parameter, ISI, ISI2, Change, SD_Study) |>
+  gt(groupname_col = "Illusion") |>
+  tab_header(title = "The ISI coefficients",
+             subtitle = "Link scale, per 0.25 s (half the window); median [95% interval]") |>
+  cols_label(ISI = "ISI", ISI2 = "ISI²", Change = "Start to end of the window",
+             SD_Study = "SD of the study intercepts") |>
+  gt_style()
+```
+
 ## Figures for the Paper
 
 The figures of Study 2 in `paper/manuscript.qmd`, saved to `paper/figures/`,
 as in `2_modelcomparison.qmd`: the manuscript includes the files and computes
-nothing itself.
+nothing itself. Since 2026-11-25 there is one: the figure of the
+specification (the codings and the transformations, `study2_specification.png`)
+was dropped from the paper, whose Methods give its results in the text. They
+are the tables of "Coding of Illusion Strength" and "Transformations of
+Difficulty and Strength" above.
 
 ```{r}
 paper_dir <- if (dir.exists("../paper")) "../paper/figures/" else "paper/figures/"
@@ -970,42 +1239,6 @@ save_figure <- function(plot, name, width, height) {
          dpi = 300, bg = "white", device = ragg::agg_png)
   plot
 }
-```
-
-### Specification
-
-```{r}
-#| fig-width: 7
-#| fig-height: 5.3
-
-# A: the three codings, worst R² at the stimuli (and the parameter it is), on
-# each illusion's range. B: the transformations of the retained coding.
-plot_codings <- function(linearity_codings, base_size = 9) {
-  d <- summarise_linearity(linearity_codings) |>
-    mutate(Illusion = factor(illusions[Illusion_Type], levels = illusions),
-           Coding = factor(Coding, levels = rev(names(codings))),
-           Label = sub("^0", "", sprintf("%.3f", Worst)))
-  ggplot(d, aes(Illusion, Coding)) +
-    geom_tile(aes(fill = Worst), colour = "white", linewidth = 1.2) +
-    # The coding retained, framed as the transformations retained are in B
-    geom_tile(data = filter(d, Coding == "Difference × Strength × Effect, no gap"), fill = NA,
-              colour = "black", linewidth = 0.7, width = 0.97, height = 0.95) +
-    geom_text(aes(label = Label), fontface = "bold", size = base_size / 3.2, nudge_y = 0.12) +
-    geom_text(aes(label = Worst_Parameter), size = base_size / 4.2, nudge_y = -0.2, colour = "grey20") +
-    scale_fill_gradient(low = "#FFF3E0", high = "#66BB6A", guide = "none") +
-    scale_x_discrete(position = "top", expand = c(0, 0)) +
-    scale_y_discrete(expand = c(0, 0), labels = \(x) sub(", ", ",\n", x)) +
-    labs(x = NULL, y = NULL) +
-    theme_minimal(base_size = base_size) +
-    theme(panel.grid = element_blank(), axis.ticks = element_blank(),
-          axis.text = element_text(colour = "black"))
-}
-
-fig_spec <- (plot_codings(linearity_codings) /
-               plot_powers(summary_powers, transforms, label_size = 1.9)) +
-  plot_layout(heights = c(1, 1.3)) +
-  plot_annotation(tag_levels = "A")
-save_figure(fig_spec, "study2_specification", width = 7, height = 5.3)
 ```
 
 ### The Linear Approximation
