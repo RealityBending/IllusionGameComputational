@@ -3432,10 +3432,12 @@ dims declared=(1); dims found=()
   sampled, boxing `sd_2 sd_4 sd_6 sd_8 sd_10 sd_11 sd_12` (the
   `(1 | Study)` SDs and `poutlier`'s two).
 - **Upstream.** cogmod: `.init_fun()` now gives a one-element container
-  `dim = 1` (`dev`, 0.3.6 NEWS, tests updated; the full suite passes). Not on
-  the cluster, where production stays on 0.3.5, so the `fit_model.R` boxing
-  stays. stanli: an issue drafted in `stanli_unconstrain_issue.md`, not
-  posted.
+  `dim = 1` (0.3.6 NEWS, tests updated; the full suite passes), pushed to
+  `dev` as `e8f5c11` on 2026-11-27. Not on the cluster, where production
+  stays on 0.3.5 (`eb4c6a3`), so the `fit_model.R` boxing stays. stanli:
+  posted as [seantalts/stanli#703](https://github.com/seantalts/stanli/issues/703)
+  on 2026-11-27, from `stanli_unconstrain_issue.md`. Once a release fixes it,
+  the boxing is harmless and can stay.
 - **Not resubmitted yet.** The 26 Nov command above is unchanged.
 
 **The other two illusions go to colleagues' accounts (2026-11-27, the user's

@@ -840,7 +840,7 @@ belt and braces.
 | `cogmod_lba_priors_inits.md` | the cogmod defaults to fix before re-running `gam_lba` (drift-smooth priors, starting values), with the model written out in full |
 | `refit_colleagues.md` | the instructions sent to the two colleagues fitting the slow models of the 2026-10-13 refit on their own accounts |
 | `lin_colleagues.md` | the instructions for colleagues fitting Study 2's `lin_ddm5_mullerlyer` / `_verticalhorizontal` on their own accounts, in stanli (2026-11-27) |
-| `stanli_unconstrain_issue.md` | draft of the stanli issue on `unconstrain()` refusing a length-1 value for a `vector[1]` (`AGENT.md` §6.19) |
+| `stanli_unconstrain_issue.md` | the stanli issue on `unconstrain()` refusing a length-1 value for a `vector[1]`, posted as seantalts/stanli#703 (`AGENT.md` §6.19) |
 | `cogmod_priors_review.md` | the cogmod default priors to change before the refit, from `1_models.qmd` (2026-10-12) |
 | `lba_modes/` | the laptop scripts behind it (they read the combined fit; nothing is refitted) |
 | `hpc.local` | **gitignored** — this machine's account settings, e.g. `IGC_HPC_USER=oc236` |
