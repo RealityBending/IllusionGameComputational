@@ -157,7 +157,7 @@ models <- list(
     "LNR-6" = "gam_lnr6_ebbinghaus_Ebbinghaus",  # 1 of 4 shards on the 2026-10-13 refit, with the gam_lnr_ebbinghaus adaptation failure (server/AGENT.md 4.10 C); refitting in stanli as 11819833 (2026-11-24, 6.13), which will be picked up from models_stanli/ once predicted
     "DDM-4" = "gam_ddm4_ebbinghaus_Ebbinghaus",
     "DDM-5" = "gam_ddm5_ebbinghaus_Ebbinghaus",  # converged (cc831, uploaded 2026-11-16)
-    "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus",  # stanli stand-in until the cmdstanr refit 11698242
+    "RDM" = "gam_rdm_ebbinghaus_Ebbinghaus",  # converged, cmdstanr refit 11698242 (combined 2026-11-27, 11846660; replaces its stanli stand-in)
     "RDM-5" = "gam_rdm5_ebbinghaus_Ebbinghaus",  # converged on the 2026-10-13 refit (oc236, delivered 2026-11-17)
     "LBA" = "gam_lba_ebbinghaus_Ebbinghaus"  # NOT CONVERGED: 6:2 split on the 2026-10-13 refit (oc236, delivered 2026-11-17; server/AGENT.md 4.10 B)
   )

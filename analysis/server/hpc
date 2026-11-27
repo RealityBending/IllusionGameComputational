@@ -7,6 +7,8 @@
 #   ./hpc push                  copy *.R / *.slurm to the cluster (CRLF -> LF)
 #   ./hpc install [pkg...]      build the project R library on a compute node
 #                               (naming a pkg force-reinstalls it, e.g. 'cogmod')
+#   ./hpc install-stanli        fetch, check and build stanli (IGC_STANLI_VERSION,
+#                               default 0.31.0) into this account's cogmod_stanli/
 #   ./hpc precompile            pre-build the CmdStan precompiled header
 #   ./hpc models                list the models defined in models.R
 #   ./hpc fit <model|all> [..]  one array job per model (extra args -> sbatch)
@@ -86,6 +88,11 @@ if [ "$BACKEND" = stanli ]; then
 fi
 STANLI_LIB="${IGC_STANLI_LIB:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cogmod_stanli/R_libs_0.25.0}"
 STANLI_RUNTIME="${IGC_STANLI_RUNTIME:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cogmod_stanli/runtime_v0.25.0/libstanli.so}"
+# Where `./hpc install-stanli` builds a release: STANLI_HOME/R_libs_<version>
+# and STANLI_HOME/runtime_v<version>, which IGC_STANLI_LIB and
+# IGC_STANLI_RUNTIME then point at. Every account builds its own: another
+# account's home cannot be read.
+STANLI_HOME="${IGC_STANLI_HOME:-/mnt/lustre/users/${HPC_GROUP}/${HPC_USER}/cogmod_stanli}"
 MAIL_USER="${IGC_MAIL_USER:-${HPC_USER}@sussex.ac.uk}"
 
 # Environment modules / R library used by the jobs. CmdStanR/0.7.1 is the
@@ -152,12 +159,15 @@ list_models() {
 # one SSH connection rather than one per model (the login node starts refusing
 # connections after a burst -- 2026-09-28). Every name is checked before
 # anything is submitted.
+# The result is space-separated, never one per line: cmd_progress splices it
+# into a remote command string, where a newline would end the command and run
+# each further model name as a command of its own.
 resolve_models() {
   local want="${1:-}" known m w found
   known="$(list_models)"
   [ -n "$known" ] || die "no models found in models.R"
   [ -n "$want" ] || die "which model? one of: $(echo $known) (or 'all', or a comma-separated list)"
-  if [ "$want" = all ]; then echo "$known"; return; fi
+  if [ "$want" = all ]; then echo $known; return; fi
   for w in ${want//,/ }; do
     found=0
     for m in $known; do [ "$m" = "$w" ] && found=1; done
@@ -245,6 +255,47 @@ cmd_install() {
       export IGC_FORCE=\"${forced}\"
       Rscript install_pkgs.R
     '"
+}
+
+# stanli for IGC_BACKEND=stanli, into this account's own STANLI_HOME, the way
+# 0.25.0 and 0.31.0 were installed on dmm56 (AGENT.md 6.10, 6.14): the
+# release's source and linux runtime are fetched from GitHub on the login node
+# and checked against the sha256 recorded here, then install_stanli.slurm
+# builds stanli on a compute node with the fits' R module and checks it. It
+# refuses to touch a version already installed: a running fit has that
+# runtime loaded. nutpieR (IGC_SAMPLER=nutpie) is not built.
+cmd_install_stanli() {
+  require_link
+  local v="${IGC_STANLI_VERSION:-0.31.0}" sum_src sum_rt
+  case "$v" in
+    0.31.0)
+      sum_src=4cc3b227d0fe660fd16a3786040d33ad98fa088d0ff8963817dbc86f491c79f1
+      sum_rt=030293579d74d42e43ce3a2cb4270e1533b61848dd4aad2598764e263d9817d2 ;;
+    *) die "no sha256 recorded for stanli ${v}: add them to cmd_install_stanli" ;;
+  esac
+  local d="$STANLI_HOME" url="https://github.com/seantalts/stanli/releases/download/v${v}"
+  info "stanli ${v} into ${d}/R_libs_${v}, runtime in ${d}/runtime_v${v}"
+  remote "set -e
+    if [ -e '${d}/R_libs_${v}/stanli/DESCRIPTION' ]; then
+      echo '  refusing: stanli ${v} is already installed in ${d}/R_libs_${v}' >&2; exit 1
+    fi
+    [ -e '${USERS_DIR}/install_stanli.slurm' ] || { echo '  run ./hpc push first' >&2; exit 1; }
+    mkdir -p '${d}/src_${v}' '${d}/runtime_v${v}' '${d}/R_libs_${v}' '${SCRATCH_DIR}'
+    cd '${d}/src_${v}'
+    for f in stanli_${v}.tar.gz stanli-runtime-linux-x86_64.tar.gz; do
+      [ -s \"\$f\" ] || curl -fsSL -o \"\$f\" '${url}/'\"\$f\"
+    done
+    printf '%s  %s\n' ${sum_src} stanli_${v}.tar.gz ${sum_rt} stanli-runtime-linux-x86_64.tar.gz > SHA256SUMS
+    sha256sum -c SHA256SUMS
+    [ -e '${d}/runtime_v${v}/libstanli.so' ] || tar -xzf stanli-runtime-linux-x86_64.tar.gz -C '${d}/runtime_v${v}'
+    [ -e '${d}/runtime_v${v}/libstanli.so' ] || { echo '  no libstanli.so in the runtime tarball' >&2; exit 1; }
+    for v2 in CFLAGS CXXFLAGS CXX11FLAGS CXX14FLAGS CXX17FLAGS; do echo \"\$v2 = -O2 -march=x86-64-v3\"; done > '${d}/Makevars_${v}.portable'
+    cd '${USERS_DIR}' && srun \
+      --partition='${IGC_INSTALL_PARTITION:-short}' --time=01:00:00 \
+      --cpus-per-task=4 --mem=16G --job-name=igc_stanli_install \
+      --export=ALL,IGC_STANLI_HOME='${d}',IGC_STANLI_VERSION='${v}',IGC_R_MODULE='${R_MODULE}',IGC_EB_MODULES='${EB_MODULES}',IGC_R_LIBS='${R_LIBS_DIR}',IGC_R_LIBS_USER='${R_LIBS_USER_DIR}' \
+      bash install_stanli.slurm"
+  info "then, for this version: IGC_STANLI_LIB=${d}/R_libs_${v} IGC_STANLI_RUNTIME=${d}/runtime_v${v}/libstanli.so"
 }
 
 cmd_precompile() {
@@ -517,6 +568,7 @@ case "${1:-}" in
   setup)      shift; cmd_setup "$@" ;;
   push)       shift; cmd_push "$@" ;;
   install)    shift; cmd_install "$@" ;;
+  install-stanli) shift; cmd_install_stanli "$@" ;;
   precompile) shift; cmd_precompile "$@" ;;
   models)     shift; cmd_models "$@" ;;
   fit)        shift; cmd_fit "$@" ;;
@@ -532,5 +584,5 @@ case "${1:-}" in
   pull)       shift; cmd_pull "$@" ;;
   cancel)     shift; cmd_cancel "$@" ;;
   sh)         shift; cmd_sh "$@" ;;
-  *) sed -n '2,44p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,46p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' ;;
 esac

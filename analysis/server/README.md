@@ -428,8 +428,10 @@ absolute value, `Effect` its side (+0.5 conflicting, -0.5 facilitating, 0
 none), and the ISI centred on its study's window. The range is the illusion's
 **linear subrange**, `igc_linear_ranges` in `models.R`. It is still to be
 refined, and for now it is the whole reliable subrange (`AGENT.md` §6.17).
-Only `lin_ddm5_mullerlyer` (untransformed, difference 0.045–0.45 x strength
-±30) is defined so far, for a 50-participant test (`AGENT.md` §6.14).
+So far one untransformed entry per illusion (`lin_ddm5_mullerlyer`,
+`lin_ddm5_verticalhorizontal`, `lin_ddm5_ebbinghaus`) and one Müller-Lyer
+variant with √|strength| (`lin_ddm5sqrt_mullerlyer`) are defined, each tested
+on 50 participants (`AGENT.md` §6.14–6.15).
 Two modelling choices in that table are worth knowing about before reading any
 output:
 
@@ -619,7 +621,10 @@ two stack, so the fastest arrangement is a colleague on `long` plus a
 a colleague**: update, `./hpc archive`, cogmod 0.3.5, smoke test, submit, and
 what to send back. What follows is the one-time setup of a fresh account.
 **`onboarding_new_account.md` is that setup written for a newcomer's coding
-agent**, from VPN and SSH key to a passing smoke test.
+agent**, from VPN and SSH key to a passing smoke test. **For Study 2's linear
+models, `lin_colleagues.md`** is the step-by-step: stanli 0.31.0 in the
+account's own `cogmod_stanli/` (`./hpc install-stanli`), a smoke test, the
+fit, and what to send back.
 
 Their setup, once:
 
@@ -813,8 +818,9 @@ belt and braces.
 
 | file | role |
 | --- | --- |
-| `hpc` | the driver — check/setup/push/install/precompile/models/fit/rebuild/combine/predict/priors/archive/progress/queue/log/ls/pull/cancel/sh |
+| `hpc` | the driver — check/setup/push/install/install-stanli/precompile/models/fit/rebuild/combine/predict/priors/archive/progress/queue/log/ls/pull/cancel/sh |
 | `install_pkgs.R` | builds the project R library (`./hpc install`) |
+| `install_stanli.slurm` | builds and checks stanli in the account's own `cogmod_stanli/` (`./hpc install-stanli`, which fetches and sha256-checks the release first) |
 | `precompile.R` | builds the CmdStan precompiled header (`./hpc precompile`) |
 | `models.R` | **the model registry** — one entry per model |
 | `fit_model.R` | fits the model named by `IGC_MODEL`, one shard per array task |
@@ -833,6 +839,8 @@ belt and braces.
 | `cogmod_lba_modes_issue.md` | why the full-data `gam_lba` split into two modes, and the options |
 | `cogmod_lba_priors_inits.md` | the cogmod defaults to fix before re-running `gam_lba` (drift-smooth priors, starting values), with the model written out in full |
 | `refit_colleagues.md` | the instructions sent to the two colleagues fitting the slow models of the 2026-10-13 refit on their own accounts |
+| `lin_colleagues.md` | the instructions for colleagues fitting Study 2's `lin_ddm5_mullerlyer` / `_verticalhorizontal` on their own accounts, in stanli (2026-11-27) |
+| `stanli_unconstrain_issue.md` | draft of the stanli issue on `unconstrain()` refusing a length-1 value for a `vector[1]` (`AGENT.md` §6.19) |
 | `cogmod_priors_review.md` | the cogmod default priors to change before the refit, from `1_models.qmd` (2026-10-12) |
 | `lba_modes/` | the laptop scripts behind it (they read the combined fit; nothing is refitted) |
 | `hpc.local` | **gitignored** — this machine's account settings, e.g. `IGC_HPC_USER=oc236` |

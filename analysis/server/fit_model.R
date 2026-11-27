@@ -131,6 +131,14 @@ if (backend == "stanli") {
 if (sampler == "nutpie") {
   cat("nutpieR", format(utils::packageVersion("nutpieR")), "from", find.package("nutpieR"), "\n")
 }
+# Above the 0.3.5 floor nothing stops a newer cogmod, and 0.3.6 changes the
+# DDM likelihood when `sigmadrift` is estimated (its NEWS). Even "0.3.5" on
+# `dev` spans commits whose priors code differs (eb4c6a3, 2026-10-13, which
+# dmm56's library holds, to 6463109, 2026-10-20). Fits meant to sit side by
+# side must show the same version and commit here.
+cogmod_sha <- utils::packageDescription("cogmod")$RemoteSha
+cat("cogmod", format(utils::packageVersion("cogmod")), if (is.null(cogmod_sha)) "(no commit recorded)" else cogmod_sha,
+    "from", find.package("cogmod"), "\n")
 
 
 # Data --------------------------------------------------------------------
@@ -487,10 +495,30 @@ if (is.null(m) && backend == "stanli") {
       progress = "text"
     )
   } else {
+    # A parameter declared with one dimension and one element (a `vector[1]`)
+    # must reach unconstrain() as a one-element array. cogmod_inits() up to
+    # 0.3.5 gives it as a bare number, which stanli 0.31.0 reads as a scalar
+    # and refuses ("variable name=sd_2; dims declared=(1); dims found=()"):
+    # brms's `sd_k` of a group-level term on its own, such as `(1 | Study)` in
+    # the linear models, killed all four tasks of 11845408 (AGENT.md 6.19).
+    # stanli 0.25.0 accepted it, and cmdstanr boxes such values itself before
+    # writing its JSON. cogmod 0.3.6 sets the dim, which this then leaves alone.
+    one_d <- Filter(function(d) length(d$dims) == 1,
+                    cogmod:::.stan_param_decls(as.character(brms::stancode(m))))
+    one_d <- vapply(one_d, `[[`, character(1), "name")
+    box_one_element <- function(x) {
+      for (nm in intersect(names(x), one_d)) {
+        if (is.null(dim(x[[nm]])) && length(x[[nm]]) == 1) x[[nm]] <- array(x[[nm]], dim = 1L)
+      }
+      x
+    }
+    init_l <- lapply(seq_len(chains_per_task), function(i) box_one_element(inits(i)))
+    boxed <- names(Filter(function(v) identical(dim(v), 1L), init_l[[1]]))
+    cat("stanli inits: one-element arrays:", if (length(boxed)) paste(boxed, collapse = " ") else "none", "\n")
     # One row per chain on the unconstrained scale; partial = TRUE draws
     # anything the inits leave out in (-2, 2), as CmdStan does.
-    init_u <- do.call(rbind, lapply(seq_len(chains_per_task), function(i) {
-      stanli::unconstrain(sm, inits(i), partial = TRUE)
+    init_u <- do.call(rbind, lapply(init_l, function(x) {
+      stanli::unconstrain(sm, x, partial = TRUE)
     }))
     sfit <- stanli::sample_model(sm,
       chains = chains_per_task,

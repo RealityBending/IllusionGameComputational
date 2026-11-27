@@ -2403,6 +2403,20 @@ agree within 0.006 on every parameter. A chain took 6.05 days on average (max
 so the cost in Table 1 of the paper triples for this cell. Only RDM
 Ebbinghaus (11698242) is still a stand-in.
 
+**2026-11-27: `gam_rdm_ebbinghaus` processed, the last stand-in gone.** All
+four shards done by 2026-11-25 12:48. Combined as 11846660 (32 min on
+a40-16) and predicted as 11846667, both 2026-11-27 (submitted outside this
+log). Priors 11850442 (`general`, since `short` was full of another
+project's array), then both files pulled and checked by md5. The laptop's
+priors file, until then a copy of the stanli one, is now the cmdstanr one.
+**Converged and matches its stanli twin:** 8 chains in one mode (`lp__`
+-39,050 to -39,081, sd ~105), step sizes 0.0060-0.0073, population Rhat
+1.007, bulk ESS ≥ 1,051, 0.04% divergent. `elpd_loo` -28,655.3 (SE 816.2),
+and stanli's minus cmdstanr's is 0.0 ± 3.8. A chain took 2.71 days on average
+(max 3.28) against stanli's 1.75, 173.5 core-days against 112.2.
+`2_modelcomparison.qmd` takes the cmdstanr file by itself (`has_results()`);
+only its comment changed.
+
 ### 6.12 Study 1 closed, DDM-5 retained (2026-11-24)
 
 **The model comparison is closed** (user's decision, 2026-11-24): most models
@@ -2420,7 +2434,8 @@ files (`models/predictions/`). In brief:
   and Ebbinghaus (+6,541 ± 294 over RDM-5), but not on VH, where LNR-6
   (+7,032 ± 189) and LNR (+4,115 ± 192) beat it.
 - Total sampling of the 20 completed fits: ~114,500 core-hours (120,700
-  once the cmdstanr RDM VH replaced its stanli stand-in, 2026-11-25).
+  once the cmdstanr RDM VH replaced its stanli stand-in, 2026-11-25, and
+  122,200, ~5,090 core-days, once RDM Ebbinghaus did, 2026-11-27).
 
 **What this rules out:** no further Study 1 variant is fitted: no
 `sigmabias ~ 1` RDM, no simplified LBA or LNR-6, no LNR reparametrisation
@@ -2770,7 +2785,63 @@ combined, predicted and pulled (as for ML: `short`, `--mem=24G
 --time=00:30:00`), re-rendering is all that is left.
 `3_linearmodels.qmd`
 draws one linear model per illusion (`linear_files`), so comparing the two
-fits means either swapping the file or drawing both.
+fits means either swapping the file or drawing both. **Done 2026-11-25 in
+53 min** (rtx-02; 6 studies, 7,171 rows): treedepth 6.0, step 0.086, 0.1%
+divergent, **max Rhat 1.051, min neff ratio 0.016** (Müller-Lyer's 11841190:
+1.030, 0.043), 1,751 parameters. Combined (11844940, 47 s; loo 59 of 7,171
+Pareto k > 0.7, 12 of them > 1) and predicted (11844941, 1.8 min, with `isi`
+and `grouplevel`) on `short` on 2026-11-26 (the user's go-ahead), with the
+predict job `--dependency=afterok:` on the combine. The shard and the
+prediction file were pulled into
+`analysis/models/test_lin_ddm5_20261125_nutpie/` (md5 checked), and
+`3_linearmodels.qmd`, `4_reliability.qmd`, `study2_approximation.png` and the
+manuscript re-rendered. In the figure, VH's linear curves follow DDM-5's error
+rate and median RT and its NDT, and the bias to a first approximation (a
+nearly flat line through the GAM's curve). The boundary and drift variability
+fall short on the facilitating side at the hardest levels, as on Müller-Lyer
+but with no V: at −45 the hardest level's drift variability is ~0.6 against
+DDM-5's ~1.9.
+
+**The third illusion: `lin_ddm5_ebbinghaus`, 11844926 (2026-11-26 ~09:35,
+`sussexneuro`, rtx-02), so that each illusion has a test.** New registry
+entry, untransformed, over Ebbinghaus's linear subrange (= its reliable
+subrange, 0.05–0.50 x ±1.5). Same command as 11842905 (50 participants of
+Ebbinghaus drawn with seed 2026, stanli 0.31.0, nutpie low-rank, 4 chains of
+1000 + 1000, 4 CPUs, 16G, zen5, 1 day), into the same
+`test_lin_ddm5_20261125_nutpie/`. Before submitting: `./hpc push`, then in
+one connection the cluster's `models.R` had the entry, the directory had no
+Ebbinghaus file, and the 0.31.0 library (with nutpieR) and runtime were in
+place. `--test-only` gave a start at once on `sussexneuro`. The first
+submission was lost to a refused SSH connection (login-node burst limit), and
+`squeue` confirmed that nothing had been queued before it was resubmitted.
+`linear_files` (`3_linearmodels.qmd`) and `best_files` (`4_reliability.qmd`)
+already point at its prediction file. As for the other two, combine,
+predict and pull it (`short`, `--mem=24G --time=00:30:00`), then re-render.
+
+**Frozen by a Lustre outage (2026-11-26).** From before 13:30 UTC, `ls` of
+both `/mnt/lustre/users/...` and `/mnt/lustre/scratch/...` hung on the login
+node (`timeout 20` → rc 124), so no log could be read. `squeue`, `sinfo`,
+`sacct`, `sstat` and `sbatch --test-only` still answered. **`sstat` tells a
+frozen job from a slow one without touching Lustre**: sample `AveCPU` twice,
+45 s apart (`sstat -a -P -j <job>.batch -o JobID,AveCPU`). At 14:39 neither
+this test nor `gam_lnr6_ebbinghaus` (11819833) moved. This test had
+5h45m of CPU after 5h04m of wall on 4 CPUs, i.e. about 1.5 h of full use
+before it stopped. The Müller-Lyer test sampled in 1h42m, so this one has
+probably finished sampling and is blocked at the save. The user asked to move
+it to `short` or `general`, but neither was possible while Lustre hung: the
+submission `cd`s into the project directory, and the job reads its R library
+and data from Lustre and writes its log and shard there. `--test-only`
+(4 CPUs, 16G) gave: `short`, with zen5, 20:18 that day, or at once without
+it; `general`, with zen5, 04:53 the next day, or 23:14 without it. `short`'s
+2 h cap leaves no room on a non-zen5 node, which is 2-4x slower (4.11).
+**Cancelled at 14:44 UTC (the user's decision)** after 5h09m, with Lustre
+still hung. Twenty seconds later `sacct` said `CANCELLED+` but `squeue` still
+showed it `COMPLETING` on rtx-02: its processes are most likely stuck on
+Lustre I/O and cannot be killed until the I/O returns. Nothing was written to
+`test_lin_ddm5_20261125_nutpie/`, which can't be checked until Lustre answers.
+To resubmit: 11844926's command, on the new partition, once Lustre answers.
+**Not resubmitted**: the user went straight to the full fit instead (6.19).
+Lustre answered again by 15:56, and the cancelled job had left the queue.
 
 **The ISI in the prediction files (2026-11-25, the user's request).** A linear
 model's prediction file now has an `isi` element, made by
@@ -3097,9 +3168,9 @@ Its choices:
   (`center_within_study`). The model's baselines are deviations from the
   study's intercept, while the empirical indices carry the differences
   between studies too.
-- Once several illusions have a model, their variables enter the same
-  matrix, prefixed ML / VH / Ebb and joined by participant, which gives the
-  correlations across illusions.
+- ~~Once several illusions have a model, their variables enter the same
+  matrix, prefixed ML / VH / Ebb and joined by participant.~~ Replaced on
+  2026-11-26 by one matrix per illusion (below).
 
 On the test (50 participants, ML only: 7 reliable effects + 10 indices; no
 meaning, for the record), the matrix splits into three clusters:
@@ -3155,6 +3226,245 @@ separate from it. It still correlates −.50 with the boundary baseline (the
 behavioural PSE −.55), which a drift-only quantity need not. That could be
 a real relation or a trade-off between the drift and the boundary in the
 estimation. Look at it on the full fits.
+
+**Across illusions (2026-11-26, the user's request, once the VH test was
+predicted).** Two changes to `4_reliability.qmd`:
+- *The D-vour tables are wide*: one row per effect (or raw term) and a column
+  of D-vour per illusion, sorted by the lowest of the illusions (`Lowest`),
+  so that it shows whether the same effects are reliable everywhere. The SD
+  between participants and the mean MAD, which the long tables showed, are
+  no longer shown.
+- *The same effects on every illusion*: `reliable_effects`, defined in the
+  D-vour section, are the effects whose D-vour exceeds `reliable_threshold`
+  (0.5) on **every** illusion that has a model (bold in the table).
+- *One matrix per illusion*, of those effects and the 10 empirical indices,
+  over that illusion's model's participants, centred within study per
+  illusion. The matrices share one order: `cor_sort()` on 1 − |r| averaged
+  over the illusions, so that they can be compared cell by cell. They are
+  in a tabset, one tab per illusion (a `results: asis` loop).
+- A table, "The structure across illusions", compares them for each pair of
+  illusions. It gives the correlation of the off-diagonal correlations, their
+  mean absolute difference, and the participants the two models share.
+- The illusions no longer enter one joint matrix. The user's plan is to
+  extract dimension scores per illusion and correlate those across
+  illusions, over the participants in every model (a TODO in the qmd). The
+  tests cannot do it: each drew its 50 participants on its own illusion, and
+  ML and VH share 3.
+
+On the tests (ML and VH, 50 participants each; no meaning, for the record):
+- *The same six effects reliable on both*, the top six on each: boundary
+  baseline .84 / .89, NDT baseline .83 / .82, drift PSE .82 / .79, drift
+  strength (incongruent) .79 / .71, drift baseline .71 / .68, drift
+  difficulty .67 / .58. ML's drift difficulty x strength terms (.55, .52)
+  are not reliable on VH (.12).
+- *The structures agree*: the correlations correlate .86 over the 120 pairs
+  of variables (mean absolute difference .20). Both have an illusion block
+  (drift strength and PSE, behavioural PSE, error rates, illusion effect on
+  errors) and a speed block (boundary baseline, RTs, IES, illusion effect on
+  RT). On both, the drift's baseline and difficulty are collinear (.98 /
+  .93).
+- *Where they differ*: on ML the drift's incongruent strength slope
+  correlates −.71 / −.74 with the drift's baseline / difficulty, and on VH
+  −.13 / .09. On VH the drift's baseline and difficulty correlate .4–.6 with
+  the illusion block, and on ML about −.1 to −.2.
+
+**Dimensions: EGA, then CFA (2026-11-26, the user's choice).** A new
+section, "Dimensions", at the end of `4_reliability.qmd`. The user weighed
+factor analysis against EGA. The deciding points were the near-duplicate
+variables (which favour EGA's UVA) and the same participants on every
+illusion in the full fits (which favour a CFA). In order:
+1. *UVA* (`EGAnet::UVA()`, wTO > 0.25, `reduce.method = "remove"`) on each
+   illusion. A variable removed on any illusion is removed on every illusion,
+   so the illusions keep the same variables. Within a redundant pair, UVA
+   keeps the variable with the lowest maximum wTO to the others.
+2. *EGA per illusion* (GLASSO on Spearman, walktrap) with `bootEGA()` (500
+   resamples of the participants, `type = "resampling"`, seed 2026): the
+   number of dimensions, its stability, and item stability.
+3. *The common structure* is the EGA of the illusions pooled, each variable
+   standardised within its illusion.
+   - Each illusion's communities are matched to the common ones by greatest
+     overlap.
+   - Each dimension is named after its highest network loading in the
+     pooled analysis.
+   - The networks are in tabs, in fixed colours. EGAnet colours communities
+     by rank, so each plot gets `color.palette` restricted to the numbers it
+     has.
+4. *CFA of the common structure* (lavaan, MLR + FIML, standardised within
+   illusion), per illusion: fit, and whether it is admissible.
+5. *Across illusions*: one model of every illusion's variables, over the
+   participants in every model, with each variable's residuals correlated
+   across illusions. Configural against metric (scaled Δχ², ΔCFI).
+   - No scalar test: the variables are centred within study, so their means
+     are 0 by construction.
+6. *Scores*: regression factor scores from each illusion's own CFA,
+   correlated across illusions (Spearman) over the participants in both.
+   - Not from the joint model: its scores would be predicted partly from the
+     other illusions' variables, and their cross-illusion correlations
+     inflated.
+   - This follows the user's position on derived scores above. The joint
+     model's latent correlations are not reported.
+
+Steps 5 and 6 need ≥ `min_shared` (200) participants in every model, so they
+print a message on the tests (3 shared). Their code was checked on simulated
+data (scratch, not in the repo): 1,000 cases, 3 factors × 11 variables on
+two "illusions", latent cross-illusion correlation .6.
+- Configural and metric converged, and the scaled difference test did not
+  reject (p = .15), as it should not.
+- The per-illusion scores correlated .38–.42 across illusions: factor scores
+  attenuate.
+
+Two EGAnet quirks:
+- `net.loads()` prints a notice of its change of default even when
+  `loading.method` is given, hence its `suppressMessages()`.
+- `bootEGA()`'s `$EGA` is the empirical EGA, and its `$frequency` is a data
+  frame (`# of Factors`, `Frequency`).
+
+On the tests (no meaning, for the record):
+- *UVA* removes 5 of 16 variables: drift difficulty (kept: drift baseline,
+  wTO .49 / .47), incongruent median RT (kept: illusion effect on RT,
+  .38 / .39), the behavioural PSE (kept: incongruent error rate, .29 / .26),
+  and on VH only the overall error rate (.29) and IES (.27).
+- *EGA*: ML has 3 dimensions (73% of resamples) and all of its variables in
+  the matched common dimension. VH has 2 (47%), with speed merged into the
+  discrimination dimension: 64% agreement.
+- *The pooled dimensions*: D1 (median RT, NDT, JND, drift baseline), D2
+  (incongruent error rate, illusion effect on errors, drift PSE, drift
+  strength) and D3 (boundary, incongruent IES, illusion effect on RT).
+- *The CFA* at n = 50 is inadmissible on ML (CFI .54, a negative variance)
+  and does not converge on VH. The table reports this rather than stopping.
+
+### 6.19 Study 2: the full linear fits, in stanli NUTS on `long` (2026-11-26)
+
+**Not `sussexneuro`** (the user, 2026-11-26): the full linear fits go on the
+other partitions, so as not to overload the group pool.
+
+**Regular stanli NUTS with threading, not nutpie** (the user's decision,
+2026-11-26, on the agent's recommendation). nutpie runs each chain on one
+core, because brms's `reduce_sum` is not parallelised under it (6.14). The
+tests are the basis of the estimate: a normal chain took about 1h15m for
+1000 + 1000 on 50 participants, about 1/44 of the rows. Scaled up, a
+single-core chain at full data takes about 2.3 days at the tests' ~63
+gradients per draw, and about 9 days at four times that, past `long`'s 8
+days. A stanli fit saves nothing until it ends and keeps no CmdStan CSVs to
+rebuild from (5.3.1), so a timeout loses the whole shard. Eight threads make a
+gradient about 6-8x faster (threading scales nearly linearly, 6), so nutpie
+would need about 6x fewer gradients per draw than NUTS to break even. NUTS is
+also the sampler checked against cmdstanr at full data (6.9); nutpie has run
+only on 50-participant tests. Against NUTS: 64 zen5 CPUs per model rather than
+8, and zen5 is the scarce resource (6.5). **Unmeasured**: NUTS's gradients per
+draw on this model. A 50-participant NUTS test would measure it against
+nutpie's ~63, and would also compare the two samplers. It was not run.
+
+**`lin_ddm5_ebbinghaus`, 11845408 (submitted 2026-11-26 15:56 UTC)**: all
+participants, 4 tasks x 2 chains x 8 threads, 1000 warmup + 1000 draws (the
+tests' run length: DDM-4 and DDM-5 adapted at 1000, and only the Ebbinghaus
+LNR needed 1500, 4.11), 64G (stanli's memory at full data is unmeasured for
+this model, as in 6.13), zen5, 8 days, into `models_stanli/`:
+
+```bash
+MSYS_NO_PATHCONV=1 IGC_BACKEND=stanli \
+  IGC_STANLI_LIB=/mnt/lustre/users/psych/dmm56/cogmod_stanli/R_libs_0.31.0 \
+  IGC_STANLI_RUNTIME=/mnt/lustre/users/psych/dmm56/cogmod_stanli/runtime_v0.31.0/libstanli.so \
+  IGC_SAMPLER=nuts IGC_CHAINS=2 IGC_WARMUP=1000 IGC_SAMPLES=1000 \
+  ./hpc fit lin_ddm5_ebbinghaus --array=1-4 --partition=long --constraint=amd_zen5 \
+    --cpus-per-task=16 --mem=64G --time=8-00:00:00
+```
+
+Checks before submitting, in one connection, once Lustre answered again
+(15:56): three listings, a write to scratch, and all 15 cluster scripts
+matched the repo (md5, CRs stripped as `./hpc push` sends them, so no push).
+Also: `models_stanli/` had no `lin_*` shard, and the 0.31.0 library and
+runtime were in place. `dmm56` held `verylong` 64, `sussexneuro` 16 and `long` 0.
+`--test-only` (16 CPUs, 64G, zen5) gave a start on 2026-11-28 13:28 on
+rtx-01. All four tasks were `PENDING (Resources)`: the zen5 nodes were full.
+`long`'s 140 CPUs per user take two such models at once. All three illusions
+at once would need 5 threads per chain (120 CPUs).
+
+**When it is done**: combine with the same `IGC_BACKEND`, `IGC_STANLI_LIB` and
+`IGC_STANLI_RUNTIME`. At 8,000 draws over ~300k rows, its loo needs blocks
+(4.8). Then predict (`--dependency=afterok:`, `short`) and pull. The first
+`REPORT` lines show whether NUTS's treedepth at full data bears out the
+estimate above.
+
+**Failed at initialisation, all four tasks (2026-11-27 00:09-00:31 UTC, 7 min
+each, on rtx-02).** Nothing was sampled. Each died in `stanli::unconstrain(sm,
+inits(i), partial = TRUE)` (`fit_model.R`, the NUTS branch):
+
+```
+mismatch in number dimensions declared and found in context;
+processing stage=parameter initialization; variable name=sd_2;
+dims declared=(1); dims found=()
+```
+
+- **What happens.** brms declares every group-level SD block as
+  `vector<lower=0>[M_k] sd_k`, and a `(1 | g)` term on its own makes
+  `M_k = 1`. `cogmod_inits()` sets a value's `dim` only when it has more than
+  one dimension (`.init_fun()`: `if (length(e$dim) > 1)`), so a `vector[1]`
+  comes out as a bare length-1 numeric, which stanli 0.31.0 reads as a scalar.
+  Checked locally on a toy `(1 | g)` model: every `sd_k` is length 1 with
+  `dim` NULL.
+- **Why nothing caught it.** Every Study 2 test used nutpie
+  (`IGC_SAMPLER=nutpie`), which takes the init list as it is and never calls
+  `unconstrain()`. This was the first NUTS run on stanli 0.31.0.
+- **It is a stanli regression, 0.25.0 to 0.31.0.** The GAM models have the
+  same length-1 `sd_k` blocks (`poutlier ~ 1 + (1 | Participant)`, one block
+  per dpar), and `gam_lnr6_ebbinghaus` (11819833) runs the same `unconstrain()`
+  call on stanli 0.25.0 and started on 2026-11-24 without complaint.
+  cmdstanr is unaffected: before writing the init JSON it boxes a length-1
+  value whose declaration is a one-dimensional container, for exactly this
+  reason (`process_init.list()`, cmdstanr 0.9.0, checked).
+- **Reproduced on a toy model (job 11850756, `general`, 11 s).**
+  `parameters { real mu; vector<lower=0>[1] tau; }`, `unconstrain()` with
+  `tau = 0.5` and with `tau = array(0.5, dim = 1)`, each with and without
+  `partial = TRUE`. 0.25.0 accepts all four. 0.31.0 refuses the bare number
+  (the same error, `variable name=tau`) and accepts the array. Script and
+  slurm file in scratch, `IGComputational/stanli_vector1/`.
+- **Fixed in `fit_model.R` (2026-11-27).** The NUTS branch reads the
+  declarations of the brms program (`cogmod:::.stan_param_decls()`) and
+  boxes every length-1 value of a one-dimensional declaration
+  (`array(x, dim = 1L)`) before `unconstrain()`, and prints which:
+  `stanli inits: one-element arrays: ...`. The nutpie branch is untouched (it
+  never failed). Every fit log now also prints its cogmod version, since the
+  0.3.5 floor lets 0.3.6 through.
+- **Smoke test 11850767** (`general`, a40-11, 30 participants with seed 2026,
+  NUTS, 2 chains x 4 threads, 100 + 50, into
+  `IGComputational/smoke_lin_nuts_20261127/`): got past initialisation and
+  sampled, boxing `sd_2 sd_4 sd_6 sd_8 sd_10 sd_11 sd_12` (the
+  `(1 | Study)` SDs and `poutlier`'s two).
+- **Upstream.** cogmod: `.init_fun()` now gives a one-element container
+  `dim = 1` (`dev`, 0.3.6 NEWS, tests updated; the full suite passes). Not on
+  the cluster, where production stays on 0.3.5, so the `fit_model.R` boxing
+  stays. stanli: an issue drafted in `stanli_unconstrain_issue.md`, not
+  posted.
+- **Not resubmitted yet.** The 26 Nov command above is unchanged.
+
+**The other two illusions go to colleagues' accounts (2026-11-27, the user's
+decision): stanli 0.31.0 NUTS, like Ebbinghaus,** so that Study 2 has one
+sampler. Their accounts cannot read `dmm56`'s `cogmod_stanli/` (home
+`drwx------`), so each builds its own with the new `./hpc install-stanli`.
+It fetches the release's source and runtime on the login node, checks the
+sha256 recorded in `hpc` (those of `src_0.31.0/SHA256SUMS`), then runs
+`install_stanli.slurm`. That builds stanli with the fits' R module and
+`-march=x86-64-v3` on a compute node and checks it: a toy NUTS fit and a
+boxed `vector[1]`. It does not build nutpieR (Rust) and refuses an existing
+install. Tested on `dmm56` into scratch (`IGComputational/stanli_install_test/`,
+`IGC_INSTALL_PARTITION=general`, the release files copied there rather than
+fetched): `STANLI INSTALL OK`, toy mu 1.01, Rhat 1.003. Their step-by-step is
+`lin_colleagues.md`. **cogmod must stay 0.3.5 on their accounts**: GitHub's
+`dev` is 0.3.6 since 2026-11-16 (`e6e3feb`), whose DDM-5 likelihood with
+`sigmadrift` differs. And "0.3.5" is not one commit: `dev` carried it from
+`7c7261a` (2026-10-12) to `6463109` (2026-10-20), and `cogmod_priors.R`
+changed by ~1,200 lines between `eb4c6a3` and `6463109`. `dmm56`'s library
+is at `eb4c6a3` ("LNR inits", 2026-10-13; the smoke test's shard stamp), so
+the colleagues' must be too. Each fit log now prints the version and commit
+at the start. A library at another commit is rebuilt with
+`IGC_COGMOD_REF=eb4c6a394a72b4e14108fcef00ab5c7c8e107ef3 ./hpc install cogmod`.
+
+**Smoke test result: 11850767 SUCCESSFUL**, 8.8 min, status 0, cogmod 0.3.5
+`eb4c6a3`. REPORT after 100 + 50: treedepth 10.00, step 0.00138, accept 0.68,
+max Rhat 2.14, 1,125 parameters. That is not a verdict on the model, since
+100 warmup iterations are far too few. It only shows that the NUTS path now
+initialises and samples.
 
 ---
 

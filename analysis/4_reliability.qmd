@@ -27,11 +27,11 @@ with `./hpc pull predictions`. The full fits hold some 70,000 participant-level
 parameters each, and were made with brms 2.21.0 (`server/AGENT.md` §3.9).
 
 ::: {.callout-warning}
-**For now this runs on the 50-participant test of the Müller-Lyer model**
-(untransformed, `server/AGENT.md` §6.15): the pipeline, not the results. Fifty
-participants estimate neither the variability between participants nor the
-reliability well, and the Vertical-Horizontal and Ebbinghaus models are not
-fitted yet.
+**For now this runs on the 50-participant tests of the Müller-Lyer and
+Vertical-Horizontal models** (untransformed, `server/AGENT.md` §6.15): the
+pipeline, not the results. Fifty participants estimate neither the variability
+between participants nor the reliability well, and the Ebbinghaus test is not
+predicted yet.
 :::
 
 ## Loading
@@ -58,12 +58,13 @@ data_path <- if (dir.exists("../data")) "../data/" else "data/"
 # 50-participant test of 2026-11-25 (job 11841190, server/AGENT.md 6.15), in a
 # directory of its own (pulled with IGC_LOCAL_MODELS, server/hpc), untransformed
 # (the user's choice over the √|strength| test, 2026-11-25), and the
-# Vertical-Horizontal one the same test of that illusion. An illusion with no
-# file yet is left out.
+# Vertical-Horizontal and Ebbinghaus ones the same test of those illusions. An
+# illusion with no file yet is left out.
 best_files <- c(
   MullerLyer = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/lin_ddm5_mullerlyer_MullerLyer.rds"),
   VerticalHorizontal = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/",
-                              "lin_ddm5_verticalhorizontal_VerticalHorizontal.rds")
+                              "lin_ddm5_verticalhorizontal_VerticalHorizontal.rds"),
+  Ebbinghaus = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/lin_ddm5_ebbinghaus_Ebbinghaus.rds")
 )
 
 illusions <- c(MullerLyer = "Müller-Lyer", VerticalHorizontal = "Vertical-Horizontal",
@@ -187,44 +188,71 @@ the two are similar, and the estimates should be used with caution; below
 the estimates alone, so it is itself more reliable with more participants.
 
 ```{r}
-# D-vour of every effect of every parameter, with the two quantities it is
-# made of
+# D-vour of every effect of every parameter
 dvour_of <- function(tables) {
-  imap_dfr(tables, \(g, ill) {
-    spread <- as.data.frame(g) |>
-      summarise(SD_between = sd(Median), Uncertainty = mean(MAD), .by = c(Component, Parameter))
-    performance::performance_dvour(g) |>
-      left_join(spread, by = c("Component", "Parameter")) |>
-      mutate(Illusion_Type = ill)
-  }) |>
+  imap_dfr(tables, \(g, ill) mutate(performance::performance_dvour(g), Illusion_Type = ill)) |>
     mutate(Illusion = factor(illusions[Illusion_Type], levels = illusions),
            Model_Parameter = factor(parameter_labels[Component], levels = parameter_labels),
            Effect = Parameter)
 }
 dvour <- dvour_of(map(grouplevel, "effects")) |>
   mutate(Effect = factor(Effect, levels = igc_grouplevel_effect_names))
+
+# The illusions that have a model, in order
+present <- intersect(names(illusions), names(grouplevel))
+
+# An effect is reliable when its D-vour is above the threshold on every
+# illusion that has a model. The structure analysis takes these effects, the
+# same ones on every illusion.
+reliable_threshold <- 0.5
+reliable_effects <- dvour |>
+  summarise(Lowest = min(D_vour), .by = c(Component, Parameter)) |>
+  filter(Lowest > reliable_threshold)
 ```
 
-### From the Most to the Least Reliable
+### Across Illusions
+
+One row per effect, with its D-vour on each illusion side by side, so that
+it shows whether the same effects are reliable on every illusion. The rows
+are sorted by the lowest D-vour of the illusions, and those above
+`reliable_threshold` on every illusion (bold) are the ones the structure
+analysis takes, on every illusion.
 
 ```{r}
 dvour_colour <- \(x) scales::col_numeric(c("#FFEBEE", "#FFF8E1", "#C8E6C9", "#2E7D32"),
                                         domain = c(0, 1))(pmin(pmax(x, 0), 1))
 
+# One row per effect, a column of D-vour per illusion and the lowest of them,
+# from the most to the least reliable on every illusion
+dvour_wide <- function(d) {
+  d |>
+    mutate(Lowest = min(D_vour), .by = c(Component, Parameter)) |>
+    select(Illusion_Type, Component, Model_Parameter, Effect, Lowest, D_vour) |>
+    pivot_wider(names_from = Illusion_Type, values_from = D_vour) |>
+    arrange(desc(Lowest)) |>
+    mutate(Rank = row_number(), Reliable = Lowest > reliable_threshold) |>
+    select(Rank, Model_Parameter, Effect, all_of(present), Lowest, Reliable)
+}
+dvour_gt <- function(w, title, subtitle, effect_label = "Effect", bold = FALSE) {
+  tab <- gt(w) |>
+    tab_header(title = title, subtitle = subtitle) |>
+    tab_spanner("D-vour", columns = c(all_of(present), Lowest)) |>
+    cols_label(.list = c(list(Model_Parameter = "Parameter", Effect = effect_label, Lowest = "Lowest"),
+                         as.list(illusions[present]))) |>
+    fmt_number(c(all_of(present), Lowest), decimals = 2) |>
+    data_color(c(all_of(present), Lowest), fn = dvour_colour)
+  if (bold) tab <- tab_style(tab, cell_text(weight = "bold"), cells_body(rows = Reliable))
+  tab |>
+    cols_hide(Reliable) |>
+    gt_style()
+}
+
 dvour |>
-  arrange(desc(D_vour)) |>
-  mutate(Rank = row_number(), .by = Illusion) |>
-  select(Illusion, Rank, Model_Parameter, Effect, D_vour, SD_between, Uncertainty) |>
-  gt(groupname_col = "Illusion") |>
-  tab_header(title = "Reliability of the participants' effects",
-             subtitle = "D-vour, from the most to the least reliable") |>
-  cols_label(Model_Parameter = "Parameter", D_vour = "D-vour",
-             SD_between = "SD between participants", Uncertainty = "Mean uncertainty (MAD)") |>
-  fmt_number(D_vour, decimals = 2) |>
-  fmt_number(c(SD_between, Uncertainty), decimals = 3) |>
-  data_color(D_vour, fn = dvour_colour) |>
-  tab_source_note("SD between participants and mean uncertainty on the link scale of each parameter.") |>
-  gt_style()
+  dvour_wide() |>
+  dvour_gt("Reliability of the participants' effects",
+           "D-vour per illusion, from the most to the least reliable on every illusion", bold = TRUE) |>
+  tab_source_note(paste0("Lowest: the lowest D-vour of the illusions. Bold: above ", reliable_threshold,
+                         " on every illusion, the effects of the structure analysis."))
 ```
 
 ```{r}
@@ -279,17 +307,9 @@ parameter, the intercepts (and the outlier proportion's) included.
 
 ```{r}
 dvour_of(map(grouplevel, "terms")) |>
-  arrange(desc(D_vour)) |>
-  mutate(Rank = row_number(), .by = Illusion) |>
-  select(Illusion, Rank, Model_Parameter, Term = Effect, D_vour, SD_between, Uncertainty) |>
-  gt(groupname_col = "Illusion") |>
-  tab_header(title = "Reliability of the random effects as fitted", subtitle = "D-vour") |>
-  cols_label(Model_Parameter = "Parameter", D_vour = "D-vour",
-             SD_between = "SD between participants", Uncertainty = "Mean uncertainty (MAD)") |>
-  fmt_number(D_vour, decimals = 2) |>
-  fmt_number(c(SD_between, Uncertainty), decimals = 3) |>
-  data_color(D_vour, fn = dvour_colour) |>
-  gt_style()
+  dvour_wide() |>
+  dvour_gt("Reliability of the random effects as fitted",
+           "D-vour per illusion, from the most to the least reliable on every illusion", effect_label = "Term")
 ```
 
 ## Empirical Indices
@@ -455,7 +475,7 @@ empirical |>
 
 The indices are computed for every participant, but only those in a model
 (`grouplevel`, above) have parameters to compare them with: for now, the 50
-participants of the Müller-Lyer test.
+participants of each illusion's test.
 
 ```{r}
 imap_dfr(grouplevel, \(g, ill) {
@@ -472,42 +492,40 @@ imap_dfr(grouplevel, \(g, ill) {
 ## Structure Analysis
 
 How the model's participant-level effects relate to one another and to the
-empirical indices: one correlation matrix of every reliable model effect (a
-D-vour above `reliable_threshold`) and every empirical index, over the
-participants who have both, sorted by hierarchical clustering of the absolute
-correlations (`correlation::cor_sort()` on 1 − |r|), so that variables that go
-together sit together, whether they rise or fall together.
-Once several illusions have a model, their variables enter the same matrix,
-joined by participant, which also gives their correlations across illusions.
+empirical indices, on each illusion: one correlation matrix per illusion, of
+the model effects reliable on every illusion (a D-vour above
+`reliable_threshold` on each, above) and the empirical indices, over the
+participants of that illusion's model. The matrices hold the same variables,
+in the same order, so that they can be compared cell by cell. The question is
+whether the structure is the same on every illusion. The order is a
+hierarchical clustering of the absolute correlations averaged over the
+illusions (`correlation::cor_sort()` on 1 − mean |r|), so that variables that
+go together sit together, whether they rise or fall together.
 
-Two choices:
+Three choices:
 - The correlations are Spearman's, since several indices are skewed (RTs,
   IES, the PSE and JND).
-- Every variable is centred within the participant's study first. The model's
-  baselines are deviations from the study's intercept, while the empirical
-  indices also carry the differences between studies. Centring both leaves
-  the differences between participants of the same study only, on both sides.
+- Every variable is centred within the participant's study first, on each
+  illusion. The model's baselines are deviations from the study's intercept,
+  while the empirical indices also carry the differences between studies.
+  Centring both leaves the differences between participants of the same study
+  only, on both sides.
+- The illusions are not in the same matrix. Correlating them, participant by
+  participant, is for the dimension scores, once they are extracted from
+  these matrices. It needs the participants of one illusion's model to be in
+  the others' too, which the full fits will have (the tests drew their 50
+  participants on each illusion independently).
 
 The empirical indices have no reliability of their own here, so a weak
 correlation with one of them may only mean that it is noisy.
 
 ```{r}
-# The threshold of D-vour above which a model effect enters the matrix
-reliable_threshold <- 0.5
 center_within_study <- TRUE
 
-illusion_codes <- c(MullerLyer = "ML", VerticalHorizontal = "VH", Ebbinghaus = "Ebb")
-several <- length(grouplevel) > 1
-
-# The reliable model effects, per illusion
-reliable_effects <- dvour |>
-  filter(D_vour > reliable_threshold) |>
-  select(Illusion_Type, Component, Parameter, D_vour)
-
-# Each participant's model effects (posterior medians), long, for the reliable
-# ones
+# Each participant's model effects (posterior medians), long, for the effects
+# reliable on every illusion
 model_scores <- imap_dfr(grouplevel, \(g, ill) mutate(as.data.frame(g$effects), Illusion_Type = ill)) |>
-  semi_join(reliable_effects, by = c("Illusion_Type", "Component", "Parameter")) |>
+  semi_join(reliable_effects, by = c("Component", "Parameter")) |>
   transmute(Participant = Level, Illusion_Type, Source = "Model",
             Variable = paste0(parameter_labels[Component], ": ", Parameter), Value = Median)
 
@@ -524,65 +542,497 @@ empirical_scores <- empirical |>
 # has them)
 studies_of <- distinct(empirical, Participant, Study)
 
+# Centred within study, on each illusion
 structure_long <- bind_rows(model_scores, empirical_scores) |>
-  mutate(Variable = if (several) paste0(illusion_codes[Illusion_Type], " ", Variable) else Variable) |>
   left_join(studies_of, by = "Participant") |>
   mutate(Value = if (center_within_study) Value - mean(Value, na.rm = TRUE) else Value,
-         .by = c(Variable, Study))
+         .by = c(Illusion_Type, Variable, Study))
 
-structure_wide <- structure_long |>
-  select(Participant, Variable, Value) |>
-  pivot_wider(names_from = Variable, values_from = Value)
+# The variables, the same on every illusion
+variables <- unique(structure_long$Variable)
+sources <- distinct(structure_long, Variable, Source)
+
+# Per illusion, one row per participant of its model, the variables in the
+# order of `variables`
+structure_wide <- map(set_names(present), \(ill) {
+  structure_long |>
+    filter(Illusion_Type == ill) |>
+    select(Participant, Variable, Value) |>
+    pivot_wider(names_from = Variable, values_from = Value) |>
+    select(Participant, all_of(variables))
+})
+
+# One matrix per illusion: Spearman correlations, pairwise, over the
+# participants of its model
+cors <- map(structure_wide, \(w) cor(w[variables], method = "spearman", use = "pairwise.complete.obs"))
+n_participants <- map_int(structure_wide, nrow)
+
+# One order for every illusion: hierarchical clustering of the absolute
+# correlations averaged over the illusions. The distance between two variables
+# is 1 - mean |r|, so that strongly related ones sit together whatever the
+# sign of the relation (cor_sort()'s default, (1 - r) / 2, would put r = -.9
+# as far apart as possible). Each signed matrix is then shown in that order.
+mean_abs <- apply(simplify2array(map(cors, abs)), c(1, 2), mean, na.rm = TRUE)
+order_vars <- rownames(correlation::cor_sort(1 - mean_abs, distance = "raw"))
 ```
 
 ```{r}
-reliable_effects |>
-  mutate(Illusion = illusions[Illusion_Type], Parameter_label = parameter_labels[Component]) |>
-  arrange(Illusion, desc(D_vour)) |>
-  select(Illusion, Parameter = Parameter_label, Effect = Parameter, D_vour) |>
-  gt(groupname_col = "Illusion") |>
-  tab_header(title = "The model effects in the matrix",
-             subtitle = paste0("D-vour above ", reliable_threshold, ", with the ",
-                               nrow(index_definitions), " empirical indices")) |>
-  cols_label(D_vour = "D-vour") |>
-  fmt_number(D_vour, decimals = 2) |>
-  data_color(D_vour, fn = dvour_colour) |>
+dvour |>
+  semi_join(reliable_effects, by = c("Component", "Parameter")) |>
+  dvour_wide() |>
+  dvour_gt("The model effects in the matrices",
+           paste0("D-vour above ", reliable_threshold, " on every illusion, with the ",
+                  nrow(index_definitions), " empirical indices"))
+```
+
+```{r}
+# One illusion's matrix, in the common order (order_vars)
+plot_structure <- function(ill) {
+  r <- cors[[ill]][order_vars, order_vars]
+  as.data.frame(r) |>
+    rownames_to_column("Variable1") |>
+    pivot_longer(-Variable1, names_to = "Variable2", values_to = "r") |>
+    mutate(Label = if_else(Variable1 == Variable2, "", sub("^(-?)0\\.", "\\1.", sprintf("%.2f", r))),
+           Variable1 = factor(Variable1, levels = rev(order_vars)),
+           Variable2 = factor(Variable2, levels = order_vars)) |>
+    ggplot(aes(Variable2, Variable1, fill = r)) +
+    geom_tile(colour = "white", linewidth = 0.4) +
+    geom_text(aes(label = Label, colour = abs(r) > 0.6), size = 2.4, show.legend = FALSE, na.rm = TRUE) +
+    scale_fill_gradient2(low = "#1565C0", mid = "white", high = "#C62828", limits = c(-1, 1), name = "rho") +
+    scale_colour_manual(values = c("FALSE" = "grey20", "TRUE" = "white")) +
+    labs(x = NULL, y = NULL,
+         title = paste0(illusions[[ill]], ": structure of the model effects and the empirical indices"),
+         subtitle = paste0("Spearman correlations, ", n_participants[[ill]], " participants",
+                           if (center_within_study) ", centred within study" else "",
+                           "; ", sum(sources$Source == "Model"), " model effects (D-vour > ",
+                           reliable_threshold, " on every illusion) and ", sum(sources$Source == "Empirical"),
+                           " empirical indices")) +
+    coord_equal() +
+    theme_minimal(base_size = 9) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid = element_blank(),
+          plot.title = element_text(face = "bold"))
+}
+
+```
+
+One tab per illusion, every matrix in the same order:
+
+::: {.panel-tabset}
+
+```{r}
+#| results: asis
+#| fig-width: 9
+#| fig-height: 8.5
+
+for (ill in present) {
+  cat("\n\n### ", illusions[[ill]], "\n\n", sep = "")
+  print(plot_structure(ill))
+  cat("\n\n")
+}
+```
+
+:::
+
+### Is the Structure the Same on Every Illusion?
+
+For each pair of illusions: the correlation, over every pair of variables, of
+their correlation on one illusion with their correlation on the other (1 when
+the two matrices are the same up to a linear rescaling), and the mean
+absolute difference between the two. Also the number of participants the two
+models share, over whom dimension scores could be correlated (next section).
+
+```{r}
+if (length(present) < 2) {
+  message("One illusion only: nothing to compare yet.")
+} else {
+  low <- lower.tri(cors[[1]])
+  ids <- map(grouplevel[present], \(g) unique(as.data.frame(g$effects)$Level))
+  combn(present, 2, simplify = FALSE) |>
+    map_dfr(\(p) {
+      a <- cors[[p[1]]][low]
+      b <- cors[[p[2]]][low]
+      tibble(Illusions = paste(illusions[p], collapse = " – "),
+             Similarity = cor(a, b, use = "complete.obs"),
+             Difference = mean(abs(a - b), na.rm = TRUE),
+             Shared = length(intersect(ids[[p[1]]], ids[[p[2]]])))
+    }) |>
+    gt() |>
+    tab_header(title = "The structure across illusions",
+               subtitle = paste0("Over the ", sum(low), " pairs of variables of the matrices")) |>
+    cols_label(Illusions = "", Similarity = "Correlation of the correlations",
+               Difference = "Mean absolute difference", Shared = "Participants in both models") |>
+    fmt_number(c(Similarity, Difference), decimals = 2) |>
+    fmt_integer(Shared) |>
+    gt_style()
+}
+```
+
+## Dimensions
+
+The matrices above show blocks of variables that go together. This section
+makes them dimensions and asks whether they are the same on every illusion,
+in two steps:
+- **Exploratory Graph Analysis** (EGA) finds the dimensions of each illusion,
+  and how stable they are.
+- **A confirmatory factor analysis** (CFA) of the structure common to the
+  illusions tests whether it holds on each illusion and across illusions,
+  and gives each participant a score on each dimension, illusion by illusion.
+
+On the 50-participant tests this sets up the pipeline only. EGA and its
+bootstraps are unstable at that size, and the cross-illusion analyses need
+the same participants in every model, which only the full fits will have.
+
+```{r}
+# Unique Variable Analysis: the weighted topological overlap above which two
+# variables are redundant (EGAnet's default)
+uva_cutoff <- 0.25
+# Resamples of the participants for the stability of EGA
+boot_iter <- 500
+# The cross-illusion analyses need at least this many participants in every
+# model
+min_shared <- 200
+illusion_codes <- c(MullerLyer = "ML", VerticalHorizontal = "VH", Ebbinghaus = "Ebb")
+```
+
+### Redundant Variables
+
+Several variables are near-duplicates: the drift's baseline and difficulty,
+or the median RT of incongruent trials and the illusion effect on RT, which
+is computed from it. A pair that shares most of its connections in the
+network forms a dimension of its own, and inflates the one it belongs to.
+Unique Variable Analysis (`EGAnet::UVA()`) flags the pairs whose weighted
+topological overlap (wTO) exceeds `uva_cutoff`. Of each redundant set, it
+keeps the variable least redundant with the rest (the lowest maximum wTO with
+the other variables). It is run on each illusion, and a variable it removes
+on any illusion is removed on every illusion, so that every illusion keeps
+the same variables.
+
+```{r}
+uva <- map(structure_wide, \(w) {
+  EGAnet::UVA(as.data.frame(w[variables]), corr = "spearman", cut.off = uva_cutoff,
+              reduce = TRUE, reduce.method = "remove")
+})
+uva_removed <- unique(unlist(map(uva, \(u) u$keep_remove$remove)))
+conflicts <- intersect(uva_removed, unique(unlist(map(uva, \(u) u$keep_remove$keep))))
+if (length(conflicts) > 0) {
+  message("Kept on one illusion but removed on another (removed on every illusion): ",
+          paste(conflicts, collapse = ", "))
+}
+
+# The variables of the dimensions, in the order of the matrices
+dim_vars <- setdiff(order_vars, uva_removed)
+
+wto_colour <- \(x) scales::col_numeric(c("white", "#FFE0B2", "#E65100"), domain = c(0, 0.5))(pmin(pmax(x, 0), 0.5))
+
+# Every pair above the threshold on at least one illusion, with its wTO on
+# each illusion and the variable removed
+imap_dfr(uva, \(u, ill) mutate(u$wto$pairwise, Illusion_Type = ill)) |>
+  mutate(A = pmin(node_i, node_j), B = pmax(node_i, node_j)) |>
+  select(Illusion_Type, A, B, wto) |>
+  filter(any(wto > uva_cutoff), .by = c(A, B)) |>
+  pivot_wider(names_from = Illusion_Type, values_from = wto) |>
+  mutate(Removed = case_when(A %in% uva_removed & B %in% uva_removed ~ "both",
+                             A %in% uva_removed ~ A,
+                             B %in% uva_removed ~ B,
+                             .default = "neither"),
+         Highest = do.call(pmax, c(across(all_of(present)), na.rm = TRUE))) |>
+  arrange(desc(Highest)) |>
+  select(-Highest) |>
+  gt() |>
+  tab_header(title = "Redundant variables",
+             subtitle = paste0("Pairs with a wTO above ", uva_cutoff, " on at least one illusion")) |>
+  tab_spanner("wTO", columns = all_of(present)) |>
+  cols_label(.list = c(list(A = "Variable", B = "Redundant with"), as.list(illusions[present]))) |>
+  fmt_number(all_of(present), decimals = 2) |>
+  data_color(all_of(present), fn = wto_colour) |>
+  tab_source_note(paste0("Removed: the variable left out on every illusion. ", length(dim_vars), " of ",
+                         length(variables), " variables remain.")) |>
+  gt_style()
+```
+
+### Exploratory Graph Analysis
+
+EGA (`EGAnet::EGA()`) estimates a network of the variables (a GLASSO
+network of their Spearman correlations) and takes its communities (walktrap)
+as the dimensions. Their number comes from the data, and every variable
+belongs to one.
+
+- **Stability.** `EGAnet::bootEGA()` re-estimates it on `boot_iter`
+  resamples of each illusion's participants. It gives how often each number
+  of dimensions comes up, and how often each variable falls in its own
+  dimension (item stability; above 0.75 is usually taken as stable).
+- **The common structure** is the EGA of the illusions pooled, each variable
+  standardised within its illusion. Each illusion's dimensions are matched
+  to it by their overlap, and each dimension is named after its variable with
+  the highest network loading in the pooled analysis.
+
+```{r}
+# Each illusion: EGA (a GLASSO network of the Spearman correlations, walktrap
+# communities), and its stability over resamples of the participants
+reduced <- map(structure_wide, \(w) as.data.frame(w[dim_vars]))
+boot <- map(reduced, \(d) {
+  EGAnet::bootEGA(d, corr = "spearman", model = "glasso", algorithm = "walktrap", iter = boot_iter,
+                  type = "resampling", seed = 2026, plot.itemStability = FALSE, verbose = FALSE)
+})
+ega <- map(boot, "EGA")
+
+# The common structure: EGA of the illusions pooled
+ega_all <- EGAnet::EGA(map_dfr(reduced, \(d) as.data.frame(scale(d))), corr = "spearman", model = "glasso",
+                       algorithm = "walktrap", plot.EGA = FALSE)
+common <- ega_all$wc
+# (net.loads() prints a notice of EGAnet's change of default even when
+# loading.method is given)
+loads_all <- suppressMessages(EGAnet::net.loads(ega_all, loading.method = "revised"))$std
+dims <- split(names(common), common)
+dim_labels <- imap_chr(dims, \(v, k) paste0("D", k, " (", v[which.max(abs(loads_all[v, k]))], ")"))
+
+# An illusion's communities relabelled with the common ones they overlap most
+# (greedily, the largest overlap first); one that matches none is "other"
+match_communities <- function(wc, ref) {
+  tab <- table(wc, ref[names(wc)])
+  lab <- setNames(rep(NA_character_, nrow(tab)), rownames(tab))
+  while (length(tab) > 0 && max(tab) > 0) {
+    ij <- which(tab == max(tab), arr.ind = TRUE)[1, ]
+    lab[rownames(tab)[ij[1]]] <- colnames(tab)[ij[2]]
+    tab[ij[1], ] <- 0
+    tab[, ij[2]] <- 0
+  }
+  out <- unname(lab[as.character(wc)])
+  out[is.na(out) & !is.na(wc)] <- "other"
+  setNames(out, names(wc))
+}
+matched <- map(ega, \(e) match_communities(e$wc, common))
+```
+
+```{r}
+# The number of dimensions on each illusion, its stability, and how far the
+# illusion's dimensions agree with the common ones
+imap_dfr(boot, \(b, ill) {
+  f <- b$frequency
+  tibble(Illusion = illusions[[ill]],
+         Dimensions = b$EGA$n.dim,
+         Boot_median = b$summary.table$median.dim,
+         Boot_range = paste0(b$summary.table$Lower.Quantile, "–", b$summary.table$Upper.Quantile),
+         Boot_same = sum(f$Frequency[f[[1]] == b$EGA$n.dim]),
+         Agreement = mean(matched[[ill]] == common[names(matched[[ill]])], na.rm = TRUE))
+}) |>
+  add_row(Illusion = "All (pooled)", Dimensions = ega_all$n.dim) |>
+  gt() |>
+  tab_header(title = "The dimensions of each illusion",
+             subtitle = paste0("EGA, and over ", boot_iter, " resamples of the participants")) |>
+  tab_spanner("Resamples", c(Boot_median, Boot_range, Boot_same)) |>
+  cols_label(Boot_median = "Median", Boot_range = "95% range", Boot_same = "Same number",
+             Agreement = "Variables in the common dimension") |>
+  fmt_percent(c(Boot_same, Agreement), decimals = 0) |>
+  sub_missing() |>
+  gt_style()
+
+# Each variable: its common dimension, and on each illusion the dimension it
+# falls in (matched to the common ones) and its item stability
+stability <- map(boot, \(b) EGAnet::itemStability(b, IS.plot = FALSE)$item.stability$empirical.dimensions)
+dim_name <- \(k) if_else(k %in% names(dims), paste0("D", k), k)
+imap_dfr(matched, \(m, ill) {
+  tibble(Variable = names(m), Illusion = illusions[[ill]], Dimension = dim_name(m),
+         Stability = unname(stability[[ill]][names(m)]))
+}) |>
+  pivot_wider(names_from = Illusion, values_from = c(Dimension, Stability),
+              names_glue = "{Illusion}__{.value}", names_vary = "slowest") |>
+  mutate(Common = dim_labels[as.character(common[Variable])], .after = Variable) |>
+  mutate(Variable = factor(Variable, levels = dim_vars)) |>
+  arrange(Common, Variable) |>
+  gt(groupname_col = "Common") |>
+  tab_header(title = "The variables in the dimensions",
+             subtitle = "Grouped by their common dimension; per illusion, their dimension and item stability") |>
+  tab_spanner_delim("__") |>
+  fmt_number(ends_with("__Stability"), decimals = 2) |>
+  data_color(ends_with("__Stability"), fn = dvour_colour) |>
+  tab_source_note("Dimension: as matched to the common ones (\"other\": an extra dimension of that illusion).") |>
+  gt_style()
+```
+
+The networks, with the dimensions coloured as matched to the common ones, so
+that the same colour is the same dimension in every tab:
+
+::: {.panel-tabset}
+
+```{r}
+#| results: asis
+#| fig-width: 8
+#| fig-height: 6
+
+# One colour per dimension number. EGAnet colours the communities by rank, so
+# each plot gets the colours of the numbers it has.
+dim_palette <- c("#F03D2D", "#90DDF0", "#C8D96F", "#9C27B0", "#FF9800", "#795548", "#607D8B", "#E91E63")
+networks <- c(list(All = ega_all), ega)
+for (n in names(networks)) {
+  e <- networks[[n]]
+  if (n != "All") {
+    m <- matched[[n]][names(e$wc)]
+    # The common dimensions keep their number; an extra one takes the next
+    e$wc[] <- if_else(m == "other", length(dims) + 1, suppressWarnings(as.numeric(m)))
+  }
+  cat("\n\n### ", if (n == "All") "All illusions (pooled)" else illusions[[n]], "\n\n", sep = "")
+  print(plot(e, color.palette = dim_palette[sort(unique(na.omit(as.numeric(e$wc))))]))
+  cat("\n\n")
+}
+```
+
+:::
+
+### Confirmatory Factor Analysis
+
+The common structure as a CFA (`lavaan::cfa()`): each variable loads on its
+dimension only, the dimensions are correlated, and the variables are
+standardised within the illusion. It is estimated by robust maximum
+likelihood (MLR), with full-information maximum likelihood for the missing
+values (a JND that could not be computed).
+
+- **On each illusion**: whether the common structure fits it. CFI and TLI
+  above .95, RMSEA below .06 and SRMR below .08 are the usual marks of a good
+  fit. "Admissible" is false when an estimate is out of bounds, such as a
+  negative residual variance.
+- **Across illusions**: one model of every illusion's variables, over the
+  participants in every model, with the residuals of each variable
+  correlated across illusions (the same participant). The configural model
+  (the same structure on every illusion) is compared with the metric model
+  (the same loadings too), by the scaled χ² difference and the change in CFI
+  (a drop of more than .01 is usually read as non-invariance). Scalar
+  invariance is not tested, since every variable is centred within study on
+  each illusion and so has a mean of 0 by construction.
+
+```{r}
+# lavaan needs syntactic names
+codes <- setNames(paste0("x", seq_along(dim_vars)), dim_vars)
+
+# The model of the common structure for the illusions given by their suffixes
+# ("" for one illusion alone). `equal`: the loadings equal across illusions
+# (each dimension keeps its first variable as the marker). A dimension with one
+# variable is that variable.
+cfa_syntax <- function(suffixes, equal = FALSE) {
+  lines <- c()
+  for (s in suffixes) {
+    for (k in names(dims)) {
+      v <- codes[dims[[k]]]
+      lab <- if (equal) paste0("l", k, "_", v, "*") else ""
+      lines <- c(lines, paste0("D", k, s, " =~ ", paste0(lab, v, s, collapse = " + ")))
+      if (length(v) == 1) lines <- c(lines, paste0(v, s, " ~~ 0*", v, s))
+    }
+  }
+  if (length(suffixes) > 1) {
+    v <- codes[unlist(dims)]
+    for (p in combn(suffixes, 2, simplify = FALSE)) {
+      lines <- c(lines, paste0(v, p[1], " ~~ ", v, p[2]))
+    }
+  }
+  paste(lines, collapse = "\n")
+}
+fit_cfa <- function(model, data) {
+  suppressWarnings(lavaan::cfa(model, data = data, estimator = "MLR", missing = "fiml"))
+}
+fit_indices <- function(f) {
+  i <- c("cfi.robust", "tli.robust", "rmsea.robust", "srmr")
+  ok <- lavaan::lavInspect(f, "converged")
+  x <- if (ok) lavaan::fitMeasures(f, i) else setNames(rep(NA_real_, length(i)), i)
+  tibble(Participants = lavaan::lavInspect(f, "nobs"), CFI = x[[1]], TLI = x[[2]], RMSEA = x[[3]],
+         SRMR = x[[4]], Converged = ok,
+         Admissible = ok && isTRUE(suppressWarnings(lavaan::lavInspect(f, "post.check"))))
+}
+
+# Each illusion on its own
+cfa_data <- map(reduced, \(d) setNames(as.data.frame(scale(d)), codes[names(d)]))
+cfa_fits <- map(cfa_data, \(d) fit_cfa(cfa_syntax(""), d))
+
+imap_dfr(cfa_fits, \(f, ill) mutate(fit_indices(f), Model = illusions[[ill]], .before = 1)) |>
+  gt() |>
+  tab_header(title = "The common structure on each illusion", subtitle = "CFA, robust fit indices") |>
+  cols_label(Model = "") |>
+  fmt_number(c(CFI, TLI, RMSEA, SRMR), decimals = 3) |>
   gt_style()
 ```
 
 ```{r}
-#| fig-width: 9
-#| fig-height: 8.5
+# Across illusions: the participants in every model
+shared <- Reduce(intersect, map(structure_wide, "Participant"))
+if (length(present) < 2 || length(shared) < min_shared) {
+  message("The invariance across illusions needs at least ", min_shared, " participants in every model (",
+          length(shared), " now): the full fits.")
+} else {
+  suffixes <- setNames(paste0("_", illusion_codes[present]), present)
+  joint <- imap(structure_wide, \(w, ill) {
+    w <- filter(w, Participant %in% shared)
+    z <- as.data.frame(scale(w[dim_vars]))
+    names(z) <- paste0(codes[dim_vars], suffixes[[ill]])
+    bind_cols(Participant = w$Participant, z)
+  }) |>
+    reduce(inner_join, by = "Participant")
+  fit_configural <- fit_cfa(cfa_syntax(suffixes), joint)
+  fit_metric <- fit_cfa(cfa_syntax(suffixes, equal = TRUE), joint)
+  test <- lavaan::lavTestLRT(fit_configural, fit_metric)
+  bind_rows(mutate(fit_indices(fit_configural), Model = "Configural"),
+            mutate(fit_indices(fit_metric), Model = "Metric")) |>
+    mutate(Chisq_diff = c(NA, test$`Chisq diff`[2]), Df_diff = c(NA, test$`Df diff`[2]),
+           p = c(NA, test$`Pr(>Chisq)`[2]), Delta_CFI = CFI - CFI[1]) |>
+    relocate(Model) |>
+    gt() |>
+    tab_header(title = "Invariance across illusions",
+               subtitle = paste0("CFA of every illusion's variables, ", length(shared), " participants")) |>
+    cols_label(Model = "", Chisq_diff = "Δχ² (scaled)", Df_diff = "Δdf", Delta_CFI = "ΔCFI") |>
+    fmt_number(c(CFI, TLI, RMSEA, SRMR, Chisq_diff, Delta_CFI, p), decimals = 3) |>
+    sub_missing() |>
+    gt_style()
+}
+```
 
-# Spearman correlations, pairwise, sorted by hierarchical clustering of their
-# absolute values: the distance between two variables is 1 - |r|, so that
-# strongly related ones sit together whatever the sign of the relation
-# (cor_sort()'s default, (1 - r) / 2, would put r = -.9 as far apart as
-# possible). The signed matrix is then shown in that order.
-r <- cor(select(structure_wide, -Participant), method = "spearman", use = "pairwise.complete.obs")
-order_vars <- rownames(correlation::cor_sort(1 - abs(r), distance = "raw"))
-r <- r[order_vars, order_vars]
-sources <- distinct(structure_long, Variable, Source)
+### Dimension Scores Across Illusions
 
-as.data.frame(r) |>
-  rownames_to_column("Variable1") |>
-  pivot_longer(-Variable1, names_to = "Variable2", values_to = "r") |>
-  mutate(Label = if_else(Variable1 == Variable2, "", sub("^(-?)0\\.", "\\1.", sprintf("%.2f", r))),
-         Variable1 = factor(Variable1, levels = rev(order_vars)),
-         Variable2 = factor(Variable2, levels = order_vars)) |>
-  ggplot(aes(Variable2, Variable1, fill = r)) +
-  geom_tile(colour = "white", linewidth = 0.4) +
-  geom_text(aes(label = Label, colour = abs(r) > 0.6), size = 2.4, show.legend = FALSE) +
-  scale_fill_gradient2(low = "#1565C0", mid = "white", high = "#C62828", limits = c(-1, 1), name = "rho") +
-  scale_colour_manual(values = c("FALSE" = "grey20", "TRUE" = "white")) +
-  labs(x = NULL, y = NULL,
-       title = "Structure of the model effects and the empirical indices",
-       subtitle = paste0("Spearman correlations, ", nrow(structure_wide), " participants",
-                         if (center_within_study) ", centred within study" else "",
-                         "; ", sum(sources$Source == "Model"), " reliable model effects (D-vour > ",
-                         reliable_threshold, ") and ", sum(sources$Source == "Empirical"),
-                         " empirical indices")) +
-  coord_equal() +
-  theme_minimal(base_size = 9) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid = element_blank())
+Each participant's score on each dimension, from each illusion's own CFA
+(the regression method), correlated across illusions over the participants
+in both models (Spearman). Each illusion's scores come from its own model,
+not from the joint one above. Regression scores in the joint model would be
+predicted partly from the other illusions' variables, which would inflate
+their correlations across illusions.
+
+```{r}
+#| fig-width: 7
+#| fig-height: 6
+
+# Every participant's scores, per illusion (none from a CFA that did not
+# converge)
+scores <- imap_dfr(cfa_fits, \(f, ill) {
+  if (!lavaan::lavInspect(f, "converged")) return(NULL)
+  as_tibble(lavaan::lavPredict(f, method = "regression")) |>
+    mutate(Participant = structure_wide[[ill]]$Participant[lavaan::lavInspect(f, "case.idx")],
+           Illusion_Type = ill)
+})
+
+if (length(present) < 2 || length(shared) < min_shared) {
+  message("Correlating the scores across illusions needs at least ", min_shared,
+          " participants in every model (", length(shared), " now): the full fits.")
+} else {
+  score_wide <- scores |>
+    filter(Participant %in% shared) |>
+    pivot_longer(starts_with("D"), names_to = "Dimension", values_to = "Score") |>
+    mutate(Variable = paste0(illusion_codes[Illusion_Type], " ", Dimension)) |>
+    select(Participant, Variable, Score) |>
+    pivot_wider(names_from = Variable, values_from = Score)
+  # Grouped by dimension, then illusion
+  vars_scores <- as.vector(outer(illusion_codes[present], names(dims), \(i, k) paste0(i, " D", k)))
+  r_scores <- cor(score_wide[vars_scores], method = "spearman", use = "pairwise.complete.obs")
+  as.data.frame(r_scores) |>
+    rownames_to_column("Variable1") |>
+    pivot_longer(-Variable1, names_to = "Variable2", values_to = "r") |>
+    mutate(Label = if_else(Variable1 == Variable2, "", sub("^(-?)0\\.", "\\1.", sprintf("%.2f", r))),
+           Variable1 = factor(Variable1, levels = rev(vars_scores)),
+           Variable2 = factor(Variable2, levels = vars_scores)) |>
+    ggplot(aes(Variable2, Variable1, fill = r)) +
+    geom_tile(colour = "white", linewidth = 0.4) +
+    geom_text(aes(label = Label), size = 3) +
+    scale_fill_gradient2(low = "#1565C0", mid = "white", high = "#C62828", limits = c(-1, 1), name = "rho") +
+    labs(x = NULL, y = NULL, title = "Dimension scores across illusions",
+         subtitle = paste0("Spearman correlations, ", length(shared), " participants; ",
+                           paste(dim_labels, collapse = ", "))) +
+    coord_equal() +
+    theme_minimal(base_size = 9) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1), panel.grid = element_blank())
+}
 ```

@@ -49,12 +49,14 @@ data_path <- if (dir.exists("../data")) "../data/" else "data/"
 # (job 11841190, the coding without a gap, server/AGENT.md 6.15), in a
 # directory of its own (pulled with IGC_LOCAL_MODELS, server/hpc). The test of
 # 2026-11-24, with the gap, is in test_lin_ddm5_20261124_nutpie/ (6.14). The
-# Vertical-Horizontal one is the same test (submitted 2026-11-25), in the same
-# directory. An illusion with no file yet is left out.
+# Vertical-Horizontal one is the same test (submitted 2026-11-25), and the
+# Ebbinghaus one too (submitted 2026-11-26), in the same directory. An illusion
+# with no file yet is left out.
 linear_files <- c(
   MullerLyer = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/lin_ddm5_mullerlyer_MullerLyer.rds"),
   VerticalHorizontal = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/",
-                              "lin_ddm5_verticalhorizontal_VerticalHorizontal.rds")
+                              "lin_ddm5_verticalhorizontal_VerticalHorizontal.rds"),
+  Ebbinghaus = paste0(path, "test_lin_ddm5_20261125_nutpie/predictions/lin_ddm5_ebbinghaus_Ebbinghaus.rds")
 )
 
 illusions <- c(MullerLyer = "Müller-Lyer", VerticalHorizontal = "Vertical-Horizontal",
@@ -908,8 +910,8 @@ are population-level predictions at the same points (`compute_curves()` in
 `server/predictions.R`), the linear model's at the centre of each study's ISI
 window. With strength coded as its absolute value and its side, the linear
 model's curves are two half-lines, one per side, which meet at zero strength.
-For now only the Müller-Lyer illusion has one, a test on 50 participants
-(`server/AGENT.md` §6.15).
+For now these are tests on 50 participants, of Müller-Lyer and
+Vertical-Horizontal (`server/AGENT.md` §6.15); Ebbinghaus has none yet.
 
 Each illusion is drawn over its reliable predictor space: DDM-5 over all of
 it, and a linear model over the range it was fitted on, so that a model fitted
@@ -1093,9 +1095,9 @@ starting point runs from 0 at the error boundary to 1 at the correct one.
 
 The predictions are made on the cluster (`compute_isi_curves()` in
 `server/predictions.R`) and stored in the linear models' prediction files,
-since 2026-11-25. For now only the 50-participant test of the Müller-Lyer
-model has them (`server/AGENT.md` §6.15), whose studies are those its 50
-participants come from: the study intercepts of the studies with few of them
+since 2026-11-25. For now only the 50-participant tests of the Müller-Lyer
+and Vertical-Horizontal models have them (`server/AGENT.md` §6.15), whose
+studies are those their 50 participants come from: the study intercepts of the studies with few of them
 rest on little.
 
 ```{r}
@@ -1246,9 +1248,9 @@ save_figure <- function(plot, name, width, height) {
 DDM-5 (Study 1) and the linear models over it (Study 2), the figure that links
 the two studies. In the manuscript in the place of Study 1's figure of DDM-5
 (`study1_ddm5.png`, deleted 2026-11-25), as `@fig-study1-ddm5`. For now its
-Müller-Lyer linear curves are the 50-participant test, and the other two
-illusions have none: re-render this, then the manuscript, as the full fits
-come in.
+Müller-Lyer and Vertical-Horizontal linear curves are the 50-participant
+tests, and Ebbinghaus has none: re-render this, then the manuscript, as the
+fits come in.
 
 ```{r}
 #| fig-width: 7.2

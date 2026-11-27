@@ -522,6 +522,14 @@ igc_models <- list(
     formula = igc_formulas$lin_ddm5,
     linear = c(igc_linear_ranges$VerticalHorizontal,
                list(transform_difference = "identity", transform_strength = "identity"))
+  ),
+
+  # The third illusion, untransformed like the other two (2026-11-26)
+  lin_ddm5_ebbinghaus = list(
+    illusion = "Ebbinghaus",
+    formula = igc_formulas$lin_ddm5,
+    linear = c(igc_linear_ranges$Ebbinghaus,
+               list(transform_difference = "identity", transform_strength = "identity"))
   )
 )
 

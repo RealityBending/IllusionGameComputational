@@ -136,10 +136,17 @@ cd analysis/server && ./hpc push && ./hpc fit <model>
   with difficulty. `performance::performance_dvour()` ranks them by
   reliability. Its "Empirical Indices" section computes behavioural indices
   per participant from the raw trials of the linear subrange (error rates,
-  median RTs, IES, illusion effects, PSE, JND). Its "Structure Analysis" puts
-  the reliable model effects (D-vour > 0.5) and the indices in one sorted
-  Spearman correlation matrix, centred within study (`analysis/server/AGENT.md`
-  §6.18).
+  median RTs, IES, illusion effects, PSE, JND). Its "Structure Analysis" takes
+  the model effects reliable on every illusion (D-vour > 0.5 on each) and the
+  indices, and draws one Spearman correlation matrix per illusion, centred
+  within study, all in one order so that the structures can be compared.
+  Its "Dimensions" section reduces the redundant variables (UVA) and finds
+  the dimensions of each illusion (EGA, with bootstrapped stability) and of
+  the illusions pooled. It fits that common structure as a CFA, per illusion
+  and across illusions (configural against metric invariance), and
+  correlates the per-illusion factor scores across illusions. The last two
+  need the same participants in every model, i.e. the full fits
+  (`analysis/server/AGENT.md` §6.18).
 - **Never run brms post-processing on a cluster fit with the laptop's brms.**
   The fits are brms 2.21.0, and the laptop's 2.23.1 rebuilds their smooth
   bases with the wrong signs. `log_lik()`, `loo()`, `posterior_*()`,
